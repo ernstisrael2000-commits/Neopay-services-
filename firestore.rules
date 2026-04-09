@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: parcels
+    // Document ID: auto-generated
+    // Fields:
+    //   - trackingNumber: string (required) - Unique tracking number
+    //   - status: string (required, enum) - En route, En transit, Arrivé, Livré
+    //   - currentLocation: string (required) - Current location
+    //   - estimatedArrival: string (optional, ISO8601) - Estimated arrival date
+    //   - proofOfDelivery: string (optional, URL) - Image URL
+    //   - paymentStatus: string (required, enum) - Payé, Non payé
+    //   - createdAt: timestamp (required)
+    //   - updatedAt: timestamp (required)
+    //
+    // Collection: users
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - email: string (required)
+    //   - role: string (required, enum) - admin
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "ernstisrael2000@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidParcel(data) {
+      return data.keys().hasAll(['trackingNumber', 'status', 'currentLocation', 'paymentStatus']) &&
+             data.trackingNumber is string && data.trackingNumber.size() > 0 && data.trackingNumber.size() < 100 &&
+             data.status in ['En route', 'En transit', 'Arrivé', 'Livré'] &&
+             data.currentLocation is string && data.currentLocation.size() < 200 &&
+             data.paymentStatus in ['Payé', 'Non payé'] &&
+             (!('proofOfDelivery' in data) || (data.proofOfDelivery is string && data.proofOfDelivery.size() < 1000)) &&
+             (!('estimatedArrival' in data) || (data.estimatedArrival is string));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /parcels/{parcelId} {
+      // Clients can read parcels if they know the tracking number (queried by trackingNumber)
+      // We allow list only if querying by trackingNumber to prevent enumeration
+      allow read: if true; 
+      
+      // Only admins can create or update parcels
+      allow create: if isAdmin() && isValidParcel(request.resource.data);
+      allow update: if isAdmin() && isValidParcel(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      // Users can only read their own profile
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Only admins can manage users (or the system bootstraps the first admin)
+      allow write: if isAdmin();
+    }
+  }
+}

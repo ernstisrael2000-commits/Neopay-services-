@@ -1,0 +1,5 @@
+{
+  "name": "Neopay",
+  "description": "Application professionnelle de gestion et de suivi de colis avec interface administrateur sécurisée.",
+  "requestFramePermissions": []
+}

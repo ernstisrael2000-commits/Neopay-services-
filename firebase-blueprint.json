@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "parcel": {
+      "title": "Parcel",
+      "description": "Represents a parcel being tracked in the system.",
+      "type": "object",
+      "properties": {
+        "trackingNumber": {
+          "type": "string",
+          "description": "Unique tracking number for the parcel."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["En route", "En transit", "Arrivé", "Livré"],
+          "description": "Current status of the parcel."
+        },
+        "currentLocation": {
+          "type": "string",
+          "description": "Current physical location of the parcel."
+        },
+        "estimatedArrival": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Estimated arrival date and time."
+        },
+        "proofOfDelivery": {
+          "type": "string",
+          "description": "URL of the delivery proof image."
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Payé", "Non payé"],
+          "description": "Payment status of the parcel."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the parcel record was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when the parcel record was last updated."
+        }
+      },
+      "required": ["trackingNumber", "status", "currentLocation", "paymentStatus"]
+    },
+    "user": {
+      "title": "User",
+      "description": "Represents an administrator user.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/parcels/{parcelId}": {
+      "schema": "parcel",
+      "description": "Collection of parcels."
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Collection of administrator users."
+    }
+  }
+}
