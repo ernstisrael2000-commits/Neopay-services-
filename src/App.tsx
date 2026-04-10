@@ -2,12 +2,13 @@ import { useState } from 'react';
 import Navbar from './components/Navbar';
 import TrackingView from './components/TrackingView';
 import AdminDashboard from './components/AdminDashboard';
+import HomeView from './components/HomeView';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/useAuth';
 import { Loader2, ShieldAlert, Package } from 'lucide-react';
 
 export default function App() {
-  const [view, setView] = useState<'client' | 'admin'>('client');
+  const [view, setView] = useState<'home' | 'tracking' | 'admin'>('home');
   const { isAdmin, loading } = useAuth();
 
   if (loading) {
@@ -24,14 +25,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-blue-100 selection:text-blue-900">
       <Navbar 
-        onAdminClick={() => setView('admin')} 
-        onHomeClick={() => setView('client')} 
+        currentView={view}
+        onViewChange={setView}
       />
       
-      <main className="animate-in fade-in duration-500">
-        {view === 'client' ? (
+      <main className="animate-in fade-in duration-500 pt-16">
+        {view === 'home' && (
+          <HomeView onTrackingClick={() => setView('tracking')} />
+        )}
+        
+        {view === 'tracking' && (
           <TrackingView />
-        ) : (
+        )}
+
+        {view === 'admin' && (
           isAdmin ? (
             <AdminDashboard />
           ) : (
@@ -44,10 +51,10 @@ export default function App() {
                 Vous devez être administrateur pour accéder à cette section.
               </p>
               <button 
-                onClick={() => setView('client')}
+                onClick={() => setView('home')}
                 className="text-blue-600 font-semibold hover:underline"
               >
-                Retour au suivi
+                Retour à l'accueil
               </button>
             </div>
           )

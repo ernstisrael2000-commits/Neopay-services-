@@ -12,11 +12,14 @@ import {
   AlertCircle,
   Loader2,
   Upload,
-  Trash
+  Trash,
+  Settings as SettingsIcon,
+  LayoutGrid,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { 
@@ -29,8 +32,9 @@ import {
 } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useParcels, saveParcel, uploadProof, deleteParcel } from '../services/parcelService';
-import { Parcel, ParcelStatus, PaymentStatus } from '../types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -45,8 +49,8 @@ const compressImage = (file: File): Promise<Blob> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1200;
-        const MAX_HEIGHT = 1200;
+        const MAX_WIDTH = 1600;
+        const MAX_HEIGHT = 1600;
         let width = img.width;
         let height = img.height;
 
@@ -81,17 +85,31 @@ const compressImage = (file: File): Promise<Blob> => {
 };
 
 export default function AdminDashboard() {
-  const { parcels, loading } = useParcels();
+  const { parcels, loading: parcelsLoading } = useParcels();
+  const { products, loading: productsLoading } = useProducts();
+  const { settings, loading: settingsLoading } = useSettings();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [parcelToDelete, setParcelToDelete] = useState<Parcel | null>(null);
   const [editingParcel, setEditingParcel] = useState<Parcel | null>(null);
+  
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isProductDeleteDialogOpen, setIsProductDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  const [tempLogoUrl, setTempLogoUrl] = useState('');
+  const [tempProductImageUrl, setTempProductImageUrl] = useState('');
+  const [tempProofUrl, setTempProofUrl] = useState('');
 
-  // Form State
+  // Form States
   const [formData, setFormData] = useState<Partial<Parcel>>({
     trackingNumber: '',
     status: 'En route',
@@ -99,6 +117,14 @@ export default function AdminDashboard() {
     estimatedArrival: '',
     paymentStatus: 'Non payé',
     proofOfDelivery: ''
+  });
+
+  const [productFormData, setProductFormData] = useState<Partial<Product>>({
+    name: '',
+    image: '',
+    description: '',
+    price: '',
+    whatsappMessage: ''
   });
 
   const filteredParcels = parcels.filter(p => 
@@ -124,6 +150,91 @@ export default function AdminDashboard() {
     setIsDialogOpen(true);
   };
 
+  const handleOpenProductDialog = (product?: Product) => {
+    if (product) {
+      setEditingProduct(product);
+      setProductFormData(product);
+    } else {
+      setEditingProduct(null);
+      setProductFormData({
+        name: '',
+        image: '',
+        description: '',
+        price: '',
+        whatsappMessage: ''
+      });
+    }
+    setIsProductDialogOpen(true);
+  };
+
+  const handleSaveProduct = async () => {
+    setIsSaving(true);
+    try {
+      await saveProduct(productFormData, editingProduct?.id);
+      toast.success(editingProduct ? "Produit mis à jour !" : "Produit ajouté !");
+      setIsProductDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteProduct(productToDelete.id);
+      toast.success("Produit supprimé.");
+      setIsProductDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setProductToDelete(null);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const url = await uploadLogo(file, (p) => setUploadProgress(p));
+      await updateSettings({ logoUrl: url });
+      toast.success("Logo mis à jour !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement du logo.");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const compressedBlob = await compressImage(file);
+      const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+      const url = await uploadLogo(compressedFile, (p) => setUploadProgress(p)); // Reuse uploadLogo for generic images
+      setProductFormData(prev => ({ ...prev, image: url }));
+      toast.success("Image produit téléchargée !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement de l'image.");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
   const handleOpenDeleteDialog = (parcel: Parcel) => {
     setParcelToDelete(parcel);
     setIsDeleteDialogOpen(true);
@@ -146,11 +257,6 @@ export default function AdminDashboard() {
   };
 
   const handleSave = async () => {
-    if (!formData.trackingNumber || !formData.currentLocation) {
-      toast.error("Veuillez remplir tous les champs obligatoires.");
-      return;
-    }
-
     setIsSaving(true);
     try {
       await saveParcel(formData, editingParcel?.id);
@@ -169,12 +275,13 @@ export default function AdminDashboard() {
     if (!file) return;
 
     setUploading(true);
+    setUploadProgress(0);
     try {
       // Compress image before upload
       const compressedBlob = await compressImage(file);
       const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
       
-      const url = await uploadProof(compressedFile, formData.trackingNumber!);
+      const url = await uploadProof(compressedFile, formData.trackingNumber!, (p) => setUploadProgress(p));
       setFormData(prev => ({ ...prev, proofOfDelivery: url }));
       toast.success("Image téléchargée et optimisée !");
     } catch (error) {
@@ -182,6 +289,7 @@ export default function AdminDashboard() {
       toast.error("Échec du téléchargement de l'image.");
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -196,137 +304,461 @@ export default function AdminDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestion des Colis</h1>
-          <p className="text-gray-500">Gérez, suivez et mettez à jour les expéditions Neopay.</p>
-        </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          Nouveau Colis
-        </Button>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Administration Neopay</h1>
+        <p className="text-gray-500">Gérez les colis, les produits et les paramètres du site.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card className="bg-blue-50 border-blue-100">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600 uppercase">Total Colis</p>
-                <p className="text-3xl font-bold text-blue-900">{parcels.length}</p>
-              </div>
-              <Package className="h-8 w-8 text-blue-300" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-amber-50 border-amber-100">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-amber-600 uppercase">En Transit</p>
-                <p className="text-3xl font-bold text-amber-900">
-                  {parcels.filter(p => p.status === 'En transit' || p.status === 'En route').length}
-                </p>
-              </div>
-              <Truck className="h-8 w-8 text-amber-300" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-50 border-green-100">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-600 uppercase">Livrés</p>
-                <p className="text-3xl font-bold text-green-900">
-                  {parcels.filter(p => p.status === 'Livré').length}
-                </p>
-              </div>
-              <CheckCircle2 className="h-8 w-8 text-green-300" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs defaultValue="parcels" className="space-y-6">
+        <TabsList className="bg-white border p-1 rounded-xl h-auto flex flex-wrap gap-2">
+          <TabsTrigger value="parcels" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Colis
+          </TabsTrigger>
+          <TabsTrigger value="products" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
+            <LayoutGrid className="h-4 w-4" />
+            Produits / Services
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
+            <SettingsIcon className="h-4 w-4" />
+            Paramètres
+          </TabsTrigger>
+        </TabsList>
 
-      <Card className="shadow-sm border-gray-200">
-        <CardHeader className="border-b bg-gray-50/50 flex flex-row items-center justify-between space-y-0 py-4">
-          <CardTitle className="text-lg font-semibold">Liste des expéditions</CardTitle>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input 
-              placeholder="Rechercher..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 text-sm"
-            />
+        <TabsContent value="parcels" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Gestion des Colis</h2>
+            <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nouveau Colis
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Loader2 className="h-8 w-8 animate-spin mb-2" />
-              <p>Chargement des données...</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="bg-blue-50 border-blue-100">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-600 uppercase">Total Colis</p>
+                    <p className="text-3xl font-bold text-blue-900">{parcels.length}</p>
+                  </div>
+                  <Package className="h-8 w-8 text-blue-300" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-amber-50 border-amber-100">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-amber-600 uppercase">En Transit</p>
+                    <p className="text-3xl font-bold text-amber-900">
+                      {parcels.filter(p => p.status === 'En transit' || p.status === 'En route').length}
+                    </p>
+                  </div>
+                  <Truck className="h-8 w-8 text-amber-300" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-50 border-green-100">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-600 uppercase">Livrés</p>
+                    <p className="text-3xl font-bold text-green-900">
+                      {parcels.filter(p => p.status === 'Livré').length}
+                    </p>
+                  </div>
+                  <CheckCircle2 className="h-8 w-8 text-green-300" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardHeader className="border-b bg-gray-50/50 flex flex-row items-center justify-between space-y-0 py-4">
+              <CardTitle className="text-lg font-semibold">Liste des expéditions</CardTitle>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input 
+                  placeholder="Rechercher..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {parcelsLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des données...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead className="w-[180px]">N° de Suivi</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead>Localisation</TableHead>
+                        <TableHead>Paiement</TableHead>
+                        <TableHead>Dernière MÀJ</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredParcels.map((parcel) => (
+                        <TableRow key={parcel.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell className="font-mono font-medium text-blue-600">
+                            {parcel.trackingNumber}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(parcel.status)}
+                              <span className="text-sm font-medium">{parcel.status}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {parcel.currentLocation}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={parcel.paymentStatus === 'Payé' ? 'default' : 'destructive'} className="text-[10px] uppercase tracking-wider">
+                              {parcel.paymentStatus}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-400">
+                            {parcel.updatedAt ? format(parcel.updatedAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(parcel)}>
+                                <Edit2 className="h-4 w-4 text-gray-500" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenDeleteDialog(parcel)}>
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {filteredParcels.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-32 text-center text-gray-400">
+                            Aucun colis trouvé.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="products" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Gestion des Produits / Services</h2>
+            <Button onClick={() => handleOpenProductDialog()} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nouveau Produit
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {productsLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des produits...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Image</TableHead>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>Prix</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {products.map((product) => (
+                        <TableRow key={product.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell>
+                            <img 
+                              src={product.image} 
+                              className="h-10 w-10 object-cover rounded-lg border"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/100/100';
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-semibold">{product.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
+                              {product.price}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500 max-w-xs truncate">
+                            {product.description}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenProductDialog(product)}>
+                                <Edit2 className="h-4 w-4 text-gray-500" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => {
+                                setProductToDelete(product);
+                                setIsProductDeleteDialogOpen(true);
+                              }}>
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {products.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-32 text-center text-gray-400">
+                            Aucun produit ajouté.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          <h2 className="text-xl font-bold">Paramètres du Site</h2>
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <CardTitle>Identité Visuelle</CardTitle>
+              <CardDescription>Gérez le logo de votre plateforme Neopay.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <Label>Logo du site</Label>
+                <div className="flex items-center gap-6">
+                  <div className="h-24 w-24 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-100 overflow-hidden">
+                    {settings?.logoUrl ? (
+                      <img 
+                        src={settings.logoUrl} 
+                        className="w-full h-full object-contain p-1"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <ImageIcon className="h-8 w-8 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleLogoUpload}
+                      className="hidden" 
+                      id="logo-upload"
+                    />
+                    <Button asChild variant="outline" disabled={uploading}>
+                      <label htmlFor="logo-upload" className="cursor-pointer">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                        Changer le logo
+                      </label>
+                    </Button>
+                    {uploading && (
+                      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                        <div 
+                          className="bg-blue-600 h-full transition-all duration-300" 
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500">Format recommandé: PNG ou SVG, fond transparent.</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Lien du logo (externe)</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="https://..." 
+                      value={tempLogoUrl} 
+                      onChange={(e) => setTempLogoUrl(e.target.value)}
+                    />
+                    <Button 
+                      onClick={() => {
+                        if (tempLogoUrl) {
+                          updateSettings({ logoUrl: tempLogoUrl });
+                          setTempLogoUrl('');
+                          toast.success("Lien du logo appliqué !");
+                        }
+                      }}
+                      className="bg-blue-600"
+                    >
+                      Ajouter
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Product Delete Confirmation */}
+      <Dialog open={isProductDeleteDialogOpen} onOpenChange={setIsProductDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Supprimer le produit
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer <span className="font-bold">{productToDelete?.name}</span> ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsProductDeleteDialogOpen(false)}>Annuler</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteProduct} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash className="h-4 w-4 mr-2" />}
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Product Edit/Add Dialog */}
+      <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{editingProduct ? 'Modifier le produit' : 'Nouveau produit'}</DialogTitle>
+            <DialogDescription>Ajoutez un service ou un produit dynamique à votre plateforme.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Nom</Label>
+              <Input 
+                value={productFormData.name} 
+                onChange={(e) => setProductFormData({...productFormData, name: e.target.value})}
+                className="col-span-3" 
+                placeholder="Ex: Netflix Premium 1 Mois"
+              />
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gray-50/50">
-                    <TableHead className="w-[180px]">N° de Suivi</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Localisation</TableHead>
-                    <TableHead>Paiement</TableHead>
-                    <TableHead>Dernière MÀJ</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredParcels.map((parcel) => (
-                    <TableRow key={parcel.id} className="hover:bg-gray-50/50 transition-colors">
-                      <TableCell className="font-mono font-medium text-blue-600">
-                        {parcel.trackingNumber}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(parcel.status)}
-                          <span className="text-sm font-medium">{parcel.status}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {parcel.currentLocation}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={parcel.paymentStatus === 'Payé' ? 'default' : 'destructive'} className="text-[10px] uppercase tracking-wider">
-                          {parcel.paymentStatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-400">
-                        {parcel.updatedAt ? format(parcel.updatedAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(parcel)}>
-                            <Edit2 className="h-4 w-4 text-gray-500" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenDeleteDialog(parcel)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredParcels.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-32 text-center text-gray-400">
-                        Aucun colis trouvé.
-                      </TableCell>
-                    </TableRow>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Prix</Label>
+              <Input 
+                value={productFormData.price} 
+                onChange={(e) => setProductFormData({...productFormData, price: e.target.value})}
+                className="col-span-3" 
+                placeholder="Ex: 1500 HTG"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Description</Label>
+              <textarea 
+                value={productFormData.description} 
+                onChange={(e) => setProductFormData({...productFormData, description: e.target.value})}
+                className="col-span-3 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Détails du service..."
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Msg WhatsApp</Label>
+              <Input 
+                value={productFormData.whatsappMessage} 
+                onChange={(e) => setProductFormData({...productFormData, whatsappMessage: e.target.value})}
+                className="col-span-3" 
+                placeholder="Message auto personnalisé..."
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Image (Lien)</Label>
+              <div className="col-span-3 flex gap-2">
+                <Input 
+                  value={tempProductImageUrl} 
+                  onChange={(e) => setTempProductImageUrl(e.target.value)}
+                  placeholder="https://exemple.com/image.jpg"
+                />
+                <Button 
+                  onClick={() => {
+                    if (tempProductImageUrl) {
+                      setProductFormData({...productFormData, image: tempProductImageUrl});
+                      setTempProductImageUrl('');
+                      toast.success("Lien d'image appliqué !");
+                    }
+                  }}
+                  className="bg-blue-600"
+                >
+                  Ajouter
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Image (Fichier)</Label>
+              <div className="col-span-3 space-y-4">
+                {productFormData.image && (
+                  <div className="relative h-48 w-full rounded-xl overflow-hidden border bg-gray-50">
+                    <img 
+                      src={productFormData.image} 
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
+                      }}
+                    />
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="absolute top-2 right-2"
+                      onClick={() => setProductFormData({...productFormData, image: ''})}
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleProductImageUpload}
+                      className="hidden" 
+                      id="product-image-upload"
+                    />
+                    <Button asChild variant="outline" className="w-full cursor-pointer" disabled={uploading}>
+                      <label htmlFor="product-image-upload">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                        Télécharger l'image
+                      </label>
+                    </Button>
+                  </div>
+                  {uploading && (
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-blue-600 h-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSaveProduct} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -426,35 +858,73 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Preuve</Label>
+              <Label className="text-right">Preuve (Lien)</Label>
+              <div className="col-span-3 flex gap-2">
+                <Input 
+                  value={tempProofUrl} 
+                  onChange={(e) => setTempProofUrl(e.target.value)}
+                  placeholder="Lien de l'image de preuve..."
+                />
+                <Button 
+                  onClick={() => {
+                    if (tempProofUrl) {
+                      setFormData({...formData, proofOfDelivery: tempProofUrl});
+                      setTempProofUrl('');
+                      toast.success("Lien de preuve appliqué !");
+                    }
+                  }}
+                  className="bg-blue-600"
+                >
+                  Ajouter
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Preuve (Fichier)</Label>
               <div className="col-span-3 space-y-2">
                 {formData.proofOfDelivery && (
-                  <div className="relative group rounded-lg overflow-hidden border h-24">
-                    <img src={formData.proofOfDelivery} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="relative group rounded-lg overflow-hidden border h-48 bg-gray-50">
+                    <img 
+                      src={formData.proofOfDelivery} 
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
+                      }}
+                    />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                       <Button variant="destructive" size="sm" onClick={() => setFormData({...formData, proofOfDelivery: ''})}>Supprimer</Button>
                     </div>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <Input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleFileUpload}
-                    className="hidden" 
-                    id="file-upload"
-                  />
-                  <Button 
-                    asChild 
-                    variant="outline" 
-                    className="w-full cursor-pointer"
-                    disabled={uploading}
-                  >
-                    <label htmlFor="file-upload">
-                      {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                      {formData.proofOfDelivery ? 'Changer l\'image' : 'Télécharger une preuve'}
-                    </label>
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleFileUpload}
+                      className="hidden" 
+                      id="file-upload"
+                    />
+                    <Button 
+                      asChild 
+                      variant="outline" 
+                      className="w-full cursor-pointer"
+                      disabled={uploading}
+                    >
+                      <label htmlFor="file-upload">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                        {formData.proofOfDelivery ? 'Changer l\'image' : 'Télécharger une preuve'}
+                      </label>
+                    </Button>
+                  </div>
+                  {uploading && (
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-blue-600 h-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

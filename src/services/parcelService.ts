@@ -10,11 +10,42 @@ import {
   doc, 
   serverTimestamp,
   getDocs,
-  orderBy
+  orderBy,
+  setDoc,
+  getDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
-import { Parcel, ParcelStatus, PaymentStatus } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings } from '../types';
+
+// Helper for resumable uploads with progress
+const uploadWithProgress = (
+  file: File | Blob, 
+  path: string, 
+  onProgress?: (progress: number) => void
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file, {
+      contentType: 'image/jpeg'
+    });
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        if (onProgress) onProgress(progress);
+      }, 
+      (error) => {
+        console.error("Upload error:", error);
+        reject(error);
+      }, 
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        resolve(downloadURL);
+      }
+    );
+  });
+};
 
 export const useParcels = () => {
   const [parcels, setParcels] = useState<Parcel[]>([]);
@@ -69,8 +100,98 @@ export const deleteParcel = async (id: string) => {
   await deleteDoc(parcelRef);
 };
 
-export const uploadProof = async (file: File, trackingNumber: string): Promise<string> => {
-  const storageRef = ref(storage, `proofs/${trackingNumber}_${Date.now()}`);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+export const uploadProof = async (
+  file: File | Blob, 
+  trackingNumber: string, 
+  onProgress?: (progress: number) => void
+): Promise<string> => {
+  try {
+    const path = `proofs/${trackingNumber}_${Date.now()}`;
+    return await uploadWithProgress(file, path, onProgress);
+  } catch (error) {
+    console.error("Error uploading proof:", error);
+    throw new Error("Échec du téléchargement de l'image. Veuillez vérifier votre connexion.");
+  }
+};
+
+// Product Services
+export const useProducts = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Product[];
+      setProducts(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching products:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { products, loading };
+};
+
+export const saveProduct = async (productData: Partial<Product>, id?: string) => {
+  if (id) {
+    const productRef = doc(db, 'products', id);
+    await updateDoc(productRef, {
+      ...productData,
+    });
+  } else {
+    await addDoc(collection(db, 'products'), {
+      ...productData,
+      createdAt: serverTimestamp(),
+    });
+  }
+};
+
+export const deleteProduct = async (id: string) => {
+  const productRef = doc(db, 'products', id);
+  await deleteDoc(productRef);
+};
+
+// Settings Services
+export const useSettings = () => {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const docRef = doc(db, 'settings', 'global');
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setSettings(docSnap.data() as AppSettings);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { settings, loading };
+};
+
+export const updateSettings = async (settingsData: AppSettings) => {
+  const docRef = doc(db, 'settings', 'global');
+  await setDoc(docRef, settingsData, { merge: true });
+};
+
+export const uploadLogo = async (
+  file: File | Blob,
+  onProgress?: (progress: number) => void
+): Promise<string> => {
+  try {
+    const path = `logo/app_logo_${Date.now()}`;
+    return await uploadWithProgress(file, path, onProgress);
+  } catch (error) {
+    console.error("Error uploading logo:", error);
+    throw new Error("Échec du téléchargement du logo.");
+  }
 };

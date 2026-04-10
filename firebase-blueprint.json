@@ -60,6 +60,28 @@
         }
       },
       "required": ["email", "role"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Represents a dynamic service or product.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "string" },
+        "whatsappMessage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "image", "description", "price"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Global app settings like logo.",
+      "type": "object",
+      "properties": {
+        "logoUrl": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -70,6 +92,14 @@
     "/users/{userId}": {
       "schema": "user",
       "description": "Collection of administrator users."
+    },
+    "/products/{productId}": {
+      "schema": "product",
+      "description": "Collection of dynamic products."
+    },
+    "/settings/{settingId}": {
+      "schema": "settings",
+      "description": "Global settings."
     }
   }
 }

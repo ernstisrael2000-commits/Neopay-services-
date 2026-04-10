@@ -49,19 +49,35 @@ service cloud.firestore {
              (!('estimatedArrival' in data) || (data.estimatedArrival is string));
     }
 
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'image', 'description', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.image is string &&
+             data.description is string &&
+             data.price is string;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /parcels/{parcelId} {
-      // Clients can read parcels if they know the tracking number (queried by trackingNumber)
-      // We allow list only if querying by trackingNumber to prevent enumeration
       allow read: if true; 
-      
-      // Only admins can create or update parcels
       allow create: if isAdmin() && isValidParcel(request.resource.data);
       allow update: if isAdmin() && isValidParcel(request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidProduct(request.resource.data);
+      allow update: if isAdmin() && isValidProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /users/{userId} {

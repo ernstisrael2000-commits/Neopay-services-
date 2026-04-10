@@ -156,11 +156,11 @@ export default function TrackingView() {
                       Preuve de livraison
                     </p>
                     {parcel.status === 'Livré' && parcel.proofOfDelivery ? (
-                      <div className="rounded-xl overflow-hidden border shadow-sm group relative">
+                      <div className="rounded-xl overflow-hidden border shadow-sm group relative bg-gray-100">
                         <img 
                           src={parcel.proofOfDelivery} 
                           alt="Preuve de livraison" 
-                          className="w-full h-48 object-cover transition-transform group-hover:scale-105"
+                          className="w-full h-64 object-contain transition-transform group-hover:scale-105"
                           referrerPolicy="no-referrer"
                         />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

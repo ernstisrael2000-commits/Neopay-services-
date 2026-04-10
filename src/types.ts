@@ -18,3 +18,17 @@ export interface UserProfile {
   email: string;
   role: 'admin';
 }
+
+export interface Product {
+  id?: string;
+  name: string;
+  image: string;
+  description: string;
+  price: string;
+  whatsappMessage?: string;
+  createdAt: any;
+}
+
+export interface AppSettings {
+  logoUrl?: string;
+}
