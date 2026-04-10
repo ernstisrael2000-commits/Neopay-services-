@@ -50,11 +50,11 @@ export default function TrackingView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="text-center mb-12">
+      <div className="text-center mb-12 px-2">
         <motion.h1 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-4xl font-extrabold text-gray-900 mb-4"
+          className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 leading-tight"
         >
           Suivez votre colis en temps réel
         </motion.h1>
@@ -62,7 +62,7 @@ export default function TrackingView() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-lg text-gray-600"
+          className="text-base sm:text-lg text-gray-600"
         >
           Entrez votre numéro de suivi Neopay pour voir l'état actuel de votre livraison.
         </motion.p>

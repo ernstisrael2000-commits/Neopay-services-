@@ -29,6 +29,31 @@ export interface Product {
   createdAt: any;
 }
 
+export interface Affiliate {
+  id?: string;
+  username: string;
+  password: string; // Manually provided by admin
+  name: string;
+  balance: number;
+  referredClients: number;
+  code: string;
+  createdAt: any;
+}
+
+export interface WithdrawalRequest {
+  id?: string;
+  affiliateId: string;
+  affiliateName: string;
+  affiliateCode: string;
+  amount: number;
+  method: 'MonCash' | 'Natcash';
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
 export interface AppSettings {
   logoUrl?: string;
+  whatsappAdminNumber?: string;
 }

@@ -62,11 +62,11 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 space-y-20">
       {/* Hero Section */}
-      <section className="text-center space-y-6">
+      <section className="text-center space-y-6 px-2">
         <motion.h1 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight"
+          className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-tight"
         >
           Bienvenue sur <span className="text-blue-600">Neopay</span>
         </motion.h1>
@@ -74,7 +74,7 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-xl text-gray-600 max-w-2xl mx-auto"
+          className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto"
         >
           Votre plateforme complète de services digitaux, logistique et bien plus encore.
         </motion.p>

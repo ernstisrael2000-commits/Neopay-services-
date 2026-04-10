@@ -15,7 +15,11 @@ import {
   Trash,
   Settings as SettingsIcon,
   LayoutGrid,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Edit,
+  PlusCircle,
+  Wallet,
+  Users
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -34,7 +38,8 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings } from '../types';
+import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus } from '../services/affiliateService';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -88,6 +93,8 @@ export default function AdminDashboard() {
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { settings, loading: settingsLoading } = useSettings();
+  const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
+  const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -99,6 +106,17 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductDeleteDialogOpen, setIsProductDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
+  const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
+  const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
+  const [affiliateFormData, setAffiliateFormData] = useState<Partial<Affiliate>>({
+    name: '',
+    username: '',
+    password: '',
+    code: '',
+    balance: 0,
+    referredClients: 0,
+  });
 
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -256,6 +274,52 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleSaveAffiliate = async () => {
+    if (!affiliateFormData.name || !affiliateFormData.username || !affiliateFormData.password || !affiliateFormData.code) {
+      toast.error("Veuillez remplir tous les champs.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await saveAffiliate(affiliateFormData, editingAffiliate?.id);
+      toast.success(editingAffiliate ? "Affilié mis à jour !" : "Affilié ajouté !");
+      setIsAffiliateDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleWithdrawalAction = async (request: WithdrawalRequest, status: 'approved' | 'rejected') => {
+    let reason = '';
+    if (status === 'rejected') {
+      reason = window.prompt("Raison du rejet :") || '';
+      if (!reason) return;
+    }
+
+    try {
+      await updateWithdrawalStatus(request.id!, status, reason);
+      toast.success(`Demande ${status === 'approved' ? 'approuvée' : 'rejetée'} !`);
+      
+      // WhatsApp notification
+      const message = status === 'approved' 
+        ? `Félicitations ${request.affiliateName} ! Votre demande de retrait de ${request.amount} Goud via ${request.method} a été APPROUVÉE.`
+        : `Désolé ${request.affiliateName}, votre demande de retrait de ${request.amount} Goud a été REJETÉE.\n\nRaison: ${reason}`;
+      
+      // We don't have the affiliate phone number in the request, but we could add it to the affiliate profile.
+      // For now, let's assume the admin will send it manually or we can add phone to Affiliate type.
+      // Let's just show the message to the admin so they can copy it.
+      alert(`Message à envoyer à l'affilié :\n\n${message}`);
+      
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la mise à jour du statut.");
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -318,6 +382,10 @@ export default function AdminDashboard() {
           <TabsTrigger value="products" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
             <LayoutGrid className="h-4 w-4" />
             Produits / Services
+          </TabsTrigger>
+          <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Affiliés
           </TabsTrigger>
           <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
             <SettingsIcon className="h-4 w-4" />
@@ -535,6 +603,137 @@ export default function AdminDashboard() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="affiliates" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Gestion des Affiliés</h2>
+            <Button onClick={() => {
+              setEditingAffiliate(null);
+              setAffiliateFormData({ 
+                name: '', 
+                username: '', 
+                password: '', 
+                code: '',
+                balance: 0,
+                referredClients: 0
+              });
+              setIsAffiliateDialogOpen(true);
+            }} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              Nouvel Affilié
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
+                  <CardTitle className="text-lg font-semibold">Liste des Affiliés</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {affiliatesLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                      <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                      <p>Chargement des affiliés...</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50/50">
+                            <TableHead>Nom</TableHead>
+                            <TableHead>Code</TableHead>
+                            <TableHead>Solde</TableHead>
+                            <TableHead>Référés</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {affiliates.map((a) => (
+                            <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
+                              <TableCell className="font-medium">{a.name}</TableCell>
+                              <TableCell className="font-mono text-xs">{a.code}</TableCell>
+                              <TableCell>{a.balance} Goud</TableCell>
+                              <TableCell>{a.referredClients}</TableCell>
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="sm" onClick={() => {
+                                  setEditingAffiliate(a);
+                                  setAffiliateFormData(a);
+                                  setIsAffiliateDialogOpen(true);
+                                }}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {affiliates.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-32 text-center text-gray-400">
+                                Aucun affilié trouvé.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
+                  <CardTitle className="text-lg font-semibold">Demandes de Retrait</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  {allWithdrawalsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    </div>
+                  ) : allWithdrawals.filter(w => w.status === 'pending').length > 0 ? (
+                    allWithdrawals.filter(w => w.status === 'pending').map((w) => (
+                      <div key={w.id} className="p-4 rounded-xl border bg-gray-50 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold">{w.affiliateName}</p>
+                            <p className="text-xs text-gray-500">Code: {w.affiliateCode}</p>
+                          </div>
+                          <Badge className="bg-blue-100 text-blue-700">{w.amount} Goud</Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Wallet className="h-3 w-3" />
+                          <span>{w.method}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            className="flex-1 bg-green-600 hover:bg-green-700 h-8"
+                            onClick={() => handleWithdrawalAction(w, 'approved')}
+                          >
+                            Approuver
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="destructive" 
+                            className="flex-1 h-8"
+                            onClick={() => handleWithdrawalAction(w, 'rejected')}
+                          >
+                            Rejeter
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <p className="text-sm">Aucune demande en attente.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
         <TabsContent value="settings" className="space-y-6">
           <h2 className="text-xl font-bold">Paramètres du Site</h2>
           <Card className="max-w-2xl">
@@ -606,11 +805,96 @@ export default function AdminDashboard() {
                     </Button>
                   </div>
                 </div>
+
+                <div className="space-y-2 pt-4 border-t">
+                  <Label>Numéro WhatsApp Admin (pour notifications)</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="+509..." 
+                      value={settings?.whatsappAdminNumber || ''} 
+                      onChange={(e) => updateSettings({ whatsappAdminNumber: e.target.value })}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Ce numéro recevra les demandes de retrait des affiliés.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Affiliate Edit/Add Dialog */}
+      <Dialog open={isAffiliateDialogOpen} onOpenChange={setIsAffiliateDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{editingAffiliate ? 'Modifier l\'affilié' : 'Nouvel affilié'}</DialogTitle>
+            <DialogDescription>
+              Gérez les identifiants et les informations de l'affilié.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Nom Complet</Label>
+              <Input 
+                value={affiliateFormData.name} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, name: e.target.value})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Username</Label>
+              <Input 
+                value={affiliateFormData.username} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, username: e.target.value})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Password</Label>
+              <Input 
+                value={affiliateFormData.password} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, password: e.target.value})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Code</Label>
+              <Input 
+                value={affiliateFormData.code} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, code: e.target.value})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Solde (Goud)</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.balance} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, balance: Number(e.target.value)})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Clients Parrainés</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.referredClients} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, referredClients: Number(e.target.value)})}
+                className="col-span-3" 
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAffiliateDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSaveAffiliate} disabled={isSaving} className="bg-blue-600">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Product Delete Confirmation */}
       <Dialog open={isProductDeleteDialogOpen} onOpenChange={setIsProductDeleteDialogOpen}>

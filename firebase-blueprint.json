@@ -80,8 +80,41 @@
       "description": "Global app settings like logo.",
       "type": "object",
       "properties": {
-        "logoUrl": { "type": "string" }
+        "logoUrl": { "type": "string" },
+        "whatsappAdminNumber": { "type": "string" }
       }
+    },
+    "affiliate": {
+      "title": "Affiliate",
+      "description": "Represents an affiliate user.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "balance": { "type": "number" },
+        "referredClients": { "type": "number" },
+        "code": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "password", "name", "balance", "referredClients", "code"]
+    },
+    "withdrawal": {
+      "title": "Withdrawal",
+      "description": "Represents a withdrawal request from an affiliate.",
+      "type": "object",
+      "properties": {
+        "affiliateId": { "type": "string" },
+        "affiliateName": { "type": "string" },
+        "affiliateCode": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["MonCash", "Natcash"] },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "rejectionReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["affiliateId", "amount", "method", "status"]
     }
   },
   "firestore": {
@@ -100,6 +133,14 @@
     "/settings/{settingId}": {
       "schema": "settings",
       "description": "Global settings."
+    },
+    "/affiliates/{affiliateId}": {
+      "schema": "affiliate",
+      "description": "Collection of affiliates."
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": "withdrawal",
+      "description": "Collection of withdrawal requests."
     }
   }
 }

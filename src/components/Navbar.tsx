@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users } from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
@@ -49,14 +49,14 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                 <Package className="h-6 w-6 text-white" />
               </div>
             )}
-            <span className="text-2xl font-bold tracking-tight text-gray-900">Neopay</span>
+            <span className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 hidden xs:block">Neopay</span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1 sm:gap-4">
             <Button 
               variant={currentView === 'home' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('home')} 
-              className="hidden sm:flex items-center gap-2"
+              className="hidden md:flex items-center gap-2"
             >
               <Home className="h-4 w-4" />
               Accueil
@@ -64,20 +64,29 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
             <Button 
               variant={currentView === 'tracking' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('tracking')} 
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 px-2 sm:px-4"
             >
               <Search className="h-4 w-4" />
-              Suivi
+              <span className="hidden sm:inline">Suivi</span>
+            </Button>
+
+            <Button 
+              variant={currentView === 'affiliate' ? 'secondary' : 'ghost'} 
+              onClick={() => onViewChange('affiliate')} 
+              className="flex items-center gap-2 px-2 sm:px-4"
+            >
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Affiliés</span>
             </Button>
             
             {isAdmin && (
               <Button 
                 variant={currentView === 'admin' ? 'secondary' : 'outline'} 
                 onClick={() => onViewChange('admin')} 
-                className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 text-blue-700"
+                className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 text-blue-700 px-2 sm:px-4"
               >
                 <ShieldCheck className="h-4 w-4" />
-                Admin
+                <span className="hidden sm:inline">Admin</span>
               </Button>
             )}
 

@@ -35,8 +35,21 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         (request.auth.token.email == "ernstisrael2000@gmail.com" && request.auth.token.email_verified == true));
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          request.auth.token.email == "ernstisrael2000@gmail.com"
+        );
+    }
+
+    function isValidAffiliate(data) {
+      return data.keys().hasAll(['name', 'username', 'password', 'code']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.username is string && data.username.size() > 0 &&
+             data.password is string && data.password.size() > 0 &&
+             data.code is string && data.code.size() > 0 &&
+             (!('balance' in data) || data.balance is number) &&
+             (!('referredClients' in data) || data.referredClients is number);
     }
 
     function isValidParcel(data) {
@@ -78,6 +91,20 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /affiliates/{affiliateId} {
+      allow read: if true; 
+      allow create: if isAdmin() && isValidAffiliate(request.resource.data);
+      allow update: if isAdmin() && isValidAffiliate(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if true; // Allow affiliates to see their requests and admins to see all
+      allow create: if true; // Affiliates can create requests
+      allow update: if isAdmin(); // Only admins can approve/reject
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {
