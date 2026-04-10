@@ -143,12 +143,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <Button 
                     className="w-full mt-4 bg-white text-blue-600 hover:bg-blue-50 font-bold"
                     disabled={affiliate.balance < 20}
-                  />
+                  >
+                    <ArrowUpRight className="h-4 w-4 mr-2" />
+                    Demander un retrait
+                  </Button>
                 }
-              >
-                <ArrowUpRight className="h-4 w-4 mr-2" />
-                Demander un retrait
-              </DialogTrigger>
+              />
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Demande de Retrait</DialogTitle>

@@ -45,9 +45,12 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     setRegisterLoading(true);
     try {
       await submitAffiliateRequest(registerData);
-      toast.success("Demande d'inscription envoyée ! Nous vous contacterons bientôt.");
       setIsRegisterOpen(false);
-      setRegisterData({ name: '', email: '', phone: '', message: '' });
+      // Small delay before toast and reset to avoid DOM conflicts during unmount
+      setTimeout(() => {
+        toast.success("Demande d'inscription envoyée ! Nous vous contacterons bientôt.");
+        setRegisterData({ name: '', email: '', phone: '', message: '' });
+      }, 100);
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors de l'envoi de la demande.");
@@ -132,12 +135,12 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
             <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
               <DialogTrigger 
                 render={
-                  <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50" />
+                  <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50">
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    S'inscrire comme affilié
+                  </Button>
                 }
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                S'inscrire comme affilié
-              </DialogTrigger>
+              />
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>Devenir Affilié Neopay</DialogTitle>
@@ -191,8 +194,12 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
                   </div>
                   <DialogFooter className="pt-4">
                     <Button type="submit" className="w-full bg-blue-600" disabled={registerLoading}>
-                      {registerLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                      Envoyer ma demande
+                      {registerLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                      )}
+                      <span>Envoyer ma demande</span>
                     </Button>
                   </DialogFooter>
                 </form>
