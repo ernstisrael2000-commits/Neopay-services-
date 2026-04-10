@@ -38,8 +38,8 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
-import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus } from '../services/affiliateService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest } from '../types';
+import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus } from '../services/affiliateService';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -95,6 +95,7 @@ export default function AdminDashboard() {
   const { settings, loading: settingsLoading } = useSettings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
+  const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -108,6 +109,8 @@ export default function AdminDashboard() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
+  const [isAffiliateDeleteDialogOpen, setIsAffiliateDeleteDialogOpen] = useState(false);
+  const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
   const [affiliateFormData, setAffiliateFormData] = useState<Partial<Affiliate>>({
     name: '',
@@ -293,6 +296,27 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleOpenAffiliateDeleteDialog = (affiliate: Affiliate) => {
+    setAffiliateToDelete(affiliate);
+    setIsAffiliateDeleteDialogOpen(true);
+  };
+
+  const handleConfirmAffiliateDelete = async () => {
+    if (!affiliateToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteAffiliate(affiliateToDelete.id);
+      toast.success("Affilié supprimé avec succès.");
+      setIsAffiliateDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setAffiliateToDelete(null);
+    }
+  };
+
   const handleWithdrawalAction = async (request: WithdrawalRequest, status: 'approved' | 'rejected') => {
     let reason = '';
     if (status === 'rejected') {
@@ -309,14 +333,35 @@ export default function AdminDashboard() {
         ? `Félicitations ${request.affiliateName} ! Votre demande de retrait de ${request.amount} Goud via ${request.method} a été APPROUVÉE.`
         : `Désolé ${request.affiliateName}, votre demande de retrait de ${request.amount} Goud a été REJETÉE.\n\nRaison: ${reason}`;
       
-      // We don't have the affiliate phone number in the request, but we could add it to the affiliate profile.
-      // For now, let's assume the admin will send it manually or we can add phone to Affiliate type.
-      // Let's just show the message to the admin so they can copy it.
       alert(`Message à envoyer à l'affilié :\n\n${message}`);
       
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors de la mise à jour du statut.");
+    }
+  };
+
+  const handleAffiliateRequestAction = async (request: AffiliateRequest, status: 'approved' | 'rejected') => {
+    try {
+      await updateAffiliateRequestStatus(request.id!, status);
+      toast.success(`Demande d'inscription ${status === 'approved' ? 'approuvée' : 'rejetée'} !`);
+      
+      if (status === 'approved') {
+        // Open the affiliate dialog with pre-filled data
+        setEditingAffiliate(null);
+        setAffiliateFormData({
+          name: request.name,
+          username: request.email.split('@')[0],
+          password: Math.random().toString(36).slice(-8),
+          code: `AFF${Math.floor(1000 + Math.random() * 9000)}`,
+          balance: 0,
+          referredClients: 0
+        });
+        setIsAffiliateDialogOpen(true);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la mise à jour de la demande.");
     }
   };
 
@@ -655,13 +700,18 @@ export default function AdminDashboard() {
                               <TableCell>{a.balance} Goud</TableCell>
                               <TableCell>{a.referredClients}</TableCell>
                               <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" onClick={() => {
-                                  setEditingAffiliate(a);
-                                  setAffiliateFormData(a);
-                                  setIsAffiliateDialogOpen(true);
-                                }}>
-                                  <Edit className="h-4 w-4" />
-                                </Button>
+                                <div className="flex justify-end gap-2">
+                                  <Button variant="ghost" size="sm" onClick={() => {
+                                    setEditingAffiliate(a);
+                                    setAffiliateFormData(a);
+                                    setIsAffiliateDialogOpen(true);
+                                  }}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => handleOpenAffiliateDeleteDialog(a)}>
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -681,6 +731,58 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-6">
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
+                  <CardTitle className="text-lg font-semibold">Demandes d'Inscription</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  {affiliateRequestsLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    </div>
+                  ) : affiliateRequests.filter(r => r.status === 'pending').length > 0 ? (
+                    affiliateRequests.filter(r => r.status === 'pending').map((r) => (
+                      <div key={r.id} className="p-4 rounded-xl border bg-blue-50/30 border-blue-100 space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold text-blue-900">{r.name}</p>
+                            <p className="text-xs text-gray-500">{r.email}</p>
+                            <p className="text-xs text-gray-500">{r.phone}</p>
+                          </div>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">Nouveau</Badge>
+                        </div>
+                        {r.message && (
+                          <p className="text-xs text-gray-600 bg-white p-2 rounded border italic">
+                            "{r.message}"
+                          </p>
+                        )}
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 h-8"
+                            onClick={() => handleAffiliateRequestAction(r, 'approved')}
+                          >
+                            Approuver
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="flex-1 h-8 border-red-200 text-red-600 hover:bg-red-50"
+                            onClick={() => handleAffiliateRequestAction(r, 'rejected')}
+                          >
+                            Rejeter
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <p className="text-sm">Aucune demande d'inscription.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="border-b bg-gray-50/50">
                   <CardTitle className="text-lg font-semibold">Demandes de Retrait</CardTitle>
@@ -891,6 +993,31 @@ export default function AdminDashboard() {
             <Button onClick={handleSaveAffiliate} disabled={isSaving} className="bg-blue-600">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Affiliate Delete Confirmation Dialog */}
+      <Dialog open={isAffiliateDeleteDialogOpen} onOpenChange={setIsAffiliateDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Confirmer la suppression
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer l'affilié <span className="font-bold text-gray-900">{affiliateToDelete?.name}</span> ? 
+              Cette action est irréversible et supprimera toutes les données associées.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsAffiliateDeleteDialogOpen(false)} disabled={isDeleting}>
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmAffiliateDelete} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Supprimer définitivement
             </Button>
           </DialogFooter>
         </DialogContent>

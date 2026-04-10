@@ -3,10 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
-import { loginAffiliate } from '../services/affiliateService';
+import { loginAffiliate, submitAffiliateRequest } from '../services/affiliateService';
 import { toast } from 'sonner';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, Lock, UserPlus, CheckCircle2 } from 'lucide-react';
 import { Affiliate } from '../types';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription,
+  DialogTrigger
+} from './ui/dialog';
+import { Textarea } from './ui/textarea';
 
 interface AffiliateLoginProps {
   onLogin: (affiliate: Affiliate) => void;
@@ -16,6 +26,35 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerData, setRegisterData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    message: ''
+  });
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!registerData.name || !registerData.email || !registerData.phone) {
+      toast.error("Veuillez remplir les champs obligatoires.");
+      return;
+    }
+
+    setRegisterLoading(true);
+    try {
+      await submitAffiliateRequest(registerData);
+      toast.success("Demande d'inscription envoyée ! Nous vous contacterons bientôt.");
+      setIsRegisterOpen(false);
+      setRegisterData({ name: '', email: '', phone: '', message: '' });
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'envoi de la demande.");
+    } finally {
+      setRegisterLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +126,79 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
           <p className="mt-6 text-center text-sm text-gray-500">
             Identifiants fournis par l'administrateur Neopay.
           </p>
+
+          <div className="mt-8 pt-6 border-t text-center">
+            <p className="text-gray-600 mb-4">Vous n'avez pas de compte ?</p>
+            <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+              <DialogTrigger 
+                render={
+                  <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50" />
+                }
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                S'inscrire comme affilié
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Devenir Affilié Neopay</DialogTitle>
+                  <DialogDescription>
+                    Remplissez ce formulaire pour soumettre votre demande d'adhésion.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleRegister} className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-name">Nom complet *</Label>
+                    <Input 
+                      id="reg-name" 
+                      placeholder="Jean Dupont" 
+                      value={registerData.name}
+                      onChange={(e) => setRegisterData({...registerData, name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-email">Email *</Label>
+                      <Input 
+                        id="reg-email" 
+                        type="email" 
+                        placeholder="jean@example.com" 
+                        value={registerData.email}
+                        onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reg-phone">Téléphone *</Label>
+                      <Input 
+                        id="reg-phone" 
+                        placeholder="+509..." 
+                        value={registerData.phone}
+                        onChange={(e) => setRegisterData({...registerData, phone: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-message">Pourquoi voulez-vous nous rejoindre ? (Optionnel)</Label>
+                    <Textarea 
+                      id="reg-message" 
+                      placeholder="Parlez-nous de votre audience ou de votre motivation..." 
+                      value={registerData.message}
+                      onChange={(e) => setRegisterData({...registerData, message: e.target.value})}
+                      rows={3}
+                    />
+                  </div>
+                  <DialogFooter className="pt-4">
+                    <Button type="submit" className="w-full bg-blue-600" disabled={registerLoading}>
+                      {registerLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                      Envoyer ma demande
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
     </div>

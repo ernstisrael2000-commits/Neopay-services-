@@ -57,3 +57,14 @@ export interface AppSettings {
   logoUrl?: string;
   whatsappAdminNumber?: string;
 }
+
+export interface AffiliateRequest {
+  id?: string;
+  name: string;
+  email: string;
+  phone: string;
+  message?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
+  updatedAt: any;
+}

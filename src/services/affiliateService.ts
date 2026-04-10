@@ -13,7 +13,7 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { Affiliate, WithdrawalRequest } from '../types';
+import { Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
 
 enum OperationType {
   CREATE = 'create',
@@ -265,4 +265,60 @@ export const updateWithdrawalStatus = async (
     rejectionReason: reason || '',
     updatedAt: serverTimestamp()
   });
+};
+
+export const deleteAffiliate = async (id: string) => {
+  try {
+    const { deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(doc(db, 'affiliates', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, 'affiliates');
+  }
+};
+
+// Affiliate Request Services
+export const submitAffiliateRequest = async (requestData: Partial<AffiliateRequest>) => {
+  try {
+    await addDoc(collection(db, 'affiliate_requests'), {
+      ...requestData,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'affiliate_requests');
+  }
+};
+
+export const useAllAffiliateRequests = () => {
+  const [requests, setRequests] = useState<AffiliateRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'affiliate_requests'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AffiliateRequest[];
+      setRequests(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { requests, loading };
+};
+
+export const updateAffiliateRequestStatus = async (requestId: string, status: 'approved' | 'rejected') => {
+  try {
+    const requestRef = doc(db, 'affiliate_requests', requestId);
+    await updateDoc(requestRef, {
+      status,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'affiliate_requests');
+  }
 };

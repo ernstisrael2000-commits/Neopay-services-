@@ -107,6 +107,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /affiliate_requests/{requestId} {
+      allow read: if isAdmin();
+      allow create: if true; // Public can request to join
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /users/{userId} {
       // Users can only read their own profile
       allow read: if isAuthenticated() && request.auth.uid == userId;
