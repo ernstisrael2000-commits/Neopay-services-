@@ -20,7 +20,8 @@ import {
   PlusCircle,
   Wallet,
   Users,
-  Trophy
+  Trophy,
+  Gamepad2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -38,9 +39,9 @@ import {
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners } from '../services/affiliateService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -93,6 +94,7 @@ const compressImage = (file: File): Promise<Blob> => {
 export default function AdminDashboard() {
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
+  const { games, loading: gamesLoading } = useGames();
   const { settings, loading: settingsLoading } = useSettings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
@@ -108,6 +110,19 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductDeleteDialogOpen, setIsProductDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  
+  const [isGameDialogOpen, setIsGameDialogOpen] = useState(false);
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [isGameDeleteDialogOpen, setIsGameDeleteDialogOpen] = useState(false);
+  const [gameToDelete, setGameToDelete] = useState<Game | null>(null);
+  const [gameFormData, setGameFormData] = useState<Partial<Game>>({
+    name: '',
+    image: '',
+    description: '',
+    priceRange: '',
+    whatsappMessage: ''
+  });
+
   const [isAwarding, setIsAwarding] = useState(false);
   const [isClearingWinners, setIsClearingWinners] = useState(false);
 
@@ -151,6 +166,8 @@ export default function AdminDashboard() {
     price: '',
     whatsappMessage: ''
   });
+
+  const [tempGameImageUrl, setTempGameImageUrl] = useState('');
 
   // Memoize filtered and sorted lists for performance
   const winnersQueue = React.useMemo(() => {
@@ -213,6 +230,76 @@ export default function AdminDashboard() {
       toast.error("Erreur lors de l'enregistrement.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleOpenGameDialog = (game?: Game) => {
+    if (game) {
+      setEditingGame(game);
+      setGameFormData(game);
+    } else {
+      setEditingGame(null);
+      setGameFormData({
+        name: '',
+        image: '',
+        description: '',
+        priceRange: '',
+        whatsappMessage: ''
+      });
+    }
+    setIsGameDialogOpen(true);
+  };
+
+  const handleSaveGame = async () => {
+    if (!gameFormData.name || !gameFormData.image || !gameFormData.priceRange) {
+      toast.error("Veuillez remplir les champs obligatoires.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await saveGame(gameFormData, editingGame?.id);
+      toast.success(editingGame ? "Jeu mis à jour !" : "Jeu ajouté !");
+      setIsGameDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteGame = async () => {
+    if (!gameToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteGame(gameToDelete.id);
+      toast.success("Jeu supprimé.");
+      setIsGameDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setGameToDelete(null);
+    }
+  };
+
+  const handleGameImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const compressed = await compressImage(file);
+      const url = await uploadProof(compressed, `game_${Date.now()}`, (p) => setUploadProgress(p));
+      setGameFormData({ ...gameFormData, image: url });
+      toast.success("Image du jeu téléchargée !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement.");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -489,6 +576,10 @@ export default function AdminDashboard() {
             <LayoutGrid className="h-4 w-4" />
             Produits / Services
           </TabsTrigger>
+          <TabsTrigger value="games" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
+            <Gamepad2 className="h-4 w-4" />
+            Top-up Jeux
+          </TabsTrigger>
           <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-4 flex items-center gap-2">
             <Users className="h-4 w-4" />
             Affiliés
@@ -698,6 +789,85 @@ export default function AdminDashboard() {
                         <TableRow>
                           <TableCell colSpan={5} className="h-32 text-center text-gray-400">
                             Aucun produit ajouté.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="games" className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Gestion des Jeux (Top-up)</h2>
+            <Button onClick={() => handleOpenGameDialog()} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nouveau Jeu
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {gamesLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des jeux...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Image</TableHead>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>Prix (Range)</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {games.map((game) => (
+                        <TableRow key={game.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell>
+                            <img 
+                              src={game.image} 
+                              className="h-10 w-10 object-cover rounded-lg border"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/100/100';
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-semibold">{game.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+                              {game.priceRange}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500 max-w-xs truncate">
+                            {game.description}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenGameDialog(game)}>
+                                <Edit2 className="h-4 w-4 text-gray-500" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => {
+                                setGameToDelete(game);
+                                setIsGameDeleteDialogOpen(true);
+                              }}>
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {games.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-32 text-center text-gray-400">
+                            Aucun jeu ajouté.
                           </TableCell>
                         </TableRow>
                       )}
@@ -1248,6 +1418,27 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isGameDeleteDialogOpen} onOpenChange={setIsGameDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Supprimer le jeu
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer <span className="font-bold">{gameToDelete?.name}</span> ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsGameDeleteDialogOpen(false)}>Annuler</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteGame} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash className="h-4 w-4 mr-2" />}
+              Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Product Edit/Add Dialog */}
       <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
@@ -1367,6 +1558,131 @@ export default function AdminDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Annuler</Button>
             <Button onClick={handleSaveProduct} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isGameDialogOpen} onOpenChange={setIsGameDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{editingGame ? 'Modifier le jeu' : 'Nouveau jeu'}</DialogTitle>
+            <DialogDescription>Ajoutez un jeu pour le service de Top-up.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Nom</Label>
+              <Input 
+                value={gameFormData.name} 
+                onChange={(e) => setGameFormData({...gameFormData, name: e.target.value})}
+                className="col-span-3" 
+                placeholder="Ex: Free Fire"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Prix (Range)</Label>
+              <Input 
+                value={gameFormData.priceRange} 
+                onChange={(e) => setGameFormData({...gameFormData, priceRange: e.target.value})}
+                className="col-span-3" 
+                placeholder="Ex: À partir de 100 G"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Description</Label>
+              <textarea 
+                value={gameFormData.description} 
+                onChange={(e) => setGameFormData({...gameFormData, description: e.target.value})}
+                className="col-span-3 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Détails du jeu..."
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Msg WhatsApp</Label>
+              <Input 
+                value={gameFormData.whatsappMessage} 
+                onChange={(e) => setGameFormData({...gameFormData, whatsappMessage: e.target.value})}
+                className="col-span-3" 
+                placeholder="Message auto personnalisé..."
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Image (Lien)</Label>
+              <div className="col-span-3 flex gap-2">
+                <Input 
+                  value={tempGameImageUrl} 
+                  onChange={(e) => setTempGameImageUrl(e.target.value)}
+                  placeholder="https://exemple.com/image.jpg"
+                />
+                <Button 
+                  onClick={() => {
+                    if (tempGameImageUrl) {
+                      setGameFormData({...gameFormData, image: tempGameImageUrl});
+                      setTempGameImageUrl('');
+                      toast.success("Lien d'image appliqué !");
+                    }
+                  }}
+                  className="bg-blue-600"
+                >
+                  Ajouter
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Image (Fichier)</Label>
+              <div className="col-span-3 space-y-4">
+                {gameFormData.image && (
+                  <div className="relative h-48 w-full rounded-xl overflow-hidden border bg-gray-50">
+                    <img 
+                      src={gameFormData.image} 
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400';
+                      }}
+                    />
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="absolute top-2 right-2"
+                      onClick={() => setGameFormData({...gameFormData, image: ''})}
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleGameImageUpload}
+                      className="hidden" 
+                      id="game-image-upload"
+                    />
+                    <Button asChild variant="outline" className="w-full cursor-pointer" disabled={uploading}>
+                      <label htmlFor="game-image-upload">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                        Télécharger l'image
+                      </label>
+                    </Button>
+                  </div>
+                  {uploading && (
+                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                      <div 
+                        className="bg-blue-600 h-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGameDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSaveGame} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Enregistrer
             </Button>

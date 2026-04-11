@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game } from '../types';
 
 // Helper for resumable uploads with progress
 const uploadWithProgress = (
@@ -156,6 +156,50 @@ export const saveProduct = async (productData: Partial<Product>, id?: string) =>
 export const deleteProduct = async (id: string) => {
   const productRef = doc(db, 'products', id);
   await deleteDoc(productRef);
+};
+
+// Game Services
+export const useGames = () => {
+  const [games, setGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'games'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Game[];
+      setGames(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching games:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { games, loading };
+};
+
+export const saveGame = async (gameData: Partial<Game>, id?: string) => {
+  if (id) {
+    const gameRef = doc(db, 'games', id);
+    await updateDoc(gameRef, {
+      ...gameData,
+    });
+  } else {
+    await addDoc(collection(db, 'games'), {
+      ...gameData,
+      createdAt: serverTimestamp(),
+    });
+  }
+};
+
+export const deleteGame = async (id: string) => {
+  const gameRef = doc(db, 'games', id);
+  await deleteDoc(gameRef);
 };
 
 // Settings Services

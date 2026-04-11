@@ -115,6 +115,20 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["affiliateId", "amount", "method", "status"]
+    },
+    "game": {
+      "title": "Game",
+      "description": "Represents a game for top-up services.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "priceRange": { "type": "string" },
+        "whatsappMessage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "image", "description", "priceRange"]
     }
   },
   "firestore": {
@@ -141,6 +155,10 @@
     "/withdrawals/{withdrawalId}": {
       "schema": "withdrawal",
       "description": "Collection of withdrawal requests."
+    },
+    "/games/{gameId}": {
+      "schema": "game",
+      "description": "Collection of games for top-up."
     }
   }
 }

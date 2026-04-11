@@ -63,6 +63,16 @@ export interface AppSettings {
   whatsappAdminNumber?: string;
 }
 
+export interface Game {
+  id?: string;
+  name: string;
+  image: string;
+  description: string;
+  priceRange: string;
+  whatsappMessage?: string;
+  createdAt: any;
+}
+
 export interface AffiliateRequest {
   id?: string;
   name: string;

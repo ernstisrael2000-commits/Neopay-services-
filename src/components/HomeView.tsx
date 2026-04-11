@@ -12,12 +12,22 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts } from '../services/parcelService';
+import { useProducts, useGames } from '../services/parcelService';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
+} from './ui/dialog';
+import { Badge } from './ui/badge';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
 export default function HomeView({ onTrackingClick }: { onTrackingClick: () => void }) {
   const { products, loading: productsLoading } = useProducts();
+  const { games, loading: gamesLoading } = useGames();
+  const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
 
   const openWhatsApp = (message: string) => {
     const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
@@ -45,8 +55,8 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
       title: "Top-up jeux",
       description: "Créditez vos comptes de jeux préférés instantanément.",
       icon: <Gamepad2 className="h-8 w-8 text-purple-600" />,
-      action: () => openWhatsApp("Bonjour, je souhaite faire un top-up de jeu via Neopay."),
-      buttonText: "Top-up via WhatsApp",
+      action: () => setIsGamesDialogOpen(true),
+      buttonText: "Voir les jeux",
       color: "bg-purple-50 border-purple-100"
     },
     {
@@ -201,6 +211,66 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
           </Button>
         </div>
       </section>
+
+      {/* Games Dialog */}
+      <Dialog open={isGamesDialogOpen} onOpenChange={setIsGamesDialogOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <Gamepad2 className="h-6 w-6 text-purple-600" />
+              Top-up Jeux
+            </DialogTitle>
+            <DialogDescription>
+              Choisissez votre jeu préféré pour effectuer une recharge.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {gamesLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
+            </div>
+          ) : games.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+              {games.map((game) => (
+                <Card key={game.id} className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow">
+                  <div className="aspect-video relative bg-gray-50">
+                    <img 
+                      src={game.image} 
+                      alt={game.name}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400';
+                      }}
+                    />
+                    <div className="absolute top-2 right-2">
+                      <Badge className="bg-purple-600">{game.priceRange}</Badge>
+                    </div>
+                  </div>
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-lg">{game.name}</CardTitle>
+                    <CardDescription className="text-xs line-clamp-2">
+                      {game.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    <Button 
+                      onClick={() => openWhatsApp(game.whatsappMessage || `Bonjour, je souhaite faire un top-up pour le jeu : ${game.name}.`)}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm h-9"
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      Commander
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-gray-500">
+              <p>Aucun jeu disponible pour le moment.</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
