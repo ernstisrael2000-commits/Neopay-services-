@@ -72,6 +72,11 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   if (!affiliate) return null;
 
+  // Memoize ranking position for performance
+  const rankingPosition = React.useMemo(() => {
+    return topAffiliates.findIndex(a => a.id === affiliate.id) + 1;
+  }, [topAffiliates, affiliate.id]);
+
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) {
@@ -238,7 +243,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-gray-900">
-              #{topAffiliates.findIndex(a => a.id === affiliate.id) + 1 || 'N/A'}
+              {rankingPosition > 0 ? `#${rankingPosition}` : 'N/A'}
             </div>
             <p className="text-gray-500 text-sm mt-1">Parmi les meilleurs affiliés</p>
           </CardContent>

@@ -8,7 +8,7 @@ import AffiliateDashboard from './components/AffiliateDashboard';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Loader2, ShieldAlert, Package, Users } from 'lucide-react';
+import { Loader2, ShieldAlert, Package } from 'lucide-react';
 import { Affiliate } from './types';
 
 export default function App() {

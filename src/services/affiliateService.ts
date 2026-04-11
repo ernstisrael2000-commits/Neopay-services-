@@ -4,8 +4,10 @@ import {
   query, 
   where, 
   getDocs, 
+  getDoc,
   addDoc, 
   updateDoc, 
+  deleteDoc,
   doc, 
   serverTimestamp, 
   orderBy, 
@@ -244,26 +246,29 @@ export const saveAffiliate = async (affiliateData: Partial<Affiliate>, id?: stri
   }
 };
 
+/**
+ * Updates the status of a withdrawal request and adjusts affiliate balance if approved.
+ */
 export const updateWithdrawalStatus = async (
   requestId: string, 
   status: 'approved' | 'rejected', 
   reason?: string
 ) => {
   const requestRef = doc(db, 'withdrawals', requestId);
-  const requestSnap = await getDocs(query(collection(db, 'withdrawals'), where('__name__', '==', requestId)));
+  const requestSnap = await getDoc(requestRef);
   
-  if (requestSnap.empty) return;
-  const requestData = requestSnap.docs[0].data() as WithdrawalRequest;
+  if (!requestSnap.exists()) return;
+  const requestData = requestSnap.data() as WithdrawalRequest;
 
   if (status === 'approved') {
     // Deduct from affiliate balance
     const affiliateRef = doc(db, 'affiliates', requestData.affiliateId);
-    const affiliateSnap = await getDocs(query(collection(db, 'affiliates'), where('__name__', '==', requestData.affiliateId)));
+    const affiliateSnap = await getDoc(affiliateRef);
     
-    if (!affiliateSnap.empty) {
-      const affiliateData = affiliateSnap.docs[0].data() as Affiliate;
+    if (affiliateSnap.exists()) {
+      const affiliateData = affiliateSnap.data() as Affiliate;
       await updateDoc(affiliateRef, {
-        balance: affiliateData.balance - requestData.amount
+        balance: (affiliateData.balance || 0) - requestData.amount
       });
     }
   }
@@ -275,9 +280,11 @@ export const updateWithdrawalStatus = async (
   });
 };
 
+/**
+ * Deletes an affiliate account.
+ */
 export const deleteAffiliate = async (id: string) => {
   try {
-    const { deleteDoc } = await import('firebase/firestore');
     await deleteDoc(doc(db, 'affiliates', id));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, 'affiliates');
@@ -336,19 +343,16 @@ export const useMonthlyRankings = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Only fetch affiliates who have been approved as winners by the admin
-    const q = query(
-      collection(db, 'affiliates'), 
-      where('isMonthlyWinner', '==', true),
-      orderBy('points', 'desc'),
-      limit(3)
-    );
+    // Fetch all affiliates and filter/sort client-side to avoid index requirements
+    const q = query(collection(db, 'affiliates'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Affiliate[];
+      const data = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Affiliate))
+        .filter(a => a.isMonthlyWinner === true)
+        .sort((a, b) => (b.points || 0) - (a.points || 0))
+        .slice(0, 3);
+        
       setRankings(data);
       setLoading(false);
     }, (error) => {
@@ -362,34 +366,71 @@ export const useMonthlyRankings = () => {
   return { rankings, loading };
 };
 
+export const clearMonthlyWinners = async () => {
+  try {
+    const snapshot = await getDocs(query(collection(db, 'affiliates'), where('isMonthlyWinner', '==', true)));
+    const promises = snapshot.docs.map(docSnap => 
+      updateDoc(doc(db, 'affiliates', docSnap.id), {
+        isMonthlyWinner: false,
+        updatedAt: serverTimestamp()
+      })
+    );
+    await Promise.all(promises);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+  }
+};
+
 export const awardMonthlyPrizes = async () => {
   try {
+    // 1. Clear all current monthly winners first to ensure a fresh start
+    const winnersQuery = query(collection(db, 'affiliates'), where('isMonthlyWinner', '==', true));
+    const winnersSnap = await getDocs(winnersQuery);
+    const clearPromises = winnersSnap.docs.map(d => updateDoc(doc(db, 'affiliates', d.id), { 
+      isMonthlyWinner: false,
+      updatedAt: serverTimestamp() 
+    }));
+    await Promise.all(clearPromises);
+
+    // 2. Get all affiliates to calculate new winners based on points
     const snapshot = await getDocs(collection(db, 'affiliates'));
     const affiliates = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Affiliate[];
 
-    // Sort by manual points
-    const ranked = affiliates.sort((a, b) => (b.points || 0) - (a.points || 0));
+    // 3. Filter those with points > 0 and sort descending
+    const eligible = affiliates
+      .filter(a => (a.points || 0) > 0)
+      .sort((a, b) => (b.points || 0) - (a.points || 0))
+      .slice(0, 3);
+
+    if (eligible.length === 0) return [];
 
     const prizes = [500, 250, 150];
     const promises = [];
+    const awardedWinners: Affiliate[] = [];
 
-    // Award prizes to top 3 (if they exist and have points > 0)
-    for (let i = 0; i < Math.min(ranked.length, 3); i++) {
-      if ((ranked[i].points || 0) > 0) {
-        const affiliateRef = doc(db, 'affiliates', ranked[i].id!);
-        promises.push(updateDoc(affiliateRef, {
-          balance: (ranked[i].balance || 0) + prizes[i],
-          isMonthlyWinner: true, // Mark as winner so they appear in the dashboard
-          updatedAt: serverTimestamp()
-        }));
-      }
+    // 4. Award prizes and mark as winners
+    for (let i = 0; i < eligible.length; i++) {
+      const affiliateRef = doc(db, 'affiliates', eligible[i].id!);
+      const prize = prizes[i];
+      
+      promises.push(updateDoc(affiliateRef, {
+        balance: (eligible[i].balance || 0) + prize,
+        isMonthlyWinner: true,
+        updatedAt: serverTimestamp()
+      }));
+      
+      awardedWinners.push({
+        ...eligible[i],
+        balance: (eligible[i].balance || 0) + prize,
+        isMonthlyWinner: true
+      });
     }
 
     await Promise.all(promises);
-    return ranked.slice(0, 3);
+    return awardedWinners;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
     throw error;

@@ -39,7 +39,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
-import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes } from '../services/affiliateService';
+import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners } from '../services/affiliateService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -98,11 +98,6 @@ export default function AdminDashboard() {
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
   const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();
   
-  const winnersQueue = [...affiliates]
-    .filter(a => (a.points || 0) > 0)
-    .sort((a, b) => (b.points || 0) - (a.points || 0))
-    .slice(0, 3);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -114,6 +109,7 @@ export default function AdminDashboard() {
   const [isProductDeleteDialogOpen, setIsProductDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [isAwarding, setIsAwarding] = useState(false);
+  const [isClearingWinners, setIsClearingWinners] = useState(false);
 
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
   const [isAffiliateDeleteDialogOpen, setIsAffiliateDeleteDialogOpen] = useState(false);
@@ -156,10 +152,20 @@ export default function AdminDashboard() {
     whatsappMessage: ''
   });
 
-  const filteredParcels = parcels.filter(p => 
-    p.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.currentLocation.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Memoize filtered and sorted lists for performance
+  const winnersQueue = React.useMemo(() => {
+    return [...affiliates]
+      .filter(a => (a.points || 0) > 0)
+      .sort((a, b) => (b.points || 0) - (a.points || 0))
+      .slice(0, 3);
+  }, [affiliates]);
+
+  const filteredParcels = React.useMemo(() => {
+    return parcels.filter(p => 
+      p.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.currentLocation.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [parcels, searchTerm]);
 
   const handleOpenDialog = (parcel?: Parcel) => {
     if (parcel) {
@@ -231,6 +237,29 @@ export default function AdminDashboard() {
       toast.error("Erreur lors de la distribution des prix.");
     } finally {
       setIsAwarding(false);
+    }
+  };
+
+  const handleClearWinners = async () => {
+    if (!window.confirm("Voulez-vous vider le classement des gagnants ? Cela ne touchera pas aux soldes, mais retirera les noms de la page publique.")) return;
+    
+    setIsClearingWinners(true);
+    try {
+      await clearMonthlyWinners();
+      toast.success("Classement vidé !");
+    } catch (error) {
+      toast.error("Erreur lors de la réinitialisation.");
+    } finally {
+      setIsClearingWinners(false);
+    }
+  };
+
+  const handleToggleWinnerStatus = async (affiliate: Affiliate) => {
+    try {
+      await saveAffiliate({ isMonthlyWinner: !affiliate.isMonthlyWinner }, affiliate.id);
+      toast.success(affiliate.isMonthlyWinner ? "Retiré du classement" : "Ajouté au classement");
+    } catch (error) {
+      toast.error("Erreur lors de la modification.");
     }
   };
 
@@ -737,8 +766,21 @@ export default function AdminDashboard() {
                                     {a.points || 0} pts
                                   </Badge>
                                   {a.isMonthlyWinner && (
-                                    <Badge className="bg-green-100 text-green-700 border-green-200 text-[9px] w-fit">
+                                    <Badge 
+                                      className="bg-green-100 text-green-700 border-green-200 text-[9px] w-fit cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                                      onClick={() => handleToggleWinnerStatus(a)}
+                                      title="Cliquez pour retirer du classement"
+                                    >
                                       Gagnant Approuvé
+                                    </Badge>
+                                  )}
+                                  {!a.isMonthlyWinner && (a.points || 0) > 0 && (
+                                    <Badge 
+                                      className="bg-gray-100 text-gray-600 border-gray-200 text-[9px] w-fit cursor-pointer hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                                      onClick={() => handleToggleWinnerStatus(a)}
+                                      title="Cliquez pour ajouter au classement"
+                                    >
+                                      Candidat
                                     </Badge>
                                   )}
                                 </div>
@@ -831,6 +873,15 @@ export default function AdminDashboard() {
                   <CardTitle className="text-lg font-semibold">Actions Mensuelles</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 space-y-3">
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-red-200 text-red-700 hover:bg-red-50"
+                    onClick={handleClearWinners}
+                    disabled={isClearingWinners}
+                  >
+                    {isClearingWinners ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                    Vider le classement
+                  </Button>
                   <Button 
                     variant="outline" 
                     className="w-full border-amber-200 text-amber-700 hover:bg-amber-50"
