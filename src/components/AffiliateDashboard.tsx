@@ -62,6 +62,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [accountNumber, setAccountNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Memoize ranking position for performance
+  const rankingPosition = React.useMemo(() => {
+    if (!affiliate) return 0;
+    return topAffiliates.findIndex(a => a.id === affiliate.id) + 1;
+  }, [topAffiliates, affiliate?.id]);
+
   if (affiliateLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -71,11 +77,6 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   }
 
   if (!affiliate) return null;
-
-  // Memoize ranking position for performance
-  const rankingPosition = React.useMemo(() => {
-    return topAffiliates.findIndex(a => a.id === affiliate.id) + 1;
-  }, [topAffiliates, affiliate.id]);
 
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
