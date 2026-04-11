@@ -301,7 +301,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                           </div>
                           <div>
                             <p className="font-bold text-gray-900">{a.name}</p>
-                            <p className="text-xs text-gray-500">{a.monthlySales} G ventes • {a.monthlyReferredClients} réf.</p>
+                            <p className="text-xs font-bold text-blue-600">
+                              Score: {a.points || 0} points
+                            </p>
+                            <p className="text-[10px] text-gray-400">
+                              {a.monthlySales} G ventes • {a.monthlyReferredClients} réf.
+                            </p>
                           </div>
                         </div>
                         <Badge className={
@@ -314,8 +319,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-6 text-gray-400 bg-white/50 rounded-xl border border-dashed">
-                      <p className="text-sm">Le classement sera disponible bientôt.</p>
+                    <div className="text-center py-10 text-gray-400 bg-white/50 rounded-xl border border-dashed border-amber-200">
+                      <Trophy className="h-10 w-10 mx-auto mb-3 opacity-20 text-amber-500" />
+                      <p className="text-sm font-medium">Le classement officiel est en attente de validation.</p>
+                      <p className="text-[10px] mt-1">L'administrateur annoncera les gagnants bientôt !</p>
                     </div>
                   )}
                 </div>

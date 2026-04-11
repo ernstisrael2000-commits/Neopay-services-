@@ -38,6 +38,8 @@ export interface Affiliate {
   referredClients: number;
   monthlyReferredClients: number; // For ranking
   monthlySales: number; // For ranking
+  points: number; // Manual points counter
+  isMonthlyWinner?: boolean; // Whether the affiliate is currently featured as a winner
   code: string;
   createdAt: any;
 }

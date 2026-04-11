@@ -39,7 +39,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
-import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats } from '../services/affiliateService';
+import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes } from '../services/affiliateService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -98,6 +98,11 @@ export default function AdminDashboard() {
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
   const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();
   
+  const winnersQueue = [...affiliates]
+    .filter(a => (a.points || 0) > 0)
+    .sort((a, b) => (b.points || 0) - (a.points || 0))
+    .slice(0, 3);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -108,6 +113,7 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductDeleteDialogOpen, setIsProductDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isAwarding, setIsAwarding] = useState(false);
 
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
   const [isAffiliateDeleteDialogOpen, setIsAffiliateDeleteDialogOpen] = useState(false);
@@ -120,6 +126,7 @@ export default function AdminDashboard() {
     code: '',
     balance: 0,
     referredClients: 0,
+    points: 0,
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -200,6 +207,30 @@ export default function AdminDashboard() {
       toast.error("Erreur lors de l'enregistrement.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAwardPrizes = async () => {
+    if (!window.confirm("Voulez-vous décerner les prix aux 3 meilleurs affiliés du mois ? Les montants (500, 250, 150) seront ajoutés à leurs soldes.")) return;
+    
+    setIsAwarding(true);
+    try {
+      const winners = await awardMonthlyPrizes();
+      if (winners.length > 0) {
+        let message = "Prix décernés avec succès !\n\n";
+        winners.forEach((w, i) => {
+          const prize = i === 0 ? 500 : i === 1 ? 250 : 150;
+          message += `${i+1}er: ${w.name} (+${prize} Goud)\n`;
+        });
+        alert(message);
+        toast.success("Récompenses distribuées !");
+      } else {
+        toast.info("Aucun affilié éligible pour les prix ce mois-ci.");
+      }
+    } catch (error) {
+      toast.error("Erreur lors de la distribution des prix.");
+    } finally {
+      setIsAwarding(false);
     }
   };
 
@@ -689,6 +720,7 @@ export default function AdminDashboard() {
                             <TableHead>Nom</TableHead>
                             <TableHead>Code</TableHead>
                             <TableHead>Solde</TableHead>
+                            <TableHead>Points</TableHead>
                             <TableHead>Référés</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
@@ -698,7 +730,19 @@ export default function AdminDashboard() {
                             <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
                               <TableCell className="font-medium">{a.name}</TableCell>
                               <TableCell className="font-mono text-xs">{a.code}</TableCell>
-                              <TableCell>{a.balance} Goud</TableCell>
+                              <TableCell className="font-bold text-blue-600">{a.balance} Goud</TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 w-fit">
+                                    {a.points || 0} pts
+                                  </Badge>
+                                  {a.isMonthlyWinner && (
+                                    <Badge className="bg-green-100 text-green-700 border-green-200 text-[9px] w-fit">
+                                      Gagnant Approuvé
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell>{a.referredClients}</TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
@@ -732,11 +776,61 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-6">
+              <Card className="shadow-sm border-amber-200 bg-amber-50/20">
+                <CardHeader className="border-b border-amber-100 bg-amber-50/50">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-amber-500" />
+                    File d'attente des Prix
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  <p className="text-[10px] text-gray-500 italic mb-2">
+                    Ces affiliés sont les candidats actuels basés sur les points. Cliquez sur le bouton ci-dessous pour les officialiser dans le classement public.
+                  </p>
+                  {winnersQueue.length > 0 ? (
+                    <div className="space-y-3">
+                      {winnersQueue.map((w, idx) => (
+                        <div key={w.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-amber-100 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              idx === 0 ? 'bg-amber-500 text-white' : 
+                              idx === 1 ? 'bg-gray-400 text-white' : 
+                              'bg-orange-500 text-white'
+                            }`}>
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold">{w.name}</p>
+                              <p className="text-[10px] text-gray-500">{w.points} points</p>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-[10px]">
+                            {idx === 0 ? '500 G' : idx === 1 ? '250 G' : '150 G'}
+                          </Badge>
+                        </div>
+                      ))}
+                      <Button 
+                        className="w-full bg-amber-500 hover:bg-amber-600 text-white mt-2"
+                        onClick={handleAwardPrizes}
+                        disabled={isAwarding}
+                      >
+                        {isAwarding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                        Approuver & Décerner les prix
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-400">
+                      <p className="text-xs italic">Aucun affilié n'a de points ce mois-ci.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="border-b bg-gray-50/50">
                   <CardTitle className="text-lg font-semibold">Actions Mensuelles</CardTitle>
                 </CardHeader>
-                <CardContent className="p-4">
+                <CardContent className="p-4 space-y-3">
                   <Button 
                     variant="outline" 
                     className="w-full border-amber-200 text-amber-700 hover:bg-amber-50"
@@ -751,7 +845,7 @@ export default function AdminDashboard() {
                     Réinitialiser le mois
                   </Button>
                   <p className="text-[10px] text-gray-400 mt-2 text-center">
-                    À faire au début de chaque nouveau mois.
+                    Décernés les prix avant de réinitialiser le mois.
                   </p>
                 </CardContent>
               </Card>
@@ -1016,6 +1110,15 @@ export default function AdminDashboard() {
                 value={affiliateFormData.referredClients} 
                 onChange={(e) => setAffiliateFormData({...affiliateFormData, referredClients: Number(e.target.value)})}
                 className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-xs">Points (Manuel)</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.points || 0} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, points: Number(e.target.value)})}
+                className="col-span-3 border-amber-200 focus:ring-amber-500" 
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">

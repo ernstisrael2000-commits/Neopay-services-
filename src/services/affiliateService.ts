@@ -233,6 +233,7 @@ export const saveAffiliate = async (affiliateData: Partial<Affiliate>, id?: stri
         referredClients: 0,
         monthlyReferredClients: 0,
         monthlySales: 0,
+        points: 0,
         ...dataToSave,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -335,12 +336,11 @@ export const useMonthlyRankings = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // We'll sort by a combination of referrals and sales
-    // For simplicity, let's just use sales as primary and referrals as secondary
+    // Only fetch affiliates who have been approved as winners by the admin
     const q = query(
       collection(db, 'affiliates'), 
-      orderBy('monthlySales', 'desc'),
-      orderBy('monthlyReferredClients', 'desc'),
+      where('isMonthlyWinner', '==', true),
+      orderBy('points', 'desc'),
       limit(3)
     );
     
@@ -351,12 +351,49 @@ export const useMonthlyRankings = () => {
       })) as Affiliate[];
       setRankings(data);
       setLoading(false);
+    }, (error) => {
+      console.error("Error fetching rankings:", error);
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
   return { rankings, loading };
+};
+
+export const awardMonthlyPrizes = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, 'affiliates'));
+    const affiliates = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Affiliate[];
+
+    // Sort by manual points
+    const ranked = affiliates.sort((a, b) => (b.points || 0) - (a.points || 0));
+
+    const prizes = [500, 250, 150];
+    const promises = [];
+
+    // Award prizes to top 3 (if they exist and have points > 0)
+    for (let i = 0; i < Math.min(ranked.length, 3); i++) {
+      if ((ranked[i].points || 0) > 0) {
+        const affiliateRef = doc(db, 'affiliates', ranked[i].id!);
+        promises.push(updateDoc(affiliateRef, {
+          balance: (ranked[i].balance || 0) + prizes[i],
+          isMonthlyWinner: true, // Mark as winner so they appear in the dashboard
+          updatedAt: serverTimestamp()
+        }));
+      }
+    }
+
+    await Promise.all(promises);
+    return ranked.slice(0, 3);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+    throw error;
+  }
 };
 
 export const resetMonthlyStats = async () => {
@@ -366,6 +403,8 @@ export const resetMonthlyStats = async () => {
       updateDoc(doc(db, 'affiliates', docSnap.id), {
         monthlyReferredClients: 0,
         monthlySales: 0,
+        points: 0,
+        isMonthlyWinner: false, // Reset winner status
         updatedAt: serverTimestamp()
       })
     );
