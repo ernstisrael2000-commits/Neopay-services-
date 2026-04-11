@@ -45,6 +45,21 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     setRegisterLoading(true);
     try {
       await submitAffiliateRequest(registerData);
+      
+      // Send notifications via backend
+      try {
+        await fetch('/api/notify-registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...registerData,
+            date: new Date().toLocaleString('fr-FR')
+          })
+        });
+      } catch (notifyError) {
+        console.error("Failed to send notification:", notifyError);
+      }
+
       setIsRegisterOpen(false);
       // Small delay before toast and reset to avoid DOM conflicts during unmount
       setTimeout(() => {
@@ -61,14 +76,19 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
+    
+    // Trim whitespace from credentials
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanUsername || !cleanPassword) {
       toast.error("Veuillez remplir tous les champs.");
       return;
     }
 
     setLoading(true);
     try {
-      const affiliate = await loginAffiliate(username, password);
+      const affiliate = await loginAffiliate(cleanUsername, cleanPassword);
       if (affiliate) {
         toast.success(`Bienvenue, ${affiliate.name} !`);
         onLogin(affiliate);

@@ -3,7 +3,8 @@ import {
   useAffiliateData, 
   useTopAffiliates, 
   submitWithdrawal, 
-  useAffiliateWithdrawals 
+  useAffiliateWithdrawals,
+  useMonthlyRankings
 } from '../services/affiliateService';
 import { Affiliate, WithdrawalRequest } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -51,12 +52,14 @@ interface AffiliateDashboardProps {
 export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateDashboardProps) {
   const { affiliate, loading: affiliateLoading } = useAffiliateData(affiliateId);
   const { topAffiliates, loading: topLoading } = useTopAffiliates();
+  const { rankings: monthlyRankings, loading: rankingsLoading } = useMonthlyRankings();
   const { withdrawals, loading: withdrawalsLoading } = useAffiliateWithdrawals(affiliateId);
   const { settings } = useSettings();
 
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawMethod, setWithdrawMethod] = useState<'MonCash' | 'Natcash'>('MonCash');
+  const [withdrawMethod, setWithdrawMethod] = useState<'MonCash' | 'NatCash'>('MonCash');
+  const [accountNumber, setAccountNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (affiliateLoading) {
@@ -86,16 +89,22 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       return;
     }
 
+    if (!accountNumber.trim()) {
+      toast.error(`Veuillez entrer votre numéro ${withdrawMethod}.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await submitWithdrawal(affiliate, amount, withdrawMethod);
+      await submitWithdrawal(affiliate, amount, withdrawMethod, accountNumber.trim());
       toast.success("Demande de retrait envoyée !");
       setIsWithdrawModalOpen(false);
       setWithdrawAmount('');
+      setAccountNumber('');
 
       // Send WhatsApp notification to admin
       const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
-      const message = `Bonjour Admin, j'ai soumis une demande de retrait Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${withdrawMethod}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
+      const message = `Bonjour Admin, j'ai soumis une demande de retrait Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${withdrawMethod}\nNuméro: ${accountNumber.trim()}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       
     } catch (error: any) {
@@ -168,9 +177,22 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="MonCash">MonCash</SelectItem>
-                        <SelectItem value="Natcash">Natcash</SelectItem>
+                        <SelectItem value="NatCash">NatCash</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="account-number" className="flex items-center gap-1">
+                      Numéro {withdrawMethod} <span className="text-red-500">*</span>
+                    </Label>
+                    <Input 
+                      id="account-number"
+                      placeholder={`Entrez votre numéro ${withdrawMethod}`} 
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      className="border-blue-200 focus:ring-blue-500"
+                    />
+                    <p className="text-[10px] text-gray-400">Ce numéro sera utilisé pour votre paiement.</p>
                   </div>
                   <div className="space-y-2">
                     <Label>Montant (Goud)</Label>
@@ -224,33 +246,79 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Top Affiliates Ranking */}
-        <Card className="border-0 shadow-md">
+        {/* Monthly Rankings & Prizes */}
+        <Card className="border-0 shadow-md bg-gradient-to-br from-amber-50 to-white">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-amber-500" />
-              Top 10 Affiliés
+              Les Trois Grands Titres du Mois
             </CardTitle>
-            <CardDescription>Les affiliés les plus performants de la plateforme.</CardDescription>
+            <CardDescription>Les affiliés les plus performants récompensés ce mois-ci.</CardDescription>
           </CardHeader>
           <CardContent>
-            {topLoading ? (
+            {rankingsLoading ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
               </div>
             ) : (
-              <div className="space-y-4">
-                {topAffiliates.map((a, idx) => (
-                  <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx < 3 ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-600'}`}>
-                        {idx + 1}
-                      </span>
-                      <span className="font-medium">{a.name}</span>
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="space-y-2 p-3 rounded-xl bg-white shadow-sm border border-amber-100">
+                    <div className="bg-amber-100 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Trophy className="h-5 w-5 text-amber-600" />
                     </div>
-                    <span className="text-sm text-gray-500 font-mono">{a.referredClients} réf.</span>
+                    <p className="text-xs font-bold text-amber-800 uppercase">1er (Or)</p>
+                    <p className="text-lg font-bold">500 G</p>
                   </div>
-                ))}
+                  <div className="space-y-2 p-3 rounded-xl bg-white shadow-sm border border-gray-100">
+                    <div className="bg-gray-100 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Trophy className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <p className="text-xs font-bold text-gray-600 uppercase">2e (Argent)</p>
+                    <p className="text-lg font-bold">250 G</p>
+                  </div>
+                  <div className="space-y-2 p-3 rounded-xl bg-white shadow-sm border border-orange-100">
+                    <div className="bg-orange-100 w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Trophy className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <p className="text-xs font-bold text-orange-800 uppercase">3e (Bronze)</p>
+                    <p className="text-lg font-bold">150 G</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-700 px-1">Top Affiliés du Mois</h4>
+                  {monthlyRankings.length > 0 ? (
+                    monthlyRankings.map((a, idx) => (
+                      <div key={a.id} className="flex items-center justify-between p-4 rounded-xl bg-white border shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                            idx === 0 ? 'bg-amber-500 text-white' : 
+                            idx === 1 ? 'bg-gray-400 text-white' : 
+                            'bg-orange-500 text-white'
+                          }`}>
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900">{a.name}</p>
+                            <p className="text-xs text-gray-500">{a.monthlySales} G ventes • {a.monthlyReferredClients} réf.</p>
+                          </div>
+                        </div>
+                        <Badge className={
+                          idx === 0 ? 'bg-amber-100 text-amber-700' : 
+                          idx === 1 ? 'bg-gray-100 text-gray-700' : 
+                          'bg-orange-100 text-orange-700'
+                        }>
+                          {idx === 0 ? '+500 G' : idx === 1 ? '+250 G' : '+150 G'}
+                        </Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-gray-400 bg-white/50 rounded-xl border border-dashed">
+                      <p className="text-sm">Le classement sera disponible bientôt.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>

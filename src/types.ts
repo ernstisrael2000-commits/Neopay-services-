@@ -36,6 +36,8 @@ export interface Affiliate {
   name: string;
   balance: number;
   referredClients: number;
+  monthlyReferredClients: number; // For ranking
+  monthlySales: number; // For ranking
   code: string;
   createdAt: any;
 }
@@ -46,7 +48,8 @@ export interface WithdrawalRequest {
   affiliateName: string;
   affiliateCode: string;
   amount: number;
-  method: 'MonCash' | 'Natcash';
+  method: 'MonCash' | 'NatCash';
+  accountNumber: string;
   status: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
   createdAt: any;

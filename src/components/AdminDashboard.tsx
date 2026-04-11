@@ -19,7 +19,8 @@ import {
   Edit,
   PlusCircle,
   Wallet,
-  Users
+  Users,
+  Trophy
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -38,7 +39,7 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo } from '../services/parcelService';
-import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus } from '../services/affiliateService';
+import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats } from '../services/affiliateService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -328,12 +329,12 @@ export default function AdminDashboard() {
       await updateWithdrawalStatus(request.id!, status, reason);
       toast.success(`Demande ${status === 'approved' ? 'approuvée' : 'rejetée'} !`);
       
-      // WhatsApp notification
-      const message = status === 'approved' 
-        ? `Félicitations ${request.affiliateName} ! Votre demande de retrait de ${request.amount} Goud via ${request.method} a été APPROUVÉE.`
-        : `Désolé ${request.affiliateName}, votre demande de retrait de ${request.amount} Goud a été REJETÉE.\n\nRaison: ${reason}`;
-      
-      alert(`Message à envoyer à l'affilié :\n\n${message}`);
+      if (status === 'approved') {
+        const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} Goud a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Neopay Affilié.\n\nCordialement,\nL'équipe Neopay`;
+        
+        // Show the message to the admin so they can send it
+        alert(`Message à envoyer à l'affilié :\n\n${message}`);
+      }
       
     } catch (error) {
       console.error(error);
@@ -733,6 +734,30 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="border-b bg-gray-50/50">
+                  <CardTitle className="text-lg font-semibold">Actions Mensuelles</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <Button 
+                    variant="outline" 
+                    className="w-full border-amber-200 text-amber-700 hover:bg-amber-50"
+                    onClick={async () => {
+                      if (window.confirm("Êtes-vous sûr de vouloir réinitialiser les statistiques mensuelles ? Cela effacera le classement actuel.")) {
+                        await resetMonthlyStats();
+                        toast.success("Statistiques mensuelles réinitialisées !");
+                      }
+                    }}
+                  >
+                    <Trophy className="h-4 w-4 mr-2" />
+                    Réinitialiser le mois
+                  </Button>
+                  <p className="text-[10px] text-gray-400 mt-2 text-center">
+                    À faire au début de chaque nouveau mois.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm border-gray-200">
+                <CardHeader className="border-b bg-gray-50/50">
                   <CardTitle className="text-lg font-semibold">Demandes d'Inscription</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4">
@@ -799,6 +824,12 @@ export default function AdminDashboard() {
                           <div>
                             <p className="font-bold">{w.affiliateName}</p>
                             <p className="text-xs text-gray-500">Code: {w.affiliateCode}</p>
+                            <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                              <p className="text-[10px] uppercase font-bold text-blue-400">Compte de Paiement</p>
+                              <p className="text-sm font-bold text-blue-700">
+                                {w.method}: {w.accountNumber}
+                              </p>
+                            </div>
                           </div>
                           <Badge className="bg-blue-100 text-blue-700">{w.amount} Goud</Badge>
                         </div>
@@ -984,6 +1015,24 @@ export default function AdminDashboard() {
                 type="number"
                 value={affiliateFormData.referredClients} 
                 onChange={(e) => setAffiliateFormData({...affiliateFormData, referredClients: Number(e.target.value)})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-xs">Ventes Mois (G)</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.monthlySales || 0} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlySales: Number(e.target.value)})}
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right text-xs">Réf. Mois</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.monthlyReferredClients || 0} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: Number(e.target.value)})}
                 className="col-span-3" 
               />
             </div>

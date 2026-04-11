@@ -111,13 +111,17 @@ export const useTopAffiliates = () => {
 export const submitWithdrawal = async (
   affiliate: Affiliate, 
   amount: number, 
-  method: 'MonCash' | 'Natcash'
+  method: 'MonCash' | 'NatCash',
+  accountNumber: string
 ) => {
   if (amount > affiliate.balance) {
     throw new Error("Montant supérieur au solde disponible.");
   }
   if (amount < 20) {
     throw new Error("Le montant minimum de retrait est de 20 Goud.");
+  }
+  if (!accountNumber) {
+    throw new Error("Le numéro de compte est obligatoire.");
   }
 
   await addDoc(collection(db, 'withdrawals'), {
@@ -126,6 +130,7 @@ export const submitWithdrawal = async (
     affiliateCode: affiliate.code,
     amount,
     method,
+    accountNumber,
     status: 'pending',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
@@ -226,6 +231,8 @@ export const saveAffiliate = async (affiliateData: Partial<Affiliate>, id?: stri
       await addDoc(collection(db, 'affiliates'), {
         balance: 0,
         referredClients: 0,
+        monthlyReferredClients: 0,
+        monthlySales: 0,
         ...dataToSave,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -320,5 +327,50 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, 'affiliate_requests');
+  }
+};
+
+export const useMonthlyRankings = () => {
+  const [rankings, setRankings] = useState<Affiliate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // We'll sort by a combination of referrals and sales
+    // For simplicity, let's just use sales as primary and referrals as secondary
+    const q = query(
+      collection(db, 'affiliates'), 
+      orderBy('monthlySales', 'desc'),
+      orderBy('monthlyReferredClients', 'desc'),
+      limit(3)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Affiliate[];
+      setRankings(data);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { rankings, loading };
+};
+
+export const resetMonthlyStats = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, 'affiliates'));
+    const promises = snapshot.docs.map(docSnap => 
+      updateDoc(doc(db, 'affiliates', docSnap.id), {
+        monthlyReferredClients: 0,
+        monthlySales: 0,
+        updatedAt: serverTimestamp()
+      })
+    );
+    await Promise.all(promises);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
   }
 };
