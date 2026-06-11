@@ -44,8 +44,28 @@ function parseServiceAccount(raw: string): any {
   if (!json.startsWith('{')) json = '{' + json;
   const sa = JSON.parse(json);
   if (sa.private_key) {
-    // Handle both single-escaped (\n) and double-escaped (\\n) newlines
-    sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+    // Normalize private key: replace any escaped newline variants with real newlines
+    // Handles: \\n (double-escaped), \n (single-escaped literal string)
+    let key: string = sa.private_key;
+    // Keep replacing until stable (handles multiple layers of escaping)
+    let prev = '';
+    while (prev !== key) {
+      prev = key;
+      key = key.replace(/\\n/g, '\n');
+    }
+    // If key still has no real newlines (i.e. it came in as a single line), try splitting on \n literal
+    if (!key.includes('\n')) {
+      key = key.split('\\n').join('\n');
+    }
+    // Normalize non-standard PEM headers to standard English ones that OpenSSL expects.
+    // Firebase service accounts downloaded in some locales use translated headers.
+    key = key
+      .replace(/-----[^-]*BEGIN[^-]*PRIVAT[^-]*-----/i, '-----BEGIN PRIVATE KEY-----')
+      .replace(/-----[^-]*END[^-]*PRIVAT[^-]*-----/i, '-----END PRIVATE KEY-----')
+      .replace(/-----DEBUT PRIV[^-]*-----/i, '-----BEGIN PRIVATE KEY-----')
+      .replace(/-----END CL[^-]*PRIV[^-]*-----/i, '-----END PRIVATE KEY-----')
+      .replace(/-----FIN CL[^-]*PRIV[^-]*-----/i, '-----END PRIVATE KEY-----');
+    sa.private_key = key;
   }
   return sa;
 }
