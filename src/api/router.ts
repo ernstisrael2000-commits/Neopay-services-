@@ -509,11 +509,17 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
     if (captchaToken && !(await verifyRecaptcha(captchaToken)))
       return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
 
-    // Validate min/max from settings
+    // Validate min/max from settings + resolve method-specific exchange rate
+    let resolvedExchangeRate = exchangeRate;
     try {
       const settingsSnap = await adminDb.collection('settings').doc('global').get();
       if (settingsSnap.exists) {
         const s = settingsSnap.data()!;
+        // Use per-method rate if configured and client didn't already supply one
+        if (!resolvedExchangeRate && method && s.cardRates?.[method]) {
+          resolvedExchangeRate = Number(s.cardRates[method]);
+        }
+        if (!resolvedExchangeRate) resolvedExchangeRate = s.exchangeRate;
         const usd = usdAmount || amount;
         if (s.minDepositUSD && usd < s.minDepositUSD)
           return res.status(400).json({ error: `Montant minimum: $${s.minDepositUSD.toFixed(2)} USD` });
@@ -526,7 +532,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       clientId, clientName, type: 'deposit', amount, status: 'pending', method,
       ...(usdAmount !== undefined && { usdAmount }),
       ...(htgAmount !== undefined && { htgAmount }),
-      ...(exchangeRate !== undefined && { exchangeRate }),
+      ...((resolvedExchangeRate !== undefined) && { exchangeRate: resolvedExchangeRate }),
       ...(txId && { txId }),
       ...(message && { message }),
       description: `Dépôt via ${method}${htgAmount ? ` — ${htgAmount.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,

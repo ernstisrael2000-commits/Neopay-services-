@@ -193,6 +193,8 @@ export default function AdminWalletManager() {
   const [maxDepositInput, setMaxDepositInput] = useState('');
   const [minWithdrawInput, setMinWithdrawInput] = useState('');
   const [maxWithdrawInput, setMaxWithdrawInput] = useState('');
+  const [cardRatesInput, setCardRatesInput] = useState<Record<string, string>>({});
+  const [isSavingCardRates, setIsSavingCardRates] = useState(false);
 
   // Payment methods state
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
@@ -219,6 +221,13 @@ export default function AdminWalletManager() {
         setMethods(m);
       } else {
         setMethods(DEFAULT_PAYMENT_METHODS);
+      }
+      // Load per-method custom rates
+      const cr = (settings as any).cardRates as Record<string, number> | undefined;
+      if (cr) {
+        const asStrings: Record<string, string> = {};
+        for (const [k, v] of Object.entries(cr)) asStrings[k] = String(v);
+        setCardRatesInput(asStrings);
       }
     }
   }, [settings]);
@@ -261,6 +270,21 @@ export default function AdminWalletManager() {
       setEditingRate(false);
     } catch { toast.error("Erreur lors de la sauvegarde."); }
     finally { setIsSaving(false); }
+  };
+
+  // ── Save per-method card rates ────────────────────────────────────────────────
+  const saveCardRates = async () => {
+    setIsSavingCardRates(true);
+    try {
+      const cardRates: Record<string, number> = {};
+      for (const [id, val] of Object.entries(cardRatesInput)) {
+        const n = parseFloat(val);
+        if (!isNaN(n) && n > 0) cardRates[id] = n;
+      }
+      await updateSettings({ cardRates } as any);
+      toast.success('Taux personnalisés sauvegardés !');
+    } catch { toast.error('Erreur lors de la sauvegarde.'); }
+    finally { setIsSavingCardRates(false); }
   };
 
   // ── Save methods ──────────────────────────────────────────────────────────────
@@ -421,6 +445,70 @@ export default function AdminWalletManager() {
             <Button onClick={saveRate} disabled={isSaving} className="bg-primary text-white font-black rounded-xl h-11 px-6">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Sauvegarder le taux
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Per-method custom rates ── */}
+      <div>
+        <h2 className="text-xl font-black text-dark mb-4 flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-primary" />
+          Taux personnalisés par méthode
+        </h2>
+        <Card className="border-gray-100 shadow-sm">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-50 border border-blue-100">
+              <Info className="h-4 w-4 text-blue-600 shrink-0" />
+              <p className="text-xs text-blue-700">
+                Définissez un taux HTG/USD spécifique par méthode de paiement. Laissez vide pour utiliser le taux global.
+              </p>
+            </div>
+            {methods.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">Aucune méthode configurée.</p>
+            ) : (
+              <div className="space-y-3">
+                {methods.map(m => {
+                  const customVal = cardRatesInput[m.id] || '';
+                  const globalRate = parseFloat(rateInput) || settings?.exchangeRate || 135;
+                  const previewRate = parseFloat(customVal) || globalRate;
+                  return (
+                    <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50">
+                      <div className="h-9 w-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-lg shrink-0 shadow-sm">
+                        {m.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-dark">{m.name}</p>
+                        <p className="text-[10px] text-gray-400">
+                          {customVal ? `Taux personnalisé : ${previewRate} HTG/$` : `Taux global : ${globalRate} HTG/$`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Input
+                          type="number"
+                          value={customVal}
+                          onChange={e => setCardRatesInput(prev => ({ ...prev, [m.id]: e.target.value }))}
+                          placeholder={String(globalRate)}
+                          className="h-9 w-28 rounded-xl text-sm font-bold text-center"
+                          min="1" step="0.01"
+                        />
+                        <span className="text-[10px] font-black text-gray-400 whitespace-nowrap">HTG/$</span>
+                        {customVal && (
+                          <button type="button"
+                            onClick={() => setCardRatesInput(prev => { const n = { ...prev }; delete n[m.id]; return n; })}
+                            className="h-9 w-9 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <Button onClick={saveCardRates} disabled={isSavingCardRates} className="bg-primary text-white font-black rounded-xl h-11 px-6">
+              {isSavingCardRates ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Sauvegarder les taux
             </Button>
           </CardContent>
         </Card>

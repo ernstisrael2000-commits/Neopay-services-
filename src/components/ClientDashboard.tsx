@@ -176,6 +176,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   const rate    = settings?.exchangeRate || 135;
   const balance = client?.balance || 0;
+  const cardRates = (settings as any)?.cardRates as Record<string, number> | undefined;
 
   const paymentMethods: PaymentMethod[] = useMemo(() => {
     if (settings?.paymentMethods && settings.paymentMethods.length > 0) return settings.paymentMethods;
@@ -248,7 +249,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     usd: number;
   } | null>(null);
 
-  const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
+  // Use method-specific rate if configured, otherwise fall back to global rate
+  const effectiveDepositRate = (depositMethod?.id && cardRates?.[depositMethod.id]) || rate;
+  const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / effectiveDepositRate : 0;
   const transferHtgPreview = transferUSD && !isNaN(parseFloat(transferUSD)) ? parseFloat(transferUSD) * rate : 0;
 
   // Fee computation (preview only – server calculates authoritatively at approval)
@@ -494,7 +497,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     e.preventDefault();
     const htg = parseFloat(htgAmount);
     if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
-    const usd = htg / rate;
+    const usd = htg / effectiveDepositRate;
     if (usd < minDeposit) { toast.error(`Montant minimum: $${minDeposit.toFixed(2)} USD`); return; }
     if (usd > maxDeposit) { toast.error(`Montant maximum: $${maxDeposit.toFixed(2)} USD`); return; }
     if (!depositMethod) { toast.error('Choisissez une méthode de paiement.'); return; }
@@ -502,10 +505,10 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setActionLoading(true);
     try {
       await submitClientDeposit(client!, usd, depositMethod.name, depositTxId || undefined,
-        depositCaptchaToken || undefined, depositMessage || undefined, htg, rate);
+        depositCaptchaToken || undefined, depositMessage || undefined, htg, effectiveDepositRate);
       const msg = `Bonjour Rena 👋,\n\nDemande de *DÉPÔT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
-        `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htg.toLocaleString()} HTG* (taux: ${rate})\n` +
+        `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htg.toLocaleString()} HTG* (taux: ${effectiveDepositRate})\n` +
         `💳 Via: *${depositMethod.name}*` +
         (depositMethod.number ? `\n📞 Numéro: *${depositMethod.number}*` : '') +
         (depositTxId ? `\n🔖 Référence: *${depositTxId}*` : '') +
@@ -1172,7 +1175,13 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             })()}
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant envoyé (HTG)</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant envoyé (HTG)</Label>
+                <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+                  1$ = {effectiveDepositRate} HTG
+                  {cardRates?.[depositMethod?.id || ''] ? ' ✦' : ''}
+                </span>
+              </div>
               <Input type="number" value={htgAmount} onChange={e => setHtgAmount(e.target.value)}
                 placeholder="Ex: 1 000" className="h-12 rounded-xl text-lg font-black" min="1" step="1" required />
               {usdPreview > 0 && (

@@ -244,6 +244,8 @@ export interface AppSettings {
   agentDepositCommissionPercent?: number;
   agentWithdrawPercent?: number;
   agentWithdrawAgentSharePercent?: number;
+  // Custom exchange rates per payment method (methodId → HTG/USD rate)
+  cardRates?: Record<string, number>;
 }
 
 export interface Game {
