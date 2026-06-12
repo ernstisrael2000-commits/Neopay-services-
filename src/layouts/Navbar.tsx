@@ -20,6 +20,7 @@ interface NavbarProps {
   onClientLogout: () => void;
   onOpenWallet: () => void;
   onAdminLogin: (admin: AdminAccount) => void;
+  onTeacherAccess?: () => void;
   formationsTab?: 'all' | 'my';
   onFormationsTabChange?: (tab: 'all' | 'my') => void;
 }
@@ -32,7 +33,7 @@ const NAV_ITEMS = [
   { key: 'affiliate', icon: Users, label: 'Affiliés' },
 ];
 
-export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, formationsTab, onFormationsTabChange }: NavbarProps) {
+export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, onTeacherAccess, formationsTab, onFormationsTabChange }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const { total: pendingAffiliateCount } = usePendingCounts(isAdmin);
@@ -135,6 +136,15 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                       {pendingCount > 9 ? '9+' : pendingCount}
                     </span>
                   )}
+                </button>
+              )}
+              {onTeacherAccess && (
+                <button
+                  onClick={() => { onTeacherAccess(); handleNav('teacher'); }}
+                  className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group ${currentView === 'teacher' ? 'bg-violet-50' : 'hover:bg-violet-50/60'}`}
+                >
+                  <GraduationCap className={`h-[18px] w-[18px] ${currentView === 'teacher' ? 'text-violet-600' : 'text-gray-400 group-hover:text-violet-600'}`} />
+                  <span className={`text-[9px] font-bold uppercase tracking-wide ${currentView === 'teacher' ? 'text-violet-600' : 'text-gray-400/70 group-hover:text-violet-600'}`}>Professeur</span>
                 </button>
               )}
             </div>
@@ -414,6 +424,14 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                   )}
                 </button>
               )}
+              {onTeacherAccess && (
+                <button onClick={() => { onTeacherAccess(); handleNav('teacher'); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${currentView === 'teacher' ? 'bg-violet-50 text-violet-600' : 'text-gray-600 hover:bg-violet-50/60'}`}>
+                  <GraduationCap className={`h-5 w-5 shrink-0 ${currentView === 'teacher' ? 'text-violet-600' : 'text-gray-400'}`} />
+                  <span>Espace Professeur</span>
+                  {currentView === 'teacher' && <ChevronRight className="h-4 w-4 ml-auto text-violet-500" />}
+                </button>
+              )}
             </div>
 
             {/* Bottom actions */}
@@ -450,6 +468,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
         onAdminLogin={(admin) => { onAdminLogin(admin); onViewChange('admin'); setShowAuthModal(false); }}
         onAffiliateAccess={() => onViewChange('affiliate')}
         onAdminPasswordLogin={() => { onViewChange('admin'); setShowAuthModal(false); }}
+        onTeacherAccess={onTeacherAccess ? () => { onTeacherAccess(); onViewChange('teacher'); setShowAuthModal(false); } : undefined}
       />
 
       <Dialog open={showLoginErrorDialog} onOpenChange={setShowLoginErrorDialog}>

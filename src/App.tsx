@@ -216,6 +216,7 @@ export default function App() {
               handleAdminLogin(admin);
               handleViewChange('admin');
             }}
+            onTeacherAccess={() => handleViewChange('teacher')}
             formationsTab={formationsTab}
             onFormationsTabChange={setFormationsTab}
           />
