@@ -2303,7 +2303,7 @@ function EmailLogsPanel() {
     setSavingTeacherFee(true);
     try {
       const res = await fetch('/api/admin/teacher-fee', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fee }),
       });
