@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useDeferredValue, useCallback } from 'react';
+import React, { useState, useEffect, useDeferredValue, useCallback, useRef } from 'react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { 
   DropdownMenu,
