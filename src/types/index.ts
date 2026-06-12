@@ -570,3 +570,34 @@ export interface AdminClientNotification {
   createdAt: any;
   resolvedAt?: any;
 }
+
+export interface Teacher {
+  id?: string;
+  name: string;
+  email?: string;
+  password: string;
+  balance: number;
+  status: 'active' | 'inactive';
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface TeacherTransaction {
+  id?: string;
+  teacherId: string;
+  teacherName: string;
+  type: 'sale_credit' | 'withdrawal';
+  amount: number;
+  fee?: number;
+  netAmount?: number;
+  formationId?: string;
+  formationTitle?: string;
+  clientName?: string;
+  method?: string;
+  accountNumber?: string;
+  status: 'completed' | 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  note?: string;
+  createdAt: any;
+  updatedAt: any;
+}

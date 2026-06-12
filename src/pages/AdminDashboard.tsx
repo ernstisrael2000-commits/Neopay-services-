@@ -9,7 +9,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuSeparator
 } from '../components/ui/dropdown-menu';
-import { Smartphone, Plus, Search, CreditCard as Edit2, Trash2, Package, MoveVertical as MoreVertical, CircleCheck as CheckCircle2, Truck, Clock, CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Loader as Loader2, Upload, Trash, Settings as SettingsIcon, LayoutGrid, Landmark, Image as ImageIcon, CreditCard as Edit, CirclePlus as PlusCircle, X, Wallet, Users, Trophy, Gamepad2, Bell, ListFilter as Filter, ArrowUpDown, DollarSign, ArrowUp, ArrowDown, CreditCard, UserCheck, Circle as HelpCircle, Zap, Star, ChevronRight, ChevronLeft, ArrowRight, ArrowRightLeft, Network, TrendingUp, LayoutDashboard, Circle as XCircle, Globe } from 'lucide-react';
+import { Smartphone, Plus, Search, CreditCard as Edit2, Trash2, Package, MoveVertical as MoreVertical, CircleCheck as CheckCircle2, Truck, Clock, CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Loader as Loader2, Upload, Trash, Settings as SettingsIcon, LayoutGrid, Landmark, Image as ImageIcon, CreditCard as Edit, CirclePlus as PlusCircle, X, Wallet, Users, Trophy, Gamepad2, Bell, ListFilter as Filter, ArrowUpDown, DollarSign, ArrowUp, ArrowDown, CreditCard, UserCheck, Circle as HelpCircle, Zap, Star, ChevronRight, ChevronLeft, ArrowRight, ArrowRightLeft, Network, TrendingUp, LayoutDashboard, Circle as XCircle, Globe, Pencil } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -2132,6 +2132,8 @@ function EmailLogsPanel() {
         { value: 'products', label: 'Catalogue', icon: LayoutGrid, permission: 'products' },
         { value: 'formations', label: 'Formations', icon: LucideIcons.GraduationCap, permission: 'products' },
         { value: 'formation_payments', label: 'Paiements Cours', icon: LucideIcons.CreditCard, permission: 'products' },
+        { value: 'teachers', label: 'Professeurs', icon: LucideIcons.UserCheck, permission: 'products' },
+        { value: 'teacher-withdrawals', label: 'Retraits Professeurs', icon: LucideIcons.Banknote, permission: 'settings' },
         { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
       ]
     },
@@ -2179,6 +2181,112 @@ function EmailLogsPanel() {
   const [activeTab, setActiveTab] = useState(visibleMenuItems[0]?.value || 'parcels');
   const [isAffiliateDeleteConfirmOpen, setIsAffiliateDeleteConfirmOpen] = useState(false);
   const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
+
+  // ── Teacher management state ────────────────────────────────────────────────
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [teachersLoading, setTeachersLoading] = useState(false);
+  const [teacherWithdrawals, setTeacherWithdrawals] = useState<any[]>([]);
+  const [teacherWithdrawalsLoading, setTeacherWithdrawalsLoading] = useState(false);
+  const [teacherFee, setTeacherFee] = useState<number>(0);
+  const [teacherFeeInput, setTeacherFeeInput] = useState<string>('');
+  const [savingTeacherFee, setSavingTeacherFee] = useState(false);
+  const [isTeacherDialogOpen, setIsTeacherDialogOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<any | null>(null);
+  const [teacherFormData, setTeacherFormData] = useState({ name: '', password: '' });
+  const [savingTeacher, setSavingTeacher] = useState(false);
+  const [deletingTeacherId, setDeletingTeacherId] = useState<string | null>(null);
+  const [approvingTeacherTx, setApprovingTeacherTx] = useState<string | null>(null);
+
+  const fetchTeachers = async () => {
+    setTeachersLoading(true);
+    try {
+      const res = await fetch('/api/admin/teachers');
+      const data = await res.json();
+      setTeachers(data.teachers || []);
+    } catch { toast.error('Erreur chargement professeurs.'); }
+    finally { setTeachersLoading(false); }
+  };
+
+  const fetchTeacherWithdrawals = async () => {
+    setTeacherWithdrawalsLoading(true);
+    try {
+      const [wdRes, feeRes] = await Promise.all([
+        fetch('/api/admin/teacher-withdrawals'),
+        fetch('/api/admin/teacher-fee'),
+      ]);
+      const wdData = await wdRes.json();
+      const feeData = await feeRes.json();
+      setTeacherWithdrawals(wdData.withdrawals || []);
+      setTeacherFee(feeData.fee ?? 0);
+      setTeacherFeeInput(String(feeData.fee ?? 0));
+    } catch { toast.error('Erreur chargement retraits professeurs.'); }
+    finally { setTeacherWithdrawalsLoading(false); }
+  };
+
+  const handleSaveTeacher = async () => {
+    if (!teacherFormData.name.trim() || (!editingTeacher && !teacherFormData.password.trim())) {
+      toast.error('Nom et mot de passe requis.'); return;
+    }
+    setSavingTeacher(true);
+    try {
+      const url = editingTeacher ? `/api/admin/teachers/${editingTeacher.id}` : '/api/admin/teachers';
+      const method = editingTeacher ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(teacherFormData),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur');
+      toast.success(editingTeacher ? 'Professeur mis à jour !' : 'Professeur créé !');
+      setIsTeacherDialogOpen(false);
+      fetchTeachers();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setSavingTeacher(false); }
+  };
+
+  const handleDeleteTeacher = async (id: string) => {
+    setDeletingTeacherId(id);
+    try {
+      const res = await fetch(`/api/admin/teachers/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success('Professeur supprimé.');
+      fetchTeachers();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setDeletingTeacherId(null); }
+  };
+
+  const handleTeacherWithdrawalAction = async (id: string, action: 'approve' | 'reject') => {
+    setApprovingTeacherTx(id);
+    try {
+      const res = await fetch(`/api/admin/teacher-withdrawals/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success(action === 'approve' ? 'Retrait approuvé !' : 'Retrait rejeté.');
+      fetchTeacherWithdrawals();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setApprovingTeacherTx(null); }
+  };
+
+  const handleSaveTeacherFee = async () => {
+    const fee = Number(teacherFeeInput);
+    if (isNaN(fee) || fee < 0 || fee > 100) { toast.error('Frais invalides (0-100%).'); return; }
+    setSavingTeacherFee(true);
+    try {
+      const res = await fetch('/api/admin/teacher-fee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fee }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      setTeacherFee(fee);
+      toast.success('Frais de retrait mis à jour !');
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setSavingTeacherFee(false); }
+  };
 
   const [isManualCommissionOpen, setIsManualCommissionOpen] = useState(false);
   const [manualCommissionAffiliateId, setManualCommissionAffiliateId] = useState<string>('');
@@ -8230,9 +8338,230 @@ function EmailLogsPanel() {
           </div>
         </TabsContent>
 
+        {/* ── TEACHERS TAB ───────────────────────────────────────────────── */}
+        <TabsContent value="teachers" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-dark flex items-center gap-2">
+                <LucideIcons.UserCheck className="h-5 w-5 text-violet-600" />
+                Professeurs
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">Gérez les comptes professeurs et leurs soldes.</p>
+            </div>
+            <Button
+              onClick={() => { fetchTeachers(); setEditingTeacher(null); setTeacherFormData({ name: '', password: '' }); setIsTeacherDialogOpen(true); }}
+              className="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white border-0 rounded-2xl shadow-lg shadow-violet-200 font-bold"
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> Nouveau Professeur
+            </Button>
+          </div>
+          {(() => { if (!teachers.length && !teachersLoading) fetchTeachers(); return null; })()}
+          {teachersLoading ? (
+            <div className="flex items-center justify-center py-16 text-gray-400"><Loader2 className="h-7 w-7 animate-spin" /></div>
+          ) : teachers.length === 0 ? (
+            <Card className="border-dashed border-2 border-gray-200 shadow-none">
+              <CardContent className="py-16 text-center text-gray-400">
+                <LucideIcons.GraduationCap className="h-10 w-10 mx-auto mb-3 text-gray-200" />
+                <p className="font-semibold">Aucun professeur enregistré</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {teachers.map(t => (
+                <Card key={t.id} className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center">
+                        <LucideIcons.GraduationCap className="h-5 w-5 text-violet-600" />
+                      </div>
+                      <div>
+                        <p className="font-black text-sm text-dark">{t.name}</p>
+                        <p className="text-[10px] text-violet-500 font-bold uppercase tracking-widest">Professeur</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400 font-bold">Solde</p>
+                        <p className="font-black text-emerald-600 text-sm">{Math.round((t.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-400 font-bold">Formations</p>
+                        <p className="font-black text-dark text-sm">{t.formationsCount || 0}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setEditingTeacher(t); setTeacherFormData({ name: t.name, password: '' }); setIsTeacherDialogOpen(true); }}
+                        className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-bold text-violet-600 hover:bg-violet-50 rounded-xl transition-colors border border-violet-100"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Modifier
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTeacher(t.id)}
+                        disabled={deletingTeacherId === t.id}
+                        className="flex items-center justify-center gap-1 py-2 px-3 text-xs font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-red-100"
+                      >
+                        {deletingTeacherId === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── TEACHER WITHDRAWALS TAB ─────────────────────────────────────── */}
+        <TabsContent value="teacher-withdrawals" className="space-y-6">
+          <div>
+            <h2 className="text-xl font-bold text-dark flex items-center gap-2">
+              <LucideIcons.Banknote className="h-5 w-5 text-violet-600" />
+              Retraits Professeurs
+            </h2>
+            <p className="text-sm text-gray-500 mt-0.5">Approuvez ou rejetez les demandes de retrait des professeurs.</p>
+          </div>
+          {(() => { if (!teacherWithdrawals.length && !teacherWithdrawalsLoading) fetchTeacherWithdrawals(); return null; })()}
+
+          {/* Fee setting */}
+          <Card className="border border-violet-100 bg-violet-50/50 shadow-none rounded-2xl">
+            <CardContent className="p-5">
+              <p className="text-xs font-black uppercase tracking-widest text-violet-600 mb-3">Frais de retrait professeurs</p>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number" min="0" max="100"
+                  value={teacherFeeInput}
+                  onChange={e => setTeacherFeeInput(e.target.value)}
+                  className="w-28 h-10 rounded-xl text-center font-bold text-lg"
+                  placeholder="0"
+                />
+                <span className="font-black text-gray-600 text-lg">%</span>
+                <Button onClick={handleSaveTeacherFee} disabled={savingTeacherFee}
+                  className="bg-violet-600 hover:bg-violet-700 text-white border-0 rounded-xl h-10 font-bold text-sm shadow-md shadow-violet-200">
+                  {savingTeacherFee ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enregistrer'}
+                </Button>
+                {teacherFee > 0 && <span className="text-xs text-gray-500 font-semibold">Actuel : {teacherFee}%</span>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {teacherWithdrawalsLoading ? (
+            <div className="flex items-center justify-center py-12 text-gray-400"><Loader2 className="h-7 w-7 animate-spin" /></div>
+          ) : teacherWithdrawals.length === 0 ? (
+            <Card className="border-dashed border-2 border-gray-200 shadow-none">
+              <CardContent className="py-14 text-center text-gray-400">
+                <LucideIcons.Banknote className="h-10 w-10 mx-auto mb-3 text-gray-200" />
+                <p className="font-semibold">Aucune demande de retrait</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Professeur</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Méthode</TableHead>
+                        <TableHead>Compte</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {teacherWithdrawals.map(wd => (
+                        <TableRow key={wd.id}>
+                          <TableCell className="font-bold text-sm">{wd.teacherName || '—'}</TableCell>
+                          <TableCell>
+                            <span className="font-black text-red-600">
+                              {Math.round((wd.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                            </span>
+                          </TableCell>
+                          <TableCell><Badge variant="outline">{wd.method || '—'}</Badge></TableCell>
+                          <TableCell className="text-gray-500 font-mono text-xs">{wd.accountNumber || '—'}</TableCell>
+                          <TableCell className="text-xs text-gray-400">
+                            {wd.createdAt?._seconds ? format(new Date(wd.createdAt._seconds * 1000), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                              wd.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                              wd.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {wd.status === 'approved' ? 'Approuvé' : wd.status === 'rejected' ? 'Rejeté' : 'En attente'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {wd.status === 'pending' && (
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleTeacherWithdrawalAction(wd.id, 'approve')}
+                                  disabled={approvingTeacherTx === wd.id}
+                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white border-0 rounded-xl text-xs font-bold shadow-sm"
+                                >
+                                  {approvingTeacherTx === wd.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Approuver'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleTeacherWithdrawalAction(wd.id, 'reject')}
+                                  disabled={approvingTeacherTx === wd.id}
+                                  className="h-8 rounded-xl text-xs font-bold"
+                                >
+                                  Rejeter
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
           </Tabs>
         </div>
       </div>
+
+      {/* Teacher dialog */}
+      <Dialog open={isTeacherDialogOpen} onOpenChange={setIsTeacherDialogOpen}>
+        <DialogContent className="sm:max-w-sm rounded-3xl border-0 shadow-2xl p-0 overflow-hidden">
+          <div className="h-2 bg-gradient-to-r from-violet-600 to-indigo-600" />
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle className="flex items-center gap-2 font-black text-dark">
+              <LucideIcons.GraduationCap className="h-5 w-5 text-violet-600" />
+              {editingTeacher ? 'Modifier le professeur' : 'Nouveau professeur'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-6 pb-6 space-y-4 mt-2">
+            <div>
+              <Label className="text-xs font-bold text-gray-500 mb-1.5 block">Nom</Label>
+              <Input value={teacherFormData.name}
+                onChange={e => setTeacherFormData(p => ({ ...p, name: e.target.value }))}
+                placeholder="Nom du professeur" className="rounded-2xl h-12" />
+            </div>
+            <div>
+              <Label className="text-xs font-bold text-gray-500 mb-1.5 block">
+                Mot de passe {editingTeacher && '(laisser vide pour ne pas changer)'}
+              </Label>
+              <Input type="password" value={teacherFormData.password}
+                onChange={e => setTeacherFormData(p => ({ ...p, password: e.target.value }))}
+                placeholder="••••••••" className="rounded-2xl h-12" />
+            </div>
+            <Button onClick={handleSaveTeacher} disabled={savingTeacher}
+              className="w-full h-12 bg-violet-600 hover:bg-violet-700 text-white font-black rounded-2xl border-0 shadow-lg shadow-violet-200">
+              {savingTeacher ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {editingTeacher ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Record Sale Dialog */}
       <Dialog open={isManualCommissionOpen} onOpenChange={setIsManualCommissionOpen}>

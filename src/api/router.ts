@@ -3599,6 +3599,46 @@ router.patch('/api/admin/formations/payment-requests/:id', requireDb, async (req
       });
     }
     await batch.commit();
+
+    // Credit teacher for MonCash-approved formation purchase
+    if (action === 'approve' && data.formationId && (data.amount || 0) > 0) {
+      try {
+        const settingsSnap = await adminDb.collection('settings').doc('main').get();
+        const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
+        const formSnap = await adminDb.collection('formations').doc(data.formationId).get();
+        const teacherId = formSnap.exists ? formSnap.data()!.teacherId : null;
+        const teacherName = formSnap.exists ? formSnap.data()!.teacherName : null;
+        if (teacherId) {
+          const teacherRef = adminDb.collection('teachers').doc(teacherId);
+          const teacherSnap = await teacherRef.get();
+          if (teacherSnap.exists) {
+            const amountUSD = (data.amount || 0) / exchangeRate;
+            const teacherBatch = adminDb.batch();
+            teacherBatch.update(teacherRef, {
+              balance: (teacherSnap.data()!.balance || 0) + amountUSD,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+            const txRef = adminDb.collection('teacher_transactions').doc();
+            teacherBatch.set(txRef, {
+              teacherId,
+              teacherName: teacherName || '',
+              type: 'sale_credit',
+              amount: amountUSD,
+              formationId: data.formationId,
+              formationTitle: data.formationTitle || '',
+              clientName: data.userName || '',
+              status: 'completed',
+              createdAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+            await teacherBatch.commit();
+          }
+        }
+      } catch (teacherErr: any) {
+        console.error('[formation payment-request approve] teacher credit error:', teacherErr.message);
+      }
+    }
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[formation payment-requests PATCH]', e);
@@ -3740,6 +3780,43 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
         read: false, createdAt: FieldValue.serverTimestamp(),
       });
     }
+    // Credit teacher if formation belongs to one
+    if (price > 0 && formationId) {
+      try {
+        const formSnap = await adminDb.collection('formations').doc(formationId).get();
+        const teacherId = formSnap.exists ? formSnap.data()!.teacherId : null;
+        const teacherName = formSnap.exists ? formSnap.data()!.teacherName : null;
+        if (teacherId) {
+          const teacherRef = adminDb.collection('teachers').doc(teacherId);
+          const teacherSnap = await teacherRef.get();
+          if (teacherSnap.exists) {
+            const currentBalance = teacherSnap.data()!.balance || 0;
+            const teacherBatch = adminDb.batch();
+            teacherBatch.update(teacherRef, {
+              balance: currentBalance + price,
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+            const txRef = adminDb.collection('teacher_transactions').doc();
+            teacherBatch.set(txRef, {
+              teacherId,
+              teacherName: teacherName || '',
+              type: 'sale_credit',
+              amount: price,
+              formationId,
+              formationTitle: formationTitle || '',
+              clientName: clientName || clientData.name || '',
+              status: 'completed',
+              createdAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+            await teacherBatch.commit();
+          }
+        }
+      } catch (teacherErr: any) {
+        console.error('[formations/purchases/wallet] teacher credit error:', teacherErr.message);
+      }
+    }
+
     await batch.commit();
 
     // Auto-commission pour le parrain du client (formation)
@@ -5295,6 +5372,308 @@ router.post('/api/webhooks/moncashconnect', async (req, res) => {
     res.status(200).json({ ok: true });
   } catch (e: any) {
     console.error('[webhook/moncashconnect]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── Teachers ──────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/api/teacher/login', requireDb, async (req, res) => {
+  try {
+    const { name, password } = req.body;
+    if (!name || !password) return res.status(400).json({ error: 'Identifiants requis.' });
+    const snap = await adminDb.collection('teachers').where('name', '==', name).limit(1).get();
+    if (snap.empty) return res.status(401).json({ error: 'Identifiants incorrects.' });
+    const doc = snap.docs[0];
+    const data = doc.data();
+    if (data.status === 'inactive') return res.status(403).json({ error: 'Compte désactivé. Contactez l\'administrateur.' });
+    if (data.password !== password) return res.status(401).json({ error: 'Identifiants incorrects.' });
+    res.json({ success: true, teacher: { id: doc.id, ...data, password: undefined } });
+  } catch (e: any) {
+    console.error('[teacher/login]', e);
+    res.status(500).json({ error: 'Erreur lors de la connexion.' });
+  }
+});
+
+router.get('/api/teacher/me/:id', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('teachers').doc(req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
+    const data = snap.data()!;
+    res.json({ teacher: { id: snap.id, ...data, password: undefined } });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/teacher/formations/:teacherId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('formations').where('teacherId', '==', req.params.teacherId).get();
+    res.json({ formations: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/teacher/formations', requireDb, async (req, res) => {
+  try {
+    const { teacherId, teacherName, ...rest } = req.body;
+    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const data = sanitizeFormation(rest);
+    if (!data.title) return res.status(400).json({ error: 'Le titre est requis.' });
+    const ref = await adminDb.collection('formations').add({
+      ...data,
+      teacherId,
+      teacherName: teacherName || '',
+      studentsCount: data.studentsCount ?? 0,
+      rating: data.rating ?? 0,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) {
+    console.error('[teacher/formations POST]', e);
+    res.status(500).json({ error: e.message || 'Erreur lors de la création.' });
+  }
+});
+
+router.put('/api/teacher/formations/:id', requireDb, async (req, res) => {
+  try {
+    const { teacherId, ...rest } = req.body;
+    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const formSnap = await adminDb.collection('formations').doc(req.params.id).get();
+    if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
+    if (formSnap.data()!.teacherId !== teacherId) return res.status(403).json({ error: 'Accès refusé.' });
+    const data = sanitizeFormation(rest);
+    await adminDb.collection('formations').doc(req.params.id).update({
+      ...data, updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[teacher/formations PUT]', e);
+    res.status(500).json({ error: e.message || 'Erreur lors de la mise à jour.' });
+  }
+});
+
+router.delete('/api/teacher/formations/:id', requireDb, async (req, res) => {
+  try {
+    const { teacherId } = req.query;
+    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const formSnap = await adminDb.collection('formations').doc(req.params.id).get();
+    if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
+    if (formSnap.data()!.teacherId !== teacherId) return res.status(403).json({ error: 'Accès refusé.' });
+    await adminDb.collection('formations').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[teacher/formations DELETE]', e);
+    res.status(500).json({ error: e.message || 'Erreur lors de la suppression.' });
+  }
+});
+
+router.post('/api/teacher/withdrawal', requireDb, async (req, res) => {
+  try {
+    const { teacherId, amount, method, accountNumber } = req.body;
+    if (!teacherId || !amount || !method || !accountNumber)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const teacherRef = adminDb.collection('teachers').doc(teacherId);
+    const teacherSnap = await teacherRef.get();
+    if (!teacherSnap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
+    const teacherData = teacherSnap.data()!;
+
+    // Load teacher fee from settings
+    const settingsSnap = await adminDb.collection('settings').doc('main').get();
+    const teacherWithdrawalFee = settingsSnap.exists ? (settingsSnap.data()!.teacherWithdrawalFee ?? 0) : 0;
+
+    const amountUSD = Number(amount);
+    const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
+    const amountHTG = Math.round(amountUSD * exchangeRate);
+    const feeAmount = Math.round(amountHTG * teacherWithdrawalFee / 100);
+    const netAmountHTG = amountHTG - feeAmount;
+
+    if ((teacherData.balance || 0) < amountUSD)
+      return res.status(400).json({ error: 'Solde insuffisant.' });
+
+    // Check no pending withdrawal
+    const pendingSnap = await adminDb.collection('teacher_transactions')
+      .where('teacherId', '==', teacherId).where('status', '==', 'pending').limit(1).get();
+    if (!pendingSnap.empty) return res.status(400).json({ error: 'Vous avez déjà un retrait en attente.' });
+
+    await adminDb.collection('teacher_transactions').add({
+      teacherId,
+      teacherName: teacherData.name || '',
+      type: 'withdrawal',
+      amount: amountUSD,
+      fee: teacherWithdrawalFee,
+      netAmount: netAmountHTG / exchangeRate,
+      amountHTG,
+      netAmountHTG,
+      feeAmount,
+      method,
+      accountNumber,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Notify admin
+    await adminDb.collection('admin_notifications').add({
+      type: 'teacher_withdrawal',
+      teacherId,
+      teacherName: teacherData.name || '',
+      amount: amountUSD,
+      amountHTG,
+      netAmountHTG,
+      fee: teacherWithdrawalFee,
+      method,
+      accountNumber,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[teacher/withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+router.get('/api/teacher/transactions/:teacherId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('teacher_transactions')
+      .where('teacherId', '==', req.params.teacherId)
+      .orderBy('createdAt', 'desc')
+      .get();
+    res.json({ transactions: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Teacher Management ─────────────────────────────────────────────────
+
+router.get('/api/admin/teachers', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('teachers').orderBy('createdAt', 'desc').get();
+    res.json({ teachers: snap.docs.map(d => ({ id: d.id, ...d.data(), password: undefined })) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/admin/teachers', requireDb, async (req, res) => {
+  try {
+    const { name, email, password, status } = req.body;
+    if (!name || !password) return res.status(400).json({ error: 'Nom et mot de passe requis.' });
+    const existing = await adminDb.collection('teachers').where('name', '==', name).limit(1).get();
+    if (!existing.empty) return res.status(400).json({ error: 'Un professeur avec ce nom existe déjà.' });
+    const ref = await adminDb.collection('teachers').add({
+      name, email: email || '', password, balance: 0,
+      status: status || 'active',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/api/admin/teachers/:id', requireDb, async (req, res) => {
+  try {
+    const { password, ...rest } = req.body;
+    const upd: any = { ...rest, updatedAt: FieldValue.serverTimestamp() };
+    if (password) upd.password = password;
+    await adminDb.collection('teachers').doc(req.params.id).update(upd);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/api/admin/teachers/:id', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('teachers').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/admin/teacher-transactions', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('teacher_transactions').orderBy('createdAt', 'desc').get();
+    res.json({ transactions: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/admin/teacher-transactions/:id/approve', requireDb, async (req, res) => {
+  try {
+    const txRef = adminDb.collection('teacher_transactions').doc(req.params.id);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const tx = txSnap.data()!;
+    if (tx.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+
+    const teacherRef = adminDb.collection('teachers').doc(tx.teacherId);
+    const teacherSnap = await teacherRef.get();
+    if (!teacherSnap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
+    const teacherData = teacherSnap.data()!;
+
+    const newBalance = Math.max(0, (teacherData.balance || 0) - (tx.amount || 0));
+    const batch = adminDb.batch();
+    batch.update(txRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+    batch.update(teacherRef, { balance: newBalance, updatedAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/admin/teacher-transactions/:id/reject', requireDb, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const txRef = adminDb.collection('teacher_transactions').doc(req.params.id);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    if (txSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+    await txRef.update({
+      status: 'rejected',
+      rejectionReason: reason || '',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/api/admin/teacher-fee', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('settings').doc('main').get();
+    const fee = snap.exists ? (snap.data()!.teacherWithdrawalFee ?? 0) : 0;
+    res.json({ fee });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/api/admin/teacher-fee', requireDb, async (req, res) => {
+  try {
+    const { fee } = req.body;
+    if (fee === undefined || fee < 0 || fee > 100) return res.status(400).json({ error: 'Frais invalides (0-100%).' });
+    await adminDb.collection('settings').doc('main').set(
+      { teacherWithdrawalFee: Number(fee), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    res.json({ success: true });
+  } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });

@@ -15,6 +15,8 @@ import PaymentSuccessView from './pages/PaymentSuccessView';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import AdminLogin from './components/AdminLogin';
 import AffiliateLogin from './components/AffiliateLogin';
+import TeacherLogin from './components/TeacherLogin';
+import TeacherDashboard from './pages/TeacherDashboard';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
@@ -26,15 +28,15 @@ import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Affiliate, AdminAccount, Client } from './types';
+import { Affiliate, AdminAccount, Client, Teacher } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'formations' | 'products' | 'services'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | null>(null);
   const { loading } = useAuth();
@@ -144,6 +146,22 @@ export default function App() {
   const handleAffiliateLogout = () => {
     setLoggedAffiliate(null);
     localStorage.removeItem('rena_affiliate');
+  };
+
+  const [loggedTeacher, setLoggedTeacher] = useState<Teacher | null>(() => {
+    const saved = localStorage.getItem('rena_teacher');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleTeacherLogin = (teacher: Teacher) => {
+    setLoggedTeacher(teacher);
+    localStorage.setItem('rena_teacher', JSON.stringify(teacher));
+  };
+
+  const handleTeacherLogout = () => {
+    setLoggedTeacher(null);
+    localStorage.removeItem('rena_teacher');
+    setView('home');
   };
 
   const [loggedClient, setLoggedClient] = useState<Client | null>(() => {
@@ -369,6 +387,14 @@ export default function App() {
             )
           )}
 
+          {view === 'teacher' && (
+            loggedTeacher ? (
+              <TeacherDashboard teacher={loggedTeacher} onLogout={handleTeacherLogout} />
+            ) : (
+              <TeacherLogin onLoginSuccess={handleTeacherLogin} onBack={() => handleViewChange('home')} />
+            )
+          )}
+
           {view === 'affiliate' && (
             loggedAffiliate ? (
               <AffiliateDashboard 
@@ -388,7 +414,7 @@ export default function App() {
 
         </main>
 
-        {!['admin', 'affiliate', 'formations'].includes(view) && (
+        {!['admin', 'affiliate', 'teacher', 'formations'].includes(view) && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
@@ -446,6 +472,7 @@ export default function App() {
           onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
           onAffiliateAccess={() => handleViewChange('affiliate')}
           onAdminPasswordLogin={() => { handleViewChange('admin'); setShowAuthModal(false); }}
+          onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
         />
 
         <PWAInstallPrompt />

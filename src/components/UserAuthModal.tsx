@@ -6,7 +6,7 @@ import { Label } from './ui/label';
 import {
   UserPlus, LogIn, ShieldCheck, Loader2, Eye, EyeOff,
   ArrowLeft, ArrowRight, User, Phone, Mail, Lock, Hash, Wallet,
-  AlertCircle, Users, ExternalLink
+  AlertCircle, Users, ExternalLink, GraduationCap
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { isInIframe } from '../lib/google-auth';
@@ -26,6 +26,7 @@ interface UserAuthModalProps {
   onAdminLogin: (admin: AdminAccount) => void;
   onAffiliateAccess: () => void;
   onAdminPasswordLogin?: () => void;
+  onTeacherAccess?: () => void;
 }
 
 // Plain Google icon — no motion, no framer
@@ -87,7 +88,7 @@ const IframeGoogleWarning = () => {
 };
 
 export default function UserAuthModal({
-  open, onOpenChange, onClientLogin, onAdminLogin, onAffiliateAccess, onAdminPasswordLogin
+  open, onOpenChange, onClientLogin, onAdminLogin, onAffiliateAccess, onAdminPasswordLogin, onTeacherAccess
 }: UserAuthModalProps) {
   const [view, setView] = useState<ModalView>('choice');
   const [loading, setLoading] = useState(false);
@@ -426,6 +427,21 @@ export default function UserAuthModal({
                   </div>
                 </button>
               </div>
+              {onTeacherAccess && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Espace Professeur</p>
+                  <button onClick={() => { onTeacherAccess!(); handleClose(false); }}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-violet-300 hover:bg-violet-50/30 transition-all group text-left active:scale-[0.98]">
+                    <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0 group-hover:bg-violet-200 transition-colors">
+                      <GraduationCap className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-dark">Accès Professeur</p>
+                      <p className="text-xs text-gray-500">Gérez vos formations et votre portefeuille</p>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
