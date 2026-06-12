@@ -319,7 +319,7 @@ export default function UserAuthModal({
 
         {/* ── CHOICE ── */}
         {view === 'choice' && (
-          <div>
+          <div className="max-h-[90svh] overflow-y-auto">
             <div className="relative overflow-hidden p-8 text-white text-center" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #4f46e5 100%)' }}>
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-400/20 rounded-full blur-xl translate-y-1/2 -translate-x-1/2" />
@@ -384,7 +384,7 @@ export default function UserAuthModal({
 
         {/* ── ADMIN ACCESS ── */}
         {view === 'admin-access' && (
-          <div>
+          <div className="max-h-[90svh] overflow-y-auto">
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
               <button onClick={() => { setView('choice'); setGoogleError(null); }}
                 className="flex items-center gap-1 text-white/60 hover:text-white text-sm mb-4 transition-colors">
