@@ -80,7 +80,7 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
     coverImage: '', previewVideoUrl: '',
     price: 0, originalPrice: undefined,
     level: 'debutant', category: '', language: 'Français',
-    totalDuration: '', hasCertificate: false, comingSoon: false, published: false,
+    totalDuration: '', hasCertificate: false, comingSoon: false, published: true,
     instructor: teacher.name, instructorBio: '', instructorAvatar: '',
     modules: [], chapters: [], resources: [],
     studentsCount: 0, rating: 0,
@@ -671,24 +671,39 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
 
               {/* Toggles */}
               <div className="flex flex-wrap gap-4">
-                {([
-                  { key: 'published', label: 'Publié', color: 'emerald' },
-                  { key: 'comingSoon', label: 'À venir', color: 'orange' },
-                  { key: 'hasCertificate', label: 'Certificat', color: 'violet' },
-                ] as { key: keyof Formation; label: string; color: string }[]).map(toggle => (
-                  <label key={toggle.key} className="flex items-center gap-2 cursor-pointer select-none">
-                    <button
-                      type="button"
-                      onClick={() => setFormData(p => ({ ...p, [toggle.key]: !p[toggle.key] }))}
-                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-                        formData[toggle.key] ? `bg-${toggle.color}-500` : 'bg-gray-200'
-                      }`}
-                    >
-                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formData[toggle.key] ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                    <span className="text-sm font-bold text-gray-600">{toggle.label}</span>
-                  </label>
-                ))}
+                {/* Publié */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({ ...p, published: !p.published }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${formData.published ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formData.published ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm font-bold text-gray-600">Publié</span>
+                </label>
+                {/* À venir */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({ ...p, comingSoon: !p.comingSoon }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${formData.comingSoon ? 'bg-orange-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formData.comingSoon ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm font-bold text-gray-600">À venir</span>
+                </label>
+                {/* Certificat */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({ ...p, hasCertificate: !p.hasCertificate }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${formData.hasCertificate ? 'bg-violet-500' : 'bg-gray-200'}`}
+                  >
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formData.hasCertificate ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm font-bold text-gray-600">Certificat</span>
+                </label>
               </div>
             </div>
 
