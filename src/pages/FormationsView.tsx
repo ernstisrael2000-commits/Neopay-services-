@@ -1711,7 +1711,7 @@ function PurchaseCard({
           <p className="text-xs text-gray-400 flex items-center gap-1.5">
             <Wallet className="h-3.5 w-3.5" />
             Votre solde : <span className={`font-bold ml-0.5 ${hasWalletFunds ? 'text-emerald-600' : 'text-rose-500'}`}>
-              {(loggedClient.balance ?? 0).toLocaleString()} HTG
+              {Math.round((loggedClient.balance ?? 0) * rate).toLocaleString()} HTG
             </span>
           </p>
         )}

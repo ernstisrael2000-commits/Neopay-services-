@@ -61,6 +61,8 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const [activeTab, setActiveTab] = useState<PlayerTab>('overview');
   const [note, setNote] = useState('');
   const [noteSaved, setNoteSaved] = useState(false);
+  const [showIntroVideo, setShowIntroVideo] = useState(false);
+  const introRef = useRef<HTMLVideoElement>(null);
 
   // ── Quiz system ────────────────────────────────────────────────────────────
   const [quizResults, setQuizResults] = useState<Record<string, { passed: boolean; score: number; attempts: number }>>({});
@@ -266,6 +268,13 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [markComplete]);
+
+  // ── Intro video: show before each lesson video ─────────────────────────────
+  useEffect(() => {
+    if (!currentModuleId) return;
+    const mod = modules.find(m => m.id === currentModuleId);
+    setShowIntroVideo(!!mod?.videoUrl);
+  }, [currentModuleId]);
 
   // ── Resume direct video position ───────────────────────────────────────────
   useEffect(() => {
@@ -627,6 +636,18 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     <p className="text-sm font-semibold text-gray-500">Leçon sans vidéo</p>
                     <p className="text-xs mt-1 text-gray-400">Consultez le contenu et les ressources ci-dessous</p>
                   </div>
+                ) : showIntroVideo ? (
+                  <video
+                    key={`intro-${currentModule.id}`}
+                    ref={introRef}
+                    autoPlay
+                    playsInline
+                    className="w-full aspect-video"
+                    style={{ background: '#000' }}
+                    onEnded={() => setShowIntroVideo(false)}
+                  >
+                    <source src="/logo-intro.mp4" type="video/mp4" />
+                  </video>
                 ) : videoInfo?.type === 'youtube' ? (
                   <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
                     <iframe
