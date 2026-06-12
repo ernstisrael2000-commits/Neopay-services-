@@ -1121,7 +1121,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [formationToDelete, setFormationToDelete] = useState<Formation | null>(null);
   const [formationFormData, setFormationFormData] = useState<Partial<Formation>>({
     title: '', description: '', shortDescription: '', coverImage: '', previewVideoUrl: '',
-    price: 0, originalPrice: undefined, level: 'debutant', published: false, comingSoon: false,
+    price: 0, originalPrice: undefined, level: 'debutant', published: true, comingSoon: false,
     modules: [], chapters: [], resources: [], pdfUrl: '',
     instructor: '', instructorBio: '', instructorAvatar: '',
     language: 'Français', totalDuration: '', hasCertificate: false,
@@ -2671,7 +2671,7 @@ function EmailLogsPanel() {
       setEditingFormation(null);
       setFormationFormData({
         title: '', description: '', shortDescription: '', coverImage: '',
-        price: 0, originalPrice: undefined, level: 'debutant', published: false, comingSoon: false,
+        price: 0, originalPrice: undefined, level: 'debutant', published: true, comingSoon: false,
         modules: [], chapters: [], resources: [], pdfUrl: '',
         instructor: '', instructorBio: '', instructorAvatar: '',
         language: 'Français', totalDuration: '', hasCertificate: false,
