@@ -2187,6 +2187,7 @@ function EmailLogsPanel() {
   const [teachersLoading, setTeachersLoading] = useState(false);
   const [teacherWithdrawals, setTeacherWithdrawals] = useState<any[]>([]);
   const [teacherWithdrawalsLoading, setTeacherWithdrawalsLoading] = useState(false);
+  const teacherWithdrawalsLoaded = useRef(false);
   const [teacherFee, setTeacherFee] = useState<number>(0);
   const [teacherFeeInput, setTeacherFeeInput] = useState<string>('');
   const [savingTeacherFee, setSavingTeacherFee] = useState(false);
@@ -2226,6 +2227,7 @@ function EmailLogsPanel() {
       setTeacherFeeInput(String(feeData.fee ?? 0));
       setFormationFee(formFeeData.fee ?? 0);
       setFormationFeeInput(String(formFeeData.fee ?? 0));
+      teacherWithdrawalsLoaded.current = true;
     } catch { toast.error('Erreur chargement retraits professeurs.'); }
     finally { setTeacherWithdrawalsLoading(false); }
   };
@@ -8444,7 +8446,7 @@ function EmailLogsPanel() {
             </h2>
             <p className="text-sm text-gray-500 mt-0.5">Approuvez ou rejetez les demandes de retrait des professeurs.</p>
           </div>
-          {(() => { if (!teacherWithdrawals.length && !teacherWithdrawalsLoading) fetchTeacherWithdrawals(); return null; })()}
+          {(() => { if (!teacherWithdrawalsLoaded.current && !teacherWithdrawalsLoading) fetchTeacherWithdrawals(); return null; })()}
 
           {/* Teacher withdrawal fee */}
           <Card className="border border-violet-100 bg-violet-50/50 shadow-none rounded-2xl">
