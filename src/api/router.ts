@@ -5397,6 +5397,26 @@ router.post('/api/teacher/login', requireDb, async (req, res) => {
   }
 });
 
+router.post('/api/teacher/verify-google', requireDb, async (req, res) => {
+  try {
+    const { email, uid, googleName, googlePhotoUrl } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis.' });
+    const snap = await adminDb.collection('teachers').where('email', '==', email).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Aucun compte professeur associé à cet email Google. Contactez l\'administrateur.' });
+    const docSnap = snap.docs[0];
+    const data = docSnap.data();
+    if (data.status === 'inactive') return res.status(403).json({ error: 'Compte désactivé. Contactez l\'administrateur.' });
+    const updates: any = { updatedAt: FieldValue.serverTimestamp() };
+    if (uid) updates.uid = uid;
+    if (googlePhotoUrl && !data.photoUrl) updates.photoUrl = googlePhotoUrl;
+    await docSnap.ref.update(updates);
+    res.json({ success: true, teacher: { id: docSnap.id, ...data, ...updates, password: undefined } });
+  } catch (e: any) {
+    console.error('[teacher/verify-google]', e);
+    res.status(500).json({ error: 'Erreur lors de la connexion Google.' });
+  }
+});
+
 router.get('/api/teacher/me/:id', requireDb, async (req, res) => {
   try {
     const snap = await adminDb.collection('teachers').doc(req.params.id).get();

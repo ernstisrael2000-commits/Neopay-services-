@@ -2192,7 +2192,7 @@ function EmailLogsPanel() {
   const [savingTeacherFee, setSavingTeacherFee] = useState(false);
   const [isTeacherDialogOpen, setIsTeacherDialogOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<any | null>(null);
-  const [teacherFormData, setTeacherFormData] = useState({ name: '', password: '' });
+  const [teacherFormData, setTeacherFormData] = useState({ name: '', email: '', password: '' });
   const [savingTeacher, setSavingTeacher] = useState(false);
   const [deletingTeacherId, setDeletingTeacherId] = useState<string | null>(null);
   const [approvingTeacherTx, setApprovingTeacherTx] = useState<string | null>(null);
@@ -8349,7 +8349,7 @@ function EmailLogsPanel() {
               <p className="text-sm text-gray-500 mt-0.5">Gérez les comptes professeurs et leurs soldes.</p>
             </div>
             <Button
-              onClick={() => { fetchTeachers(); setEditingTeacher(null); setTeacherFormData({ name: '', password: '' }); setIsTeacherDialogOpen(true); }}
+              onClick={() => { fetchTeachers(); setEditingTeacher(null); setTeacherFormData({ name: '', email: '', password: '' }); setIsTeacherDialogOpen(true); }}
               className="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white border-0 rounded-2xl shadow-lg shadow-violet-200 font-bold"
             >
               <Plus className="h-4 w-4 mr-1.5" /> Nouveau Professeur
@@ -8391,7 +8391,7 @@ function EmailLogsPanel() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setEditingTeacher(t); setTeacherFormData({ name: t.name, password: '' }); setIsTeacherDialogOpen(true); }}
+                        onClick={() => { setEditingTeacher(t); setTeacherFormData({ name: t.name, email: t.email || '', password: '' }); setIsTeacherDialogOpen(true); }}
                         className="flex-1 flex items-center justify-center gap-1 py-2 text-xs font-bold text-violet-600 hover:bg-violet-50 rounded-xl transition-colors border border-violet-100"
                       >
                         <Pencil className="h-3.5 w-3.5" /> Modifier
@@ -8545,6 +8545,14 @@ function EmailLogsPanel() {
               <Input value={teacherFormData.name}
                 onChange={e => setTeacherFormData(p => ({ ...p, name: e.target.value }))}
                 placeholder="Nom du professeur" className="rounded-2xl h-12" />
+            </div>
+            <div>
+              <Label className="text-xs font-bold text-gray-500 mb-1.5 block">
+                Email Google <span className="text-gray-400 font-normal">(pour connexion Google)</span>
+              </Label>
+              <Input type="email" value={teacherFormData.email}
+                onChange={e => setTeacherFormData(p => ({ ...p, email: e.target.value }))}
+                placeholder="professeur@gmail.com" className="rounded-2xl h-12" />
             </div>
             <div>
               <Label className="text-xs font-bold text-gray-500 mb-1.5 block">
