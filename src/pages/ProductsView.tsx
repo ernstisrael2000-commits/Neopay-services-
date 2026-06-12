@@ -6,15 +6,15 @@ import {
   Info, Wallet, Smartphone, Landmark, Zap, ShieldCheck,
   DollarSign, Clock, Package, Star, QrCode, Loader2, X
 } from 'lucide-react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Badge } from './ui/badge';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { Label } from '../components/ui/label';
+import { Input } from '../components/ui/input';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter, DialogClose,
-} from './ui/dialog';
+} from '../components/ui/dialog';
 import { useProducts, useGames, useCardTopups, useSettings } from '../services/parcelService';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';

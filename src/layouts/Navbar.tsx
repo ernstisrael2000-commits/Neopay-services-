@@ -1,6 +1,6 @@
 import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
-import RenaLogo from './RenaLogo';
-import { Button } from './ui/button';
+import RenaLogo from '../components/RenaLogo';
+import { Button } from '../components/ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
@@ -8,9 +8,9 @@ import { useSettings } from '../services/parcelService';
 import { usePendingCounts } from '../services/affiliateService';
 import { usePendingClientCount, useClientNotifications, markClientNotificationRead, markAllClientNotificationsRead, clearAllClientNotifications } from '../services/clientService';
 import React, { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Client, AdminAccount } from '../types';
-import UserAuthModal from './UserAuthModal';
+import UserAuthModal from '../components/UserAuthModal';
 
 interface NavbarProps {
   currentView: string;

@@ -9,10 +9,21 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+
+  const hmrConfig = (() => {
+    if (env.REPLIT_DEV_DOMAIN) {
+      return { clientPort: 443, protocol: 'wss' as const, host: env.REPLIT_DEV_DOMAIN };
+    }
+    if (env.HMR_HOST) {
+      return { host: env.HMR_HOST };
+    }
+    return true;
+  })();
+
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.RECAPTCHA_SITE_KEY': JSON.stringify(env.RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY),
+      'process.env.RECAPTCHA_SITE_KEY': JSON.stringify(env.RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || ''),
       'process.env.FIREBASE_VAPID_KEY': JSON.stringify(env.FIREBASE_VAPID_KEY || process.env.FIREBASE_VAPID_KEY || ''),
     },
     resolve: {
@@ -43,13 +54,7 @@ export default defineConfig(({ mode }) => {
       cssMinify: true,
     },
     server: {
-      hmr: process.env.REPLIT_DEV_DOMAIN
-        ? {
-            clientPort: 443,
-            protocol: 'wss',
-            host: process.env.REPLIT_DEV_DOMAIN,
-          }
-        : true,
+      hmr: hmrConfig,
       host: '0.0.0.0',
       allowedHosts: true,
       watch: {

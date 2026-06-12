@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, History, TrendingUp, DollarSign } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 
 interface FeeRecord {
   id: string;

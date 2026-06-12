@@ -1,20 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Rena — Logistics & Fintech Platform
 
-# Run and deploy your AI Studio app
+Application web multi-rôles (clients, affiliés, agents, admins) pour la gestion de colis, paiements, portefeuilles et formations en ligne.
 
-This contains everything you need to run your app locally.
+## Démarrage rapide
 
-View your app in AI Studio: https://ai.studio/apps/283d6370-7e1a-484a-aed2-4d5b3071d1e2
+```bash
+npm install
+npm run dev        # Développement → http://localhost:5000
+npm run build      # Build production
+npm run start      # Production
+npm run lint       # Vérification TypeScript
+```
 
-## Run Locally
+## Variables d'environnement
 
-**Prerequisites:**  Node.js
+Voir [docs/README.md](docs/README.md) pour la liste complète.
 
+| Variable | Obligatoire |
+|----------|-------------|
+| `FIREBASE_SERVICE_ACCOUNT` | ✅ |
+| `SMTP_USER` / `SMTP_PASS` | ❌ optionnel |
+| `RECAPTCHA_SECRET_KEY` | ❌ optionnel |
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Structure
+
+```
+src/pages/      — Vues et dashboards
+src/layouts/    — Navbar, BottomNav
+src/components/ — Composants réutilisables
+src/hooks/      — Hooks React
+src/services/   — Services Firestore client
+src/lib/        — Firebase, email, utilitaires
+src/types/      — Types TypeScript
+database/       — Règles Firestore & Storage
+docs/           — Documentation complète
+```
+
+Voir [docs/README.md](docs/README.md) pour la documentation complète.

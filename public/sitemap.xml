@@ -1,32 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://rena.replit.app/</loc>
+    <loc>https://neopay-services--ernstisrael2000.replit.app/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://rena.replit.app/?view=products</loc>
+    <loc>https://neopay-services--ernstisrael2000.replit.app/?view=products</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://rena.replit.app/?view=services</loc>
+    <loc>https://neopay-services--ernstisrael2000.replit.app/?view=services</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://rena.replit.app/?view=formations</loc>
+    <loc>https://neopay-services--ernstisrael2000.replit.app/?view=formations</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://rena.replit.app/?view=tracking</loc>
+    <loc>https://neopay-services--ernstisrael2000.replit.app/?view=tracking</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://rena.replit.app/?view=shipping</loc>
+    <loc>https://neopay-services--ernstisrael2000.replit.app/?view=shipping</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

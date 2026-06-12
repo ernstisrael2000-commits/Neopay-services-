@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Client } from '../types';
 import { useSettings } from '../services/parcelService';
-import RenaLogo from './RenaLogo';
+import RenaLogo from '../components/RenaLogo';
 import { AnimatePresence, motion } from 'motion/react';
 
 interface FormationsNavbarProps {

@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import Navbar from './components/Navbar';
-import BottomNav from './components/BottomNav';
-import TrackingView from './components/TrackingView';
-import AdminDashboard from './components/AdminDashboard';
+import Navbar from './layouts/Navbar';
+import BottomNav from './layouts/BottomNav';
+import FormationsNavbar from './layouts/FormationsNavbar';
+import TrackingView from './pages/TrackingView';
+import AdminDashboard from './pages/AdminDashboard';
+import HomeView from './pages/HomeView';
+import ShippingView from './pages/ShippingView';
+import FormationsView from './pages/FormationsView';
+import ProductsView from './pages/ProductsView';
+import ServicesView from './pages/ServicesView';
+import AffiliateDashboard from './pages/AffiliateDashboard';
+import ClientDashboard from './pages/ClientDashboard';
+import PaymentSuccessView from './pages/PaymentSuccessView';
+import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import AdminLogin from './components/AdminLogin';
-import HomeView from './components/HomeView';
-import ShippingView from './components/ShippingView';
-import FormationsView from './components/FormationsView';
-import ProductsView from './components/ProductsView';
-import ServicesView from './components/ServicesView';
 import AffiliateLogin from './components/AffiliateLogin';
-import AffiliateDashboard from './components/AffiliateDashboard';
-import ClientDashboard from './components/ClientDashboard';
-import PaymentSuccessView from './components/PaymentSuccessView';
-import PaymentSuccessPage from './components/PaymentSuccessPage';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
@@ -24,7 +25,6 @@ import { useSettings } from './services/parcelService';
 import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
-import FormationsNavbar from './components/FormationsNavbar';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -287,7 +287,6 @@ export default function App() {
           )}
         </AnimatePresence>
         
-        {/* ── Bottom Nav — hidden on dashboard and formations views ── */}
         {!['admin', 'affiliate', 'formations'].includes(view) && !isProductDetailOpen && (
           <BottomNav
             currentView={view}
@@ -301,7 +300,6 @@ export default function App() {
         )}
 
         <main className={`animate-in fade-in duration-500 ${view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'} flex-grow relative ${!['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[74px]' : ''}`}>
-          {/* Back button only for utility views (tracking, shipping) */}
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
               <Button 
@@ -390,7 +388,6 @@ export default function App() {
 
         </main>
 
-        {/* Footer — only on non-dashboard, non-formations views */}
         {!['admin', 'affiliate', 'formations'].includes(view) && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
@@ -414,7 +411,6 @@ export default function App() {
 
         <Toaster position="top-right" />
 
-        {/* Client Wallet Dashboard Overlay */}
         <AnimatePresence>
           {showClientDashboard && loggedClient && (
             <ClientDashboard
@@ -426,7 +422,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* MonCash Payment Return View — legacy (?moncash_ref=xxx) */}
         <AnimatePresence>
           {moncashReturnRef && (
             <PaymentSuccessView
@@ -436,7 +431,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* MonCashConnect v2 Payment Return (/payment-success path) */}
         <AnimatePresence>
           {showPaymentSuccess && (
             <PaymentSuccessPage
@@ -445,7 +439,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Auth modal triggered from BottomNav Wallet tab */}
         <UserAuthModal
           open={showAuthModal}
           onOpenChange={setShowAuthModal}
@@ -455,7 +448,6 @@ export default function App() {
           onAdminPasswordLogin={() => { handleViewChange('admin'); setShowAuthModal(false); }}
         />
 
-        {/* PWA Install Prompt */}
         <PWAInstallPrompt />
       </div>
     </ErrorBoundary>

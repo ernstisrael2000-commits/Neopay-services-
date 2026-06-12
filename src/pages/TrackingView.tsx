@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, Package, MapPin, Calendar, CreditCard, Image as ImageIcon, CheckCircle2, Clock } from 'lucide-react';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Badge } from './ui/badge';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { searchParcel } from '../services/parcelService';
 import { Parcel } from '../types';
 import { motion, AnimatePresence } from 'motion/react';

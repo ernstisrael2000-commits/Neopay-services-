@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useShippingConfigs } from '../services/parcelService';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Truck, MapPin, ExternalLink, MessageCircle, Play, ChevronLeft, LayoutGrid } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Badge } from './ui/badge';
+import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 
 export default function ShippingView() {

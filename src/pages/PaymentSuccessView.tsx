@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, XCircle, Clock, Loader2, ArrowLeft } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '../components/ui/button';
 
 interface Props {
   referenceId: string;

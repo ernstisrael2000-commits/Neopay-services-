@@ -11,9 +11,9 @@ import {
   BookMarked, ArrowRight, Shield, LogIn,
   Cpu, ShoppingBag, Palette, Briefcase
 } from 'lucide-react';
-import { Dialog, DialogContent } from './ui/dialog';
+import { Dialog, DialogContent } from '../components/ui/dialog';
 import CoursePlayer from './CoursePlayer';
-import { Button } from './ui/button';
+import { Button } from '../components/ui/button';
 import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';

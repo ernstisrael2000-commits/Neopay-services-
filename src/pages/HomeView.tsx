@@ -7,8 +7,8 @@ import {
   Star, BookOpen, Award, Clock,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Button } from '../components/ui/button';
 import { useState, useEffect } from 'react';
 import {
   useSliderImages, useNavButtons, useSettings,

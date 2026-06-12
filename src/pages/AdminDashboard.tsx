@@ -8,14 +8,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuGroup,
   DropdownMenuSeparator
-} from './ui/dropdown-menu';
+} from '../components/ui/dropdown-menu';
 import { Smartphone, Plus, Search, CreditCard as Edit2, Trash2, Package, MoveVertical as MoreVertical, CircleCheck as CheckCircle2, Truck, Clock, CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Loader as Loader2, Upload, Trash, Settings as SettingsIcon, LayoutGrid, Landmark, Image as ImageIcon, CreditCard as Edit, CirclePlus as PlusCircle, X, Wallet, Users, Trophy, Gamepad2, Bell, ListFilter as Filter, ArrowUpDown, DollarSign, ArrowUp, ArrowDown, CreditCard, UserCheck, Circle as HelpCircle, Zap, Star, ChevronRight, ChevronLeft, ArrowRight, ArrowRightLeft, Network, TrendingUp, LayoutDashboard, Circle as XCircle, Globe } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Badge } from './ui/badge';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Badge } from '../components/ui/badge';
 import { 
   Dialog, 
   DialogContent, 
@@ -24,12 +24,12 @@ import {
   DialogFooter,
   DialogDescription,
   DialogClose
-} from './ui/dialog';
-import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Checkbox } from './ui/checkbox';
+} from '../components/ui/dialog';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Checkbox } from '../components/ui/checkbox';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
 import { 
   useAllAffiliates, 

@@ -1,0 +1,332 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "ernstisrael2000@gmail.com") ||
+          (request.auth.token.email == "ernstisrael508@gmail.com") ||
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          exists(/databases/$(database)/documents/admin_uids/$(request.auth.uid))
+        );
+    }
+
+    function isAgent() {
+      return isAuthenticated() &&
+        (
+          exists(/databases/$(database)/documents/agents/$(request.auth.uid)) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "agent")
+        );
+    }
+
+    function isValidAgent(data) {
+      return data.keys().hasAll(['agentCode', 'name', 'phone', 'balance', 'status']) &&
+             data.agentCode is string &&
+             data.name is string &&
+             data.phone is string &&
+             data.balance is number &&
+             data.status in ['active', 'inactive'];
+    }
+
+    function isValidAffiliate(data) {
+      return data.keys().hasAll(['name', 'username', 'password', 'code', 'level']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             data.password is string && data.password.size() > 0 &&
+             data.code is string && data.code.size() > 0 &&
+             data.level in ['Bronze', 'Silver', 'Gold', 'Elite', 'VIP'] &&
+             (!('balance' in data) || data.balance is number) &&
+             (!('points' in data) || data.points is number);
+    }
+
+    function isValidParcel(data) {
+      return data.keys().hasAll(['trackingNumber', 'status', 'currentLocation', 'paymentStatus']) &&
+             data.trackingNumber is string && data.trackingNumber.size() > 0 && data.trackingNumber.size() < 100 &&
+             data.currentLocation is string && data.currentLocation.size() < 200 &&
+             data.paymentStatus in ['Payé', 'Non payé'] &&
+             (!('proofOfDelivery' in data) || (data.proofOfDelivery is string && data.proofOfDelivery.size() < 1000)) &&
+             (!('estimatedArrival' in data) || (data.estimatedArrival is string));
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'image', 'description']) && 
+             data.name is string && data.name.size() > 0 &&
+             (!('stock' in data) || data.stock is number);
+    }
+
+    function isValidGame(data) {
+      return data.keys().hasAll(['name', 'image', 'description']) &&
+             data.name is string && data.name.size() > 0 &&
+             (!('catalog' in data) || data.catalog is list);
+    }
+
+    function isValidCard(data) {
+      return data.keys().hasAll(['name', 'image', 'description', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is string && data.price.size() > 0 &&
+             (!('stock' in data) || data.stock is number);
+    }
+
+    function isValidWithdrawal(data) {
+      return data.keys().hasAll(['affiliateId', 'amount', 'method', 'status']) &&
+             data.affiliateId is string &&
+             data.amount is number && data.amount >= 20 &&
+             data.method in ['MonCash', 'NatCash', 'Physical'] &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'phone']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.phone is string && data.phone.size() < 30 &&
+             (!('directSponsorId' in data) || (data.directSponsorId is string && data.directSponsorId.size() < 128)) &&
+             (!('indirectSponsorId' in data) || (data.indirectSponsorId is string && data.indirectSponsorId.size() < 128)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidWalletTransaction(data) {
+      return data.keys().hasAll(['affiliateId', 'type', 'amount', 'status', 'createdAt']) &&
+             data.affiliateId is string &&
+             data.amount is number &&
+             data.type in ['deposit', 'withdrawal', 'transfer_sent', 'transfer_received', 'agent_deposit', 'transfer'] &&
+             data.status in ['pending', 'completed', 'approved', 'rejected', 'pending_agent'] &&
+             (!('agentId' in data) || data.agentId is string) &&
+             (!('agentCode' in data) || data.agentCode is string) &&
+             (!('relatedAffiliateId' in data) || data.relatedAffiliateId is string) &&
+             (!('relatedAffiliateName' in data) || data.relatedAffiliateName is string) &&
+             (!('recipientWalletId' in data) || data.recipientWalletId is string) &&
+             (!('method' in data) || data.method is string) &&
+             (!('accountNumber' in data) || data.accountNumber is string) &&
+             (!('description' in data) || data.description is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+             (!('rejectionReason' in data) || data.rejectionReason is string);
+    }
+
+    // ── Connection test (used to detect online/offline status) ────────────────
+    match /_connection_test_/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /wallet_transactions/{transactionId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    match /agents/{agentId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidAgent(request.resource.data);
+      allow update: if isAdmin() || (isAgent() && request.auth.uid == agentId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidClient(request.resource.data);
+      // isAdmin() for full updates; OR any authenticated user can update only uid/photoUrl on their own doc
+      allow update: if (isAdmin() && isValidClient(request.resource.data)) ||
+                       (isAuthenticated() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'photoUrl', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    match /parcels/{parcelId} {
+      allow read: if true; 
+      allow create: if isAdmin() && isValidParcel(request.resource.data);
+      allow update: if isAdmin() && isValidParcel(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidProduct(request.resource.data);
+      allow update: if isAdmin() && isValidProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /games/{gameId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidGame(request.resource.data);
+      allow update: if isAdmin() && isValidGame(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /card_topups/{cardId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidCard(request.resource.data);
+      allow update: if isAdmin() && isValidCard(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /affiliates/{affiliateId} {
+      allow read: if true; 
+      allow create: if isAdmin() && isValidAffiliate(request.resource.data);
+      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'referredClients', 'points', 'monthlyReferredClients', 'monthlySales', 'isMonthlyWinner', 'updatedAt', 'level', 'directRevenue', 'indirectRevenue', 'totalEarnings', 'totalWithdrawn', 'walletId']));
+      allow delete: if isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if true; 
+      allow create: if true; 
+      allow update: if isAdmin(); 
+      allow delete: if isAdmin();
+    }
+
+    match /affiliate_requests/{requestId} {
+      allow read: if isAdmin();
+      allow create: if true; 
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    match /shipping_configs/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /slider_images/{imageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /nav_buttons/{buttonId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /admin_accounts/{adminId} {
+      allow read: if true;
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        (resource.data.uid == null || resource.data.uid == "" || resource.data.uid == request.auth.uid) &&
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'failedAttempts', 'lockUntil', 'updatedAt']))
+      );
+      allow create, delete: if isAdmin();
+    }
+
+    match /admin_uids/{uid} {
+      allow read: if true;
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == uid);
+    }
+
+    match /admin_login_logs/{logId} {
+      // Opened to allow writing and reading without strict auth (server handles security)
+      allow read: if true;
+      allow create: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAdmin();
+    }
+
+    match /sales/{saleId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow delete: if isAdmin();
+    }
+
+    match /client_transactions/{txId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /admin_notifications/{notifId} {
+      // Allow reads without strict auth so the admin dashboard works even if
+      // client-side anonymous auth session cannot be established
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Formations ──────────────────────────────────────────────────────────
+    match /formations/{formationId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentsCount']));
+      allow delete: if isAdmin();
+    }
+
+    // All formation writes go through Admin SDK API routes — only reads need rules
+    match /formation_purchases/{purchaseId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /formation_progress/{progressId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /formation_users/{userId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // formation_payment_requests — previously missing from rules (deny by default)
+    match /formation_payment_requests/{requestId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /online_sub_services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /client_notifications/{notifId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    match /affiliate_notifications/{notifId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    match /agent_personal_transactions/{txId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

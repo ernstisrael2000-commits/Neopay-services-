@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Loader2, ArrowLeft, Shield } from 'lucide-react';
-import { Button } from './ui/button';
+import { Button } from '../components/ui/button';
 
 interface Props {
   onClose: () => void;
