@@ -366,6 +366,18 @@ export default function UserAuthModal({
                 </div>
                 <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-500 transition-all shrink-0" />
               </button>
+              {onTeacherAccess && (
+                <button onClick={() => { onTeacherAccess!(); handleClose(false); }}
+                  className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-violet-50/50 transition-all group text-left active:scale-[0.98]">
+                  <div className="h-9 w-9 rounded-xl bg-violet-100 flex items-center justify-center shrink-0 group-hover:bg-violet-200 transition-colors">
+                    <GraduationCap className="h-4 w-4 text-violet-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-500 text-xs">Espace Professeur</p>
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-violet-500 transition-all shrink-0" />
+                </button>
+              )}
             </div>
           </div>
         )}
