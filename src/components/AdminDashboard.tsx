@@ -61,7 +61,7 @@ import {
   updateAgentBalance
 } from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, CardFeeRule, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
 import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, clearAllAdminNotifications, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
@@ -1241,7 +1241,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     stock: 0,
     whatsappMessage: '',
     goldRate: 1,
-    presets: []
+    presets: [],
+    feeRules: []
   });
   const [tempCardImageUrl, setTempCardImageUrl] = useState('');
   const [pendingSettings, setPendingSettings] = useState<Partial<AppSettings>>({});
@@ -2722,7 +2723,8 @@ function EmailLogsPanel() {
       setCardFormData({ 
         ...card,
         goldRate: card.goldRate || 1,
-        presets: card.presets || []
+        presets: card.presets || [],
+        feeRules: card.feeRules || []
       });
     } else {
       setEditingCard(null);
@@ -2734,7 +2736,8 @@ function EmailLogsPanel() {
         stock: 0,
         whatsappMessage: '',
         goldRate: 1,
-        presets: []
+        presets: [],
+        feeRules: []
       });
     }
     setTempCardImageUrl('');
@@ -10027,6 +10030,85 @@ function EmailLogsPanel() {
                     setCardFormData({...cardFormData, presets: values});
                   }}
                 />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Taux de frais personnalisés (USD)</Label>
+                  <button
+                    type="button"
+                    onClick={() => setCardFormData(prev => ({ ...prev, feeRules: [...(prev.feeRules || []), { min: 0, max: 0, fee: 0 }] }))}
+                    className="flex items-center gap-1.5 text-xs font-black text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors"
+                  >
+                    <LucideIcons.Plus className="h-3.5 w-3.5" /> Ajouter une tranche
+                  </button>
+                </div>
+                {(cardFormData.feeRules || []).length === 0 ? (
+                  <p className="text-xs text-gray-400 italic bg-gray-50 rounded-xl px-4 py-3">Aucun frais configuré. Cliquez sur "Ajouter une tranche" pour définir des frais par tranche de montant.</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 px-1">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">De ($)</span>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">À ($)</span>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Frais ($)</span>
+                      <span />
+                    </div>
+                    {(cardFormData.feeRules || []).map((rule, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center bg-amber-50 border border-amber-100 rounded-xl p-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="5"
+                          value={rule.min || ''}
+                          onChange={(e) => {
+                            const updated = [...(cardFormData.feeRules || [])];
+                            updated[idx] = { ...updated[idx], min: parseFloat(e.target.value) || 0 };
+                            setCardFormData(prev => ({ ...prev, feeRules: updated }));
+                          }}
+                          className="h-9 text-sm font-bold bg-white"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="10"
+                          value={rule.max || ''}
+                          onChange={(e) => {
+                            const updated = [...(cardFormData.feeRules || [])];
+                            updated[idx] = { ...updated[idx], max: parseFloat(e.target.value) || 0 };
+                            setCardFormData(prev => ({ ...prev, feeRules: updated }));
+                          }}
+                          className="h-9 text-sm font-bold bg-white"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="3"
+                          value={rule.fee || ''}
+                          onChange={(e) => {
+                            const updated = [...(cardFormData.feeRules || [])];
+                            updated[idx] = { ...updated[idx], fee: parseFloat(e.target.value) || 0 };
+                            setCardFormData(prev => ({ ...prev, feeRules: updated }));
+                          }}
+                          className="h-9 text-sm font-bold bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = (cardFormData.feeRules || []).filter((_, i) => i !== idx);
+                            setCardFormData(prev => ({ ...prev, feeRules: updated }));
+                          }}
+                          className="h-9 w-9 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 text-red-500 transition-colors"
+                        >
+                          <LucideIcons.Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-gray-400 italic px-1">Ex : De 5 à 10$ → Frais 3$ signifie que pour tout montant entre 5$ et 10$, un frais de 3$ sera ajouté.</p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

@@ -671,7 +671,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
         <DialogContent className="sm:max-w-lg border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
           <div className="bg-emerald-600 p-7 text-white relative overflow-hidden shrink-0">
-            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -742,29 +742,51 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
               )}
             </div>
 
-            <div className="rounded-2xl border border-emerald-100 overflow-hidden">
-              <div className="bg-emerald-600 px-4 py-2.5 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-white fill-white" />
-                <p className="text-[10px] font-black text-white uppercase tracking-widest">Calculateur intelligent</p>
-              </div>
-              <div className="bg-emerald-50 p-4 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-700 font-semibold">Montant USD</span>
-                  <span className="text-xl font-black text-emerald-900">${rechargeAmountUSD || '0'}</span>
+            {(() => {
+              const usd = parseFloat(rechargeAmountUSD) || 0;
+              const rate = settings?.exchangeRate || 146;
+              const feeRules = selectedCardForRecharge?.feeRules || [];
+              const matchedRule = feeRules.find((r: any) => usd >= r.min && usd <= r.max);
+              const fee = matchedRule ? matchedRule.fee : 0;
+              const total = usd + fee;
+              return (
+                <div className="rounded-2xl border border-emerald-100 overflow-hidden">
+                  <div className="bg-emerald-600 px-4 py-2.5 flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-white fill-white" />
+                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Calculateur intelligent</p>
+                  </div>
+                  <div className="bg-emerald-50 p-4 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-emerald-700 font-semibold">Montant USD</span>
+                      <span className="text-xl font-black text-emerald-900">${rechargeAmountUSD || '0'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-emerald-700 font-semibold">Taux de change</span>
+                      <span className="text-sm font-black text-emerald-600">1$ = {rate} HTG</span>
+                    </div>
+                    {fee > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-amber-700 font-semibold">Frais de service</span>
+                        <span className="text-sm font-black text-amber-600">+${fee}</span>
+                      </div>
+                    )}
+                    <div className="h-px bg-emerald-200" />
+                    {fee > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-emerald-800">Total USD</span>
+                        <span className="text-lg font-black text-emerald-800">${total.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-black text-emerald-900">Équivalent Gourdes</span>
+                      <span className="text-2xl font-black text-emerald-700">
+                        {usd > 0 ? (total * rate).toLocaleString() : '0'} HTG
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-700 font-semibold">Taux de change</span>
-                  <span className="text-sm font-black text-emerald-600">1$ = {settings?.exchangeRate || 146} HTG</span>
-                </div>
-                <div className="h-px bg-emerald-200" />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-emerald-900">Équivalent Gourdes</span>
-                  <span className="text-2xl font-black text-emerald-700">
-                    {rechargeAmountUSD ? (parseFloat(rechargeAmountUSD) * (settings?.exchangeRate || 146)).toLocaleString() : '0'} HTG
-                  </span>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
 
           <div className="p-6 pt-3 shrink-0 bg-white border-t border-gray-100">

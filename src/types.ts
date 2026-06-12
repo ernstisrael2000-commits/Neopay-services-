@@ -46,6 +46,12 @@ export interface Product {
   createdAt: any;
 }
 
+export interface CardFeeRule {
+  min: number;
+  max: number;
+  fee: number;
+}
+
 export interface CardTopup {
   id?: string;
   name: string;
@@ -56,6 +62,7 @@ export interface CardTopup {
   whatsappMessage?: string;
   goldRate?: number;
   presets?: number[];
+  feeRules?: CardFeeRule[];
   createdAt: any;
   updatedAt?: any;
 }
