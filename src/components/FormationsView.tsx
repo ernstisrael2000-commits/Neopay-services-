@@ -1755,11 +1755,6 @@ function PurchaseCard({
                     Acheter avec mon Wallet
                   </button>
                 )}
-                <button onClick={() => setPaymentStep('external-method')}
-                  className={`w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors border-2 ${hasWalletFunds ? 'border-violet-200 text-violet-700 hover:bg-violet-50' : 'bg-violet-600 hover:bg-violet-700 text-white border-violet-600 shadow-lg shadow-violet-500/20'}`}>
-                  <Smartphone className="h-4 w-4" />
-                  Payer par MonCash / NatCash
-                </button>
                 {!hasWalletFunds && (
                   <button onClick={onOpenWallet} className="w-full text-xs text-violet-600 font-semibold hover:underline flex items-center justify-center gap-1 py-1">
                     <TrendingUp className="h-3 w-3" /> Recharger mon wallet

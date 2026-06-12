@@ -1204,44 +1204,8 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               )}
             </div>
 
-            {/* ── MonCashConnect: paiement automatique ── */}
-            {depositMethod?.id === 'moncash' && (
-              <div className="space-y-3">
-                <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-red-50 border border-red-100">
-                  <div className="h-9 w-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-                    {(settings as any)?.moncashLogoUrl
-                      ? <img src={(settings as any).moncashLogoUrl} alt="MonCash" className="h-6 w-6 object-contain" />
-                      : <Smartphone className="h-4 w-4 text-red-600" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-red-800">Paiement automatique</p>
-                    <p className="text-[11px] text-red-600 mt-0.5 leading-relaxed">
-                      Vous serez redirigé vers MonCashConnect. Votre solde est crédité automatiquement — sans validation admin, sans preuve WhatsApp.
-                    </p>
-                  </div>
-                </div>
-                <Button type="button"
-                  disabled={moncashLoading || !htgAmount || parseFloat(htgAmount) <= 0}
-                  onClick={handleMoncashDeposit}
-                  className="w-full h-12 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-black text-sm border-0 shadow-lg shadow-red-200 transition-all active:scale-[0.98]">
-                  {moncashLoading
-                    ? <Loader2 className="h-5 w-5 animate-spin" />
-                    : <span className="flex items-center justify-center gap-2">
-                        {(settings as any)?.moncashLogoUrl
-                          ? <img src={(settings as any).moncashLogoUrl} alt="" className="h-5 w-5 object-contain" />
-                          : <Smartphone className="h-5 w-5" />}
-                        Payer avec MonCash →
-                      </span>}
-                </Button>
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                  <Shield className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-amber-800 font-medium">Paiement 100% sécurisé — crédité automatiquement dès confirmation MonCash.</p>
-                </div>
-              </div>
-            )}
-
-            {/* ── Flux manuel pour les autres méthodes ── */}
-            {depositMethod?.id !== 'moncash' && (<>
+            {/* ── Flux manuel ── */}
+            {(<>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Référence / ID transaction</Label>
               <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}

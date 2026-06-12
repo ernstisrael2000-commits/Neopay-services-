@@ -572,12 +572,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                                       <Wallet className="h-3.5 w-3.5" /> Se connecter
                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => { setPayingItemKey(null); setIsGameCatalogOpen(false); handleBuyRequested({ name: `${selectedGame.name} — ${item.name}`, price: item.price, type: 'game' }); }}
-                                    className="h-11 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-purple-100 transition-colors"
-                                  >
-                                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                                  </button>
                                 </div>
                               </motion.div>
                             )}
@@ -601,7 +595,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                   <div className="p-6 space-y-4">
                     <p className="text-sm text-gray-500 text-center">Choisissez votre méthode de paiement.</p>
                     {payingItemKey === '__nocatalog' ? (
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-3">
                         {loggedClient ? (
                           <button
                             disabled={itemPurchaseLoading}
@@ -620,27 +614,21 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                               } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
                               finally { setItemPurchaseLoading(false); }
                             }}
-                            className="h-16 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex flex-col items-center justify-center gap-0.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                            className="w-full h-14 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex flex-col items-center justify-center gap-0.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
                           >
                             <span className="flex items-center gap-2">
                               {itemPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                              Solde Wallet
+                              Payer avec mon Solde
                             </span>
                             <span className="text-[10px] font-normal text-emerald-600 opacity-80">
                               {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG disponible
                             </span>
                           </button>
                         ) : (
-                          <button onClick={() => { setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors">
-                            <Wallet className="h-4 w-4" /> Se connecter
+                          <button onClick={() => { setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="w-full h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors">
+                            <Wallet className="h-4 w-4" /> Se connecter pour payer
                           </button>
                         )}
-                        <button
-                          onClick={() => { setIsGameCatalogOpen(false); setPayingItemKey(null); openWhatsApp(selectedGame.whatsappMessage || `Bonjour Rena, je souhaite faire un top-up pour le jeu : ${selectedGame.name}. ID Joueur: ${gamePlayerId.trim() || 'Non spécifié'}`); }}
-                          className="h-12 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black rounded-2xl border-0 flex items-center justify-center gap-2 transition-colors"
-                        >
-                          <MessageCircle className="h-4 w-4" /> WhatsApp
-                        </button>
                       </div>
                     ) : (
                       <Button
@@ -821,69 +809,93 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                 </DialogClose>
               </div>
             </DialogHeader>
-            <div className="p-5 rounded-2xl bg-white/10 border border-white/5">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Montant total</span>
-                <span className="text-3xl font-black text-white">${rechargeAmountUSD} USD</span>
-              </div>
-              <div className="flex justify-between items-center text-emerald-100/60">
-                <span className="text-[10px] font-black uppercase tracking-tighter">Estimation</span>
-                <span className="text-sm font-black">≈ {(parseFloat(rechargeAmountUSD || '0') * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
-              </div>
-            </div>
+            {(() => {
+              const usd2 = parseFloat(rechargeAmountUSD || '0');
+              const rate2 = settings?.exchangeRate || 146;
+              const feeRules2 = selectedCardForRecharge?.feeRules || [];
+              const matchedRule2 = feeRules2.find((r: any) => usd2 >= r.min && usd2 <= r.max);
+              const fee2 = matchedRule2 ? matchedRule2.fee : 0;
+              const total2 = usd2 + fee2;
+              return (
+                <div className="p-5 rounded-2xl bg-white/10 border border-white/5">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Montant{fee2 > 0 ? ' + frais' : ''}</span>
+                    <span className="text-3xl font-black text-white">${total2.toFixed(2)} USD</span>
+                  </div>
+                  {fee2 > 0 && (
+                    <div className="flex justify-between items-center text-amber-200/80 mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-tighter">Dont frais de service</span>
+                      <span className="text-xs font-black">+${fee2}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-emerald-100/60">
+                    <span className="text-[10px] font-black uppercase tracking-tighter">Estimation HTG</span>
+                    <span className="text-sm font-black">≈ {(total2 * rate2).toLocaleString()} HTG</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-3">
-            {[
-              { id: 'MonCash', icon: Smartphone, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', desc: 'Paiement mobile instantané' },
-              { id: 'NatCash', icon: Smartphone, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'Sécurisé et rapide' },
-              { id: 'Admi',    icon: Landmark,   color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', desc: 'Virement ou dépôt bancaire' },
-            ].map(method => (
-              <button
-                key={method.id}
-                onClick={() => handleFinalRechargePayment(method.id)}
-                className={`group w-full flex items-center justify-between p-5 rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] ${method.bg} ${method.border} hover:shadow-md`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center ${method.color}`}>
-                    <method.icon className="h-6 w-6" />
-                  </div>
-                  <div className="text-left">
-                    <span className="block text-lg font-black text-dark uppercase">{method.id}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">{method.desc}</span>
-                  </div>
-                </div>
-                <ArrowRight className={`h-5 w-5 ${method.color} group-hover:translate-x-0.5 transition-transform`} />
-              </button>
-            ))}
-            {effectiveClient && (() => {
+            {(() => {
               const usd = parseFloat(rechargeAmountUSD || '0');
-              const bal = effectiveClient.balance ?? 0;
+              const feeRulesS = selectedCardForRecharge?.feeRules || [];
+              const matchedRuleS = feeRulesS.find((r: any) => usd >= r.min && usd <= r.max);
+              const feeS = matchedRuleS ? matchedRuleS.fee : 0;
+              const totalS = usd + feeS;
+              const bal = effectiveClient?.balance ?? 0;
+              const canPay = effectiveClient && bal >= totalS && totalS > 0;
               const balHTG = Math.round(bal * exchangeRate);
-              const canPay = bal >= usd && usd > 0;
-              return (
-                <button
-                  onClick={() => { if (!canPay) { toast.error(`Solde insuffisant.`); return; } handleFinalRechargePayment('Solde Wallet'); }}
-                  className={`group w-full flex items-center justify-between p-5 rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] ${canPay ? 'bg-emerald-50 border-emerald-100 hover:shadow-md' : 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'}`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center ${canPay ? 'text-emerald-600' : 'text-gray-400'}`}>
-                      <Wallet className="h-6 w-6" />
+              if (!effectiveClient) {
+                return (
+                  <div className="flex flex-col items-center gap-4 py-6 text-center">
+                    <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                      <Wallet className="h-7 w-7 text-emerald-600" />
                     </div>
-                    <div className="text-left">
-                      <span className="block text-lg font-black text-dark uppercase">Mon Compte</span>
-                      <span className={`text-[10px] font-bold uppercase ${canPay ? 'text-emerald-600' : 'text-gray-400'}`}>
-                        Solde: {balHTG.toLocaleString()} HTG {canPay ? '· Suffisant ✓' : '· Insuffisant'}
-                      </span>
+                    <div>
+                      <p className="font-black text-gray-800 text-base">Connexion requise</p>
+                      <p className="text-xs text-gray-400 mt-1">Connectez-vous pour payer avec votre solde Wallet.</p>
                     </div>
+                    <button
+                      onClick={() => { setIsPaymentMethodDialogOpen(false); onOpenWallet?.(); }}
+                      className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+                    >
+                      <Wallet className="h-5 w-5" /> Se connecter
+                    </button>
                   </div>
-                  <ArrowRight className={`h-5 w-5 ${canPay ? 'text-emerald-600' : 'text-gray-300'}`} />
-                </button>
+                );
+              }
+              return (
+                <>
+                  <button
+                    onClick={() => { if (!canPay) { toast.error(`Solde insuffisant. Vous avez ${balHTG.toLocaleString()} HTG.`); return; } handleFinalRechargePayment('Solde Wallet'); }}
+                    className={`group w-full flex items-center justify-between p-5 rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] ${canPay ? 'bg-emerald-50 border-emerald-100 hover:shadow-md' : 'bg-gray-50 border-gray-200 opacity-70 cursor-not-allowed'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center ${canPay ? 'text-emerald-600' : 'text-gray-400'}`}>
+                        <Wallet className="h-6 w-6" />
+                      </div>
+                      <div className="text-left">
+                        <span className="block text-lg font-black text-dark">Payer avec mon Solde</span>
+                        <span className={`text-[10px] font-bold uppercase ${canPay ? 'text-emerald-600' : 'text-red-500'}`}>
+                          Solde: {balHTG.toLocaleString()} HTG {canPay ? '· Suffisant ✓' : '· Insuffisant ✗'}
+                        </span>
+                      </div>
+                    </div>
+                    <ArrowRight className={`h-5 w-5 ${canPay ? 'text-emerald-600' : 'text-gray-300'}`} />
+                  </button>
+                  {!canPay && (
+                    <button
+                      onClick={() => { setIsPaymentMethodDialogOpen(false); onOpenWallet?.(); }}
+                      className="w-full text-xs text-emerald-600 font-semibold hover:underline flex items-center justify-center gap-1 py-1"
+                    >
+                      Recharger mon wallet →
+                    </button>
+                  )}
+                </>
               );
             })()}
-            <p className="text-center text-[10px] text-gray-400 font-bold uppercase tracking-wider py-2">
-              ✅ Vous serez redirigé vers notre service client WhatsApp.
-            </p>
           </div>
         </DialogContent>
       </Dialog>
@@ -1066,14 +1078,16 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                             exchangeRate={exchangeRate}
                           />
                         )}
-                        <Button
-                          onClick={() => handleBuyRequested({ name: customLabel ? `${displayName} — ${customLabel}` : displayName, price: displayPrice, type: 'product' })}
-                          variant="outline"
-                          className="w-full h-12 rounded-2xl border-2 border-gray-200 text-gray-700 font-black flex items-center justify-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
-                        >
-                          <MessageCircle className="h-4 w-4 text-emerald-500" />
-                          Commander via WhatsApp
-                        </Button>
+                        {!loggedClient && (
+                          <Button
+                            onClick={() => { setIsProductDetailOpen(false); onOpenWallet?.(); }}
+                            variant="outline"
+                            className="w-full h-12 rounded-2xl border-2 border-emerald-200 text-emerald-700 font-black flex items-center justify-center gap-2 hover:bg-emerald-50 active:scale-95 transition-all"
+                          >
+                            <Wallet className="h-4 w-4" />
+                            Se connecter pour payer
+                          </Button>
+                        )}
                       </div>
                     );
                   })()}
