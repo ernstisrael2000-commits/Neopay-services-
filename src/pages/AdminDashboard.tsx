@@ -2190,6 +2190,9 @@ function EmailLogsPanel() {
   const [teacherFee, setTeacherFee] = useState<number>(0);
   const [teacherFeeInput, setTeacherFeeInput] = useState<string>('');
   const [savingTeacherFee, setSavingTeacherFee] = useState(false);
+  const [formationFee, setFormationFee] = useState<number>(0);
+  const [formationFeeInput, setFormationFeeInput] = useState<string>('');
+  const [savingFormationFee, setSavingFormationFee] = useState(false);
   const [isTeacherDialogOpen, setIsTeacherDialogOpen] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<any | null>(null);
   const [teacherFormData, setTeacherFormData] = useState({ name: '', email: '', password: '' });
@@ -2210,17 +2213,38 @@ function EmailLogsPanel() {
   const fetchTeacherWithdrawals = async () => {
     setTeacherWithdrawalsLoading(true);
     try {
-      const [wdRes, feeRes] = await Promise.all([
+      const [wdRes, feeRes, formFeeRes] = await Promise.all([
         fetch('/api/admin/teacher-withdrawals'),
         fetch('/api/admin/teacher-fee'),
+        fetch('/api/admin/formation-fee'),
       ]);
       const wdData = await wdRes.json();
       const feeData = await feeRes.json();
+      const formFeeData = await formFeeRes.json();
       setTeacherWithdrawals(wdData.withdrawals || []);
       setTeacherFee(feeData.fee ?? 0);
       setTeacherFeeInput(String(feeData.fee ?? 0));
+      setFormationFee(formFeeData.fee ?? 0);
+      setFormationFeeInput(String(formFeeData.fee ?? 0));
     } catch { toast.error('Erreur chargement retraits professeurs.'); }
     finally { setTeacherWithdrawalsLoading(false); }
+  };
+
+  const handleSaveFormationFee = async () => {
+    const fee = Number(formationFeeInput);
+    if (isNaN(fee) || fee < 0 || fee > 100) { toast.error('Frais invalides (0-100%).'); return; }
+    setSavingFormationFee(true);
+    try {
+      const res = await fetch('/api/admin/formation-fee', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fee }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success('Frais de vente mis à jour !');
+      setFormationFee(fee);
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setSavingFormationFee(false); }
   };
 
   const handleSaveTeacher = async () => {
@@ -8422,7 +8446,7 @@ function EmailLogsPanel() {
           </div>
           {(() => { if (!teacherWithdrawals.length && !teacherWithdrawalsLoading) fetchTeacherWithdrawals(); return null; })()}
 
-          {/* Fee setting */}
+          {/* Teacher withdrawal fee */}
           <Card className="border border-violet-100 bg-violet-50/50 shadow-none rounded-2xl">
             <CardContent className="p-5">
               <p className="text-xs font-black uppercase tracking-widest text-violet-600 mb-3">Frais de retrait professeurs</p>
@@ -8440,6 +8464,29 @@ function EmailLogsPanel() {
                   {savingTeacherFee ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enregistrer'}
                 </Button>
                 {teacherFee > 0 && <span className="text-xs text-gray-500 font-semibold">Actuel : {teacherFee}%</span>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Formation sale platform fee */}
+          <Card className="border border-indigo-100 bg-indigo-50/50 shadow-none rounded-2xl">
+            <CardContent className="p-5">
+              <p className="text-xs font-black uppercase tracking-widest text-indigo-600 mb-1">Commission plateforme — vente de formations</p>
+              <p className="text-[11px] text-gray-500 mb-3">Part prélevée sur chaque vente de formation avant crédit professeur.</p>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number" min="0" max="100"
+                  value={formationFeeInput}
+                  onChange={e => setFormationFeeInput(e.target.value)}
+                  className="w-28 h-10 rounded-xl text-center font-bold text-lg"
+                  placeholder="0"
+                />
+                <span className="font-black text-gray-600 text-lg">%</span>
+                <Button onClick={handleSaveFormationFee} disabled={savingFormationFee}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white border-0 rounded-xl h-10 font-bold text-sm shadow-md shadow-indigo-200">
+                  {savingFormationFee ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enregistrer'}
+                </Button>
+                {formationFee > 0 && <span className="text-xs text-gray-500 font-semibold">Actuel : {formationFee}%</span>}
               </div>
             </CardContent>
           </Card>

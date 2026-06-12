@@ -3600,11 +3600,12 @@ router.patch('/api/admin/formations/payment-requests/:id', requireDb, async (req
     }
     await batch.commit();
 
-    // Credit teacher for MonCash-approved formation purchase
+    // Credit teacher for MonCash-approved formation purchase (minus platform commission)
     if (action === 'approve' && data.formationId && (data.amount || 0) > 0) {
       try {
         const settingsSnap = await adminDb.collection('settings').doc('main').get();
         const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
+        const formationFee = settingsSnap.exists ? (settingsSnap.data()!.formationPurchaseFee ?? 0) : 0;
         const formSnap = await adminDb.collection('formations').doc(data.formationId).get();
         const teacherId = formSnap.exists ? formSnap.data()!.teacherId : null;
         const teacherName = formSnap.exists ? formSnap.data()!.teacherName : null;
@@ -3613,25 +3614,30 @@ router.patch('/api/admin/formations/payment-requests/:id', requireDb, async (req
           const teacherSnap = await teacherRef.get();
           if (teacherSnap.exists) {
             const amountUSD = (data.amount || 0) / exchangeRate;
-            const teacherBatch = adminDb.batch();
-            teacherBatch.update(teacherRef, {
-              balance: (teacherSnap.data()!.balance || 0) + amountUSD,
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-            const txRef = adminDb.collection('teacher_transactions').doc();
-            teacherBatch.set(txRef, {
-              teacherId,
-              teacherName: teacherName || '',
-              type: 'sale_credit',
-              amount: amountUSD,
-              formationId: data.formationId,
-              formationTitle: data.formationTitle || '',
-              clientName: data.userName || '',
-              status: 'completed',
-              createdAt: FieldValue.serverTimestamp(),
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-            await teacherBatch.commit();
+            const platformCut = Math.round(amountUSD * formationFee) / 100;
+            const teacherAmount = amountUSD - platformCut;
+            if (teacherAmount > 0) {
+              const teacherBatch = adminDb.batch();
+              teacherBatch.update(teacherRef, {
+                balance: (teacherSnap.data()!.balance || 0) + teacherAmount,
+                updatedAt: FieldValue.serverTimestamp(),
+              });
+              const txRef = adminDb.collection('teacher_transactions').doc();
+              teacherBatch.set(txRef, {
+                teacherId,
+                teacherName: teacherName || '',
+                type: 'sale_credit',
+                amount: teacherAmount,
+                platformFee: platformCut,
+                formationId: data.formationId,
+                formationTitle: data.formationTitle || '',
+                clientName: data.userName || '',
+                status: 'completed',
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+              });
+              await teacherBatch.commit();
+            }
           }
         }
       } catch (teacherErr: any) {
@@ -3780,20 +3786,26 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
         read: false, createdAt: FieldValue.serverTimestamp(),
       });
     }
-    // Credit teacher if formation belongs to one
+    // Credit teacher if formation belongs to one (minus platform commission)
     if (price > 0 && formationId) {
       try {
-        const formSnap = await adminDb.collection('formations').doc(formationId).get();
+        const [formSnap, feeSettingsSnap] = await Promise.all([
+          adminDb.collection('formations').doc(formationId).get(),
+          adminDb.collection('settings').doc('main').get(),
+        ]);
         const teacherId = formSnap.exists ? formSnap.data()!.teacherId : null;
         const teacherName = formSnap.exists ? formSnap.data()!.teacherName : null;
-        if (teacherId) {
+        const formationFee = feeSettingsSnap.exists ? (feeSettingsSnap.data()!.formationPurchaseFee ?? 0) : 0;
+        const platformCut = Math.round(price * formationFee) / 100;
+        const teacherAmount = price - platformCut;
+        if (teacherId && teacherAmount > 0) {
           const teacherRef = adminDb.collection('teachers').doc(teacherId);
           const teacherSnap = await teacherRef.get();
           if (teacherSnap.exists) {
             const currentBalance = teacherSnap.data()!.balance || 0;
             const teacherBatch = adminDb.batch();
             teacherBatch.update(teacherRef, {
-              balance: currentBalance + price,
+              balance: currentBalance + teacherAmount,
               updatedAt: FieldValue.serverTimestamp(),
             });
             const txRef = adminDb.collection('teacher_transactions').doc();
@@ -3801,7 +3813,8 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
               teacherId,
               teacherName: teacherName || '',
               type: 'sale_credit',
-              amount: price,
+              amount: teacherAmount,
+              platformFee: platformCut,
               formationId,
               formationTitle: formationTitle || '',
               clientName: clientName || clientData.name || '',
@@ -4037,10 +4050,14 @@ router.post('/api/formations/progress/position', async (req, res) => {
   }
 });
 
-// ── Admin secret guard ────────────────────────────────────────────────────────
+// ── Admin secret guard (timing-safe comparison) ───────────────────────────────
+const _ADMIN_SECRET_BUF = Buffer.from('rena-admin-2024');
 const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
-    return res.status(403).json({ error: 'Non autorisé.' });
+  const supplied = String(req.headers['x-admin-secret'] || '');
+  const buf = Buffer.alloc(_ADMIN_SECRET_BUF.length);
+  buf.write(supplied);
+  const ok = supplied.length === _ADMIN_SECRET_BUF.length && timingSafeEqual(buf, _ADMIN_SECRET_BUF);
+  if (!ok) return res.status(403).json({ error: 'Non autorisé.' });
   next();
 };
 
@@ -5690,6 +5707,33 @@ router.put('/api/admin/teacher-fee', requireDb, async (req, res) => {
     if (fee === undefined || fee < 0 || fee > 100) return res.status(400).json({ error: 'Frais invalides (0-100%).' });
     await adminDb.collection('settings').doc('main').set(
       { teacherWithdrawalFee: Number(fee), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Formation purchase fee (platform commission on formation sales) ────────────
+router.get('/api/admin/formation-fee', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('settings').doc('main').get();
+    const fee = snap.exists ? (snap.data()!.formationPurchaseFee ?? 0) : 0;
+    res.json({ fee });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.put('/api/admin/formation-fee', requireDb, async (req, res) => {
+  try {
+    const { fee } = req.body;
+    const n = Number(fee);
+    if (fee === undefined || isNaN(n) || n < 0 || n > 100)
+      return res.status(400).json({ error: 'Frais invalides (0-100%).' });
+    await adminDb.collection('settings').doc('main').set(
+      { formationPurchaseFee: n, updatedAt: FieldValue.serverTimestamp() },
       { merge: true }
     );
     res.json({ success: true });

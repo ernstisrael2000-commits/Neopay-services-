@@ -14,7 +14,7 @@ import { Badge } from '../components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Teacher, TeacherTransaction, Formation, FormationModule } from '../types';
+import { Teacher, TeacherTransaction, Formation, FormationModule, FormationChapter } from '../types';
 import { useSettings } from '../services/parcelService';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -32,7 +32,7 @@ const LEVEL_LABELS: Record<string, string> = {
   avance: 'Avancé',
 };
 
-function newModule(): FormationModule {
+function newModule(chapterId?: string): FormationModule {
   return {
     id: crypto.randomUUID(),
     title: '',
@@ -40,7 +40,12 @@ function newModule(): FormationModule {
     duration: '',
     description: '',
     order: 0,
+    chapterId: chapterId || '',
   } as FormationModule;
+}
+
+function newChapter(): FormationChapter {
+  return { id: crypto.randomUUID(), title: '', order: 0, description: '' };
 }
 
 function tsDate(ts: any): Date | null {
@@ -74,6 +79,7 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Formation | null>(null);
+  const [chapters, setChapters] = useState<FormationChapter[]>([]);
 
   const emptyForm = (): Partial<Formation> => ({
     title: '', shortDescription: '', description: '',
@@ -143,6 +149,7 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
     setEditingFormation(null);
     setFormData(emptyForm());
     setModules([]);
+    setChapters([]);
     setIsFormOpen(true);
   };
 
@@ -166,10 +173,10 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
       instructor: f.instructor || teacher.name,
       instructorBio: f.instructorBio || '',
       instructorAvatar: f.instructorAvatar || '',
-      chapters: f.chapters || [],
       resources: f.resources || [],
     });
     setModules((f.modules || []).map(m => ({ ...m })));
+    setChapters((f.chapters || []).map(c => ({ ...c })));
     setIsFormOpen(true);
   };
 
@@ -179,9 +186,11 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
     setSaving(true);
     try {
       const sortedModules = modules.map((m, i) => ({ ...m, order: i }));
+      const sortedChapters = chapters.map((c, i) => ({ ...c, order: i }));
       const body = {
         ...formData,
         modules: sortedModules,
+        chapters: sortedChapters,
         teacherId: teacher.id,
         teacherName: teacher.name,
       };
@@ -259,6 +268,36 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
       return next;
     });
   };
+
+  // ── Chapter management ───────────────────────────────────────────────────────
+  const addChapter = () => setChapters(prev => [...prev, { ...newChapter(), order: prev.length }]);
+
+  const updateChapter = (id: string, updates: Partial<FormationChapter>) =>
+    setChapters(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+
+  const removeChapter = (id: string) => {
+    setChapters(prev => prev.filter(c => c.id !== id));
+    setModules(prev => prev.map(m => m.chapterId === id ? { ...m, chapterId: '' } : m));
+  };
+
+  const moveChapter = (idx: number, dir: -1 | 1) => {
+    setChapters(prev => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  };
+
+  // ── Lesson management (modules within chapters) ──────────────────────────────
+  const addLesson = (chapterId: string) =>
+    setModules(prev => [...prev, { ...newModule(chapterId), order: prev.filter(m => m.chapterId === chapterId).length }]);
+
+  const removeModuleById = (id: string) => setModules(prev => prev.filter(m => m.id !== id));
+
+  const updateModuleById = (id: string, field: keyof FormationModule, value: any) =>
+    setModules(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
 
   // ── Withdrawal ──────────────────────────────────────────────────────────────
   const handleWithdraw = async () => {
@@ -729,74 +768,191 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
               </div>
             </div>
 
-            {/* Modules */}
+            {/* Chapitres & Leçons */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Modules ({modules.length})</h3>
-                <Button type="button" onClick={addModule} size="sm"
+                <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">
+                  Chapitres & Leçons
+                  <span className="ml-2 font-semibold text-gray-300">({chapters.length} ch. / {modules.length} leçons)</span>
+                </h3>
+                <Button type="button" onClick={addChapter} size="sm"
                   className="bg-violet-600 hover:bg-violet-700 text-white border-0 rounded-xl text-xs h-8">
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Chapitre
                 </Button>
               </div>
 
-              <div className="space-y-2">
-                {modules.map((mod, idx) => (
-                  <div key={mod.id || idx} className="border border-gray-100 rounded-2xl p-4 bg-gray-50/50 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <button type="button" onClick={() => moveModule(idx, -1)} disabled={idx === 0}
-                          className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-30">
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        </button>
-                        <button type="button" onClick={() => moveModule(idx, 1)} disabled={idx === modules.length - 1}
-                          className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-30">
-                          <ChevronDown className="h-3.5 w-3.5" />
+              {/* With chapters: grouped view */}
+              {chapters.length > 0 && (
+                <div className="space-y-3">
+                  {chapters.map((ch, chIdx) => {
+                    const chLessons = modules.filter(m => m.chapterId === ch.id);
+                    return (
+                      <div key={ch.id} className="border border-violet-100 rounded-2xl overflow-hidden">
+                        {/* Chapter header */}
+                        <div className="bg-violet-50/70 p-3 flex items-center gap-2">
+                          <div className="flex flex-col gap-0.5">
+                            <button type="button" onClick={() => moveChapter(chIdx, -1)} disabled={chIdx === 0}
+                              className="p-0.5 text-violet-300 hover:text-violet-600 disabled:opacity-30">
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => moveChapter(chIdx, 1)} disabled={chIdx === chapters.length - 1}
+                              className="p-0.5 text-violet-300 hover:text-violet-600 disabled:opacity-30">
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <span className="h-7 w-7 rounded-lg bg-violet-600 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                            {chIdx + 1}
+                          </span>
+                          <Input
+                            value={ch.title}
+                            onChange={e => updateChapter(ch.id, { title: e.target.value })}
+                            placeholder="Titre du chapitre"
+                            className="flex-1 h-9 rounded-xl text-sm font-semibold"
+                          />
+                          <button type="button" onClick={() => removeChapter(ch.id)}
+                            className="text-red-400 hover:text-red-600 p-1 transition-colors shrink-0">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {/* Chapter description */}
+                        <div className="px-3 pt-2 pb-1 bg-violet-50/30">
+                          <Input
+                            value={ch.description || ''}
+                            onChange={e => updateChapter(ch.id, { description: e.target.value })}
+                            placeholder="Description du chapitre (optionnel)"
+                            className="h-8 rounded-xl text-xs text-gray-500"
+                          />
+                        </div>
+
+                        {/* Lessons in this chapter */}
+                        <div className="p-3 space-y-2">
+                          {chLessons.map((mod, lidx) => (
+                            <div key={mod.id} className="border border-gray-100 rounded-xl p-3 bg-white space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="h-5 min-w-[20px] px-1 rounded-md bg-gray-100 text-gray-500 text-[9px] font-black flex items-center justify-center shrink-0">
+                                  L{lidx + 1}
+                                </span>
+                                <Input
+                                  value={mod.title || ''}
+                                  onChange={e => updateModuleById(mod.id, 'title', e.target.value)}
+                                  placeholder="Titre de la leçon"
+                                  className="flex-1 h-8 rounded-xl text-sm"
+                                />
+                                <button type="button" onClick={() => removeModuleById(mod.id)}
+                                  className="text-red-400 hover:text-red-600 p-1 shrink-0">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 pl-7">
+                                <Input
+                                  value={mod.videoUrl || ''}
+                                  onChange={e => updateModuleById(mod.id, 'videoUrl', e.target.value)}
+                                  placeholder="URL vidéo (YouTube/Vimeo)"
+                                  className="h-8 rounded-xl text-xs"
+                                />
+                                <Input
+                                  value={mod.duration || ''}
+                                  onChange={e => updateModuleById(mod.id, 'duration', e.target.value)}
+                                  placeholder="Durée (ex: 12min)"
+                                  className="h-8 rounded-xl text-xs"
+                                />
+                              </div>
+                              <div className="pl-7">
+                                <Textarea
+                                  value={mod.description || ''}
+                                  onChange={e => updateModuleById(mod.id, 'description', e.target.value)}
+                                  placeholder="Description de la leçon (optionnel)"
+                                  className="rounded-xl min-h-[50px] text-xs"
+                                />
+                              </div>
+                            </div>
+                          ))}
+
+                          <button type="button" onClick={() => addLesson(ch.id)}
+                            className="w-full py-2.5 text-xs text-violet-600 border border-dashed border-violet-200 rounded-xl hover:border-violet-400 hover:bg-violet-50 transition-all font-bold flex items-center justify-center gap-1">
+                            <Plus className="h-3 w-3" /> Ajouter une leçon dans ce chapitre
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Orphaned modules */}
+                  {modules.filter(m => !m.chapterId || !chapters.find(c => c.id === m.chapterId)).length > 0 && (
+                    <div className="border border-gray-200 border-dashed rounded-2xl p-3 space-y-2">
+                      <p className="text-xs font-bold text-gray-400">Leçons sans chapitre</p>
+                      {modules.filter(m => !m.chapterId || !chapters.find(c => c.id === m.chapterId)).map((mod, lidx) => (
+                        <div key={mod.id} className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold text-gray-400 shrink-0">L{lidx + 1}</span>
+                          <Input value={mod.title || ''} onChange={e => updateModuleById(mod.id, 'title', e.target.value)} placeholder="Titre" className="flex-1 h-8 rounded-xl text-xs" />
+                          <button type="button" onClick={() => removeModuleById(mod.id)} className="text-red-400 hover:text-red-600"><X className="h-3.5 w-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Without chapters: flat module list (backward compat) */}
+              {chapters.length === 0 && (
+                <div className="space-y-2">
+                  {modules.map((mod, idx) => (
+                    <div key={mod.id || idx} className="border border-gray-100 rounded-2xl p-4 bg-gray-50/50 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-0.5">
+                          <button type="button" onClick={() => moveModule(idx, -1)} disabled={idx === 0}
+                            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-30">
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button type="button" onClick={() => moveModule(idx, 1)} disabled={idx === modules.length - 1}
+                            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-30">
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <span className="h-6 w-6 rounded-lg bg-violet-100 text-violet-600 text-[10px] font-black flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <Input
+                          value={mod.title || ''}
+                          onChange={e => updateModule(idx, 'title', e.target.value)}
+                          placeholder="Titre de la leçon"
+                          className="flex-1 h-9 rounded-xl text-sm"
+                        />
+                        <button type="button" onClick={() => removeModule(idx)}
+                          className="text-red-400 hover:text-red-600 p-1 transition-colors">
+                          <X className="h-4 w-4" />
                         </button>
                       </div>
-                      <span className="h-6 w-6 rounded-lg bg-violet-100 text-violet-600 text-[10px] font-black flex items-center justify-center shrink-0">
-                        {idx + 1}
-                      </span>
-                      <Input
-                        value={mod.title || ''}
-                        onChange={e => updateModule(idx, 'title', e.target.value)}
-                        placeholder="Titre du module"
-                        className="flex-1 h-9 rounded-xl text-sm"
-                      />
-                      <button type="button" onClick={() => removeModule(idx)}
-                        className="text-red-400 hover:text-red-600 p-1 transition-colors">
-                        <X className="h-4 w-4" />
-                      </button>
+                      <div className="grid grid-cols-2 gap-2 pl-8">
+                        <Input
+                          value={mod.videoUrl || ''}
+                          onChange={e => updateModule(idx, 'videoUrl', e.target.value)}
+                          placeholder="URL vidéo (YouTube/Vimeo)"
+                          className="h-9 rounded-xl text-sm"
+                        />
+                        <Input
+                          value={mod.duration || ''}
+                          onChange={e => updateModule(idx, 'duration', e.target.value)}
+                          placeholder="Durée (ex: 12min)"
+                          className="h-9 rounded-xl text-sm"
+                        />
+                      </div>
+                      <div className="pl-8">
+                        <Textarea
+                          value={mod.description || ''}
+                          onChange={e => updateModule(idx, 'description', e.target.value)}
+                          placeholder="Description de la leçon (optionnel)"
+                          className="rounded-xl min-h-[60px] text-sm"
+                        />
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 pl-8">
-                      <Input
-                        value={mod.videoUrl || ''}
-                        onChange={e => updateModule(idx, 'videoUrl', e.target.value)}
-                        placeholder="URL vidéo (YouTube/Vimeo)"
-                        className="h-9 rounded-xl text-sm"
-                      />
-                      <Input
-                        value={mod.duration || ''}
-                        onChange={e => updateModule(idx, 'duration', e.target.value)}
-                        placeholder="Durée (ex: 12min)"
-                        className="h-9 rounded-xl text-sm"
-                      />
-                    </div>
-                    <div className="pl-8">
-                      <Textarea
-                        value={mod.description || ''}
-                        onChange={e => updateModule(idx, 'description', e.target.value)}
-                        placeholder="Description du module (optionnel)"
-                        className="rounded-xl min-h-[60px] text-sm"
-                      />
-                    </div>
-                  </div>
-                ))}
-                {modules.length === 0 && (
-                  <div className="text-center py-6 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">
-                    Aucun module — cliquez sur "Ajouter" pour commencer.
-                  </div>
-                )}
-              </div>
+                  ))}
+                  <button type="button" onClick={addModule}
+                    className="w-full py-3 text-xs text-violet-600 border-2 border-dashed border-violet-200 rounded-2xl hover:border-violet-400 hover:bg-violet-50 transition-all font-bold flex items-center justify-center gap-1">
+                    <Plus className="h-3.5 w-3.5" /> Ajouter une leçon sans chapitre
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
