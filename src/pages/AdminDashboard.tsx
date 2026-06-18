@@ -5668,17 +5668,38 @@ function EmailLogsPanel() {
                           <Wallet className="h-3 w-3" />
                           <span>{w.method}</span>
                         </div>
-                        {/* MonCashConnect shortcut for MonCash withdrawals */}
+                        {/* MonCashConnect automatic payout for MonCash withdrawals */}
                         {w.method && w.method.toLowerCase().includes('moncash') && (
-                          <a
-                            href="https://moncashconnect.com/withdrawals"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 w-full h-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-colors mb-1"
+                          <Button
+                            size="sm"
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black h-8 gap-1.5 mb-1"
+                            onClick={async () => {
+                              const htgAmount = Math.round((w.amount || 0) * (settings?.exchangeRate || 146));
+                              try {
+                                const r = await fetch('/api/withdrawal/moncash', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    txId: w.id,
+                                    clientId: w.affiliateId || w.id,
+                                    phoneNumber: w.accountNumber || '',
+                                    htgAmount,
+                                    usdAmount: w.amount,
+                                    clientName: w.affiliateName,
+                                  }),
+                                });
+                                const data = await r.json();
+                                if (!r.ok) throw new Error(data.error || 'Erreur');
+                                toast.success(`✅ ${htgAmount.toLocaleString()} HTG envoyés sur ${w.accountNumber}`);
+                                handleWithdrawalAction(w, 'approved');
+                              } catch (err: any) {
+                                toast.error(`MonCashConnect: ${err.message}`);
+                              }
+                            }}
                           >
-                            <LucideIcons.ExternalLink className="h-3.5 w-3.5" />
-                            Envoyer via MonCashConnect → {w.accountNumber}
-                          </a>
+                            <LucideIcons.Zap className="h-3.5 w-3.5" />
+                            Payer via MonCashConnect ({Math.round((w.amount||0)*(settings?.exchangeRate||146)).toLocaleString()} HTG)
+                          </Button>
                         )}
                         <div className="flex gap-2">
                           <Button 
@@ -6150,18 +6171,36 @@ function EmailLogsPanel() {
 
                         {/* Actions */}
                         <div className="flex flex-col sm:flex-row gap-3 shrink-0 sm:min-w-[200px]">
-                          {/* MonCashConnect shortcut for MonCash withdrawals */}
+                          {/* MonCashConnect automatic payout for MonCash client withdrawals */}
                           {!isDeposit && tx.method && tx.method.toLowerCase().includes('moncash') && (
-                            <a
-                              href="https://moncashconnect.com/withdrawals"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black transition-colors"
-                              title={tx.accountNumber ? `Envoyer à ${tx.accountNumber}` : 'Traiter le retrait'}
+                            <Button
+                              className="flex-1 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm gap-2"
+                              disabled={isLoading}
+                              onClick={async () => {
+                                try {
+                                  const r = await fetch('/api/withdrawal/moncash', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      txId: tx.id,
+                                      clientId: tx.clientId,
+                                      phoneNumber: tx.accountNumber || '',
+                                      htgAmount: tx.amount,
+                                      usdAmount: tx.usdAmount,
+                                      clientName: tx.clientName,
+                                    }),
+                                  });
+                                  const data = await r.json();
+                                  if (!r.ok) throw new Error(data.error || 'Erreur');
+                                  toast.success(`✅ ${(tx.amount||0).toLocaleString()} HTG envoyés sur ${tx.accountNumber}`);
+                                } catch (err: any) {
+                                  toast.error(`MonCashConnect: ${err.message}`);
+                                }
+                              }}
                             >
-                              <LucideIcons.ExternalLink className="h-4 w-4" />
-                              MonCashConnect{tx.accountNumber ? ` → ${tx.accountNumber}` : ''}
-                            </a>
+                              <LucideIcons.Zap className="h-4 w-4" />
+                              Payer MonCash{tx.accountNumber ? ` → ${tx.accountNumber}` : ''}
+                            </Button>
                           )}
                           <Button
                             className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm gap-2"
