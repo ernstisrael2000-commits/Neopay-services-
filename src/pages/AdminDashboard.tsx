@@ -5668,39 +5668,6 @@ function EmailLogsPanel() {
                           <Wallet className="h-3 w-3" />
                           <span>{w.method}</span>
                         </div>
-                        {/* MonCashConnect automatic payout for MonCash withdrawals */}
-                        {w.method && w.method.toLowerCase().includes('moncash') && (
-                          <Button
-                            size="sm"
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black h-8 gap-1.5 mb-1"
-                            onClick={async () => {
-                              const htgAmount = Math.round((w.amount || 0) * (settings?.exchangeRate || 146));
-                              try {
-                                const r = await fetch('/api/withdrawal/moncash', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    txId: w.id,
-                                    clientId: w.affiliateId || w.id,
-                                    phoneNumber: w.accountNumber || '',
-                                    htgAmount,
-                                    usdAmount: w.amount,
-                                    clientName: w.affiliateName,
-                                  }),
-                                });
-                                const data = await r.json();
-                                if (!r.ok) throw new Error(data.error || 'Erreur');
-                                toast.success(`✅ ${htgAmount.toLocaleString()} HTG envoyés sur ${w.accountNumber}`);
-                                handleWithdrawalAction(w, 'approved');
-                              } catch (err: any) {
-                                toast.error(`MonCashConnect: ${err.message}`);
-                              }
-                            }}
-                          >
-                            <LucideIcons.Zap className="h-3.5 w-3.5" />
-                            Payer via MonCashConnect ({Math.round((w.amount||0)*(settings?.exchangeRate||146)).toLocaleString()} HTG)
-                          </Button>
-                        )}
                         <div className="flex gap-2">
                           <Button 
                             size="sm" 
@@ -6171,37 +6138,6 @@ function EmailLogsPanel() {
 
                         {/* Actions */}
                         <div className="flex flex-col sm:flex-row gap-3 shrink-0 sm:min-w-[200px]">
-                          {/* MonCashConnect automatic payout for MonCash client withdrawals */}
-                          {!isDeposit && tx.method && tx.method.toLowerCase().includes('moncash') && (
-                            <Button
-                              className="flex-1 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm gap-2"
-                              disabled={isLoading}
-                              onClick={async () => {
-                                try {
-                                  const r = await fetch('/api/withdrawal/moncash', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      txId: tx.id,
-                                      clientId: tx.clientId,
-                                      phoneNumber: tx.accountNumber || '',
-                                      htgAmount: tx.amount,
-                                      usdAmount: tx.usdAmount,
-                                      clientName: tx.clientName,
-                                    }),
-                                  });
-                                  const data = await r.json();
-                                  if (!r.ok) throw new Error(data.error || 'Erreur');
-                                  toast.success(`✅ ${(tx.amount||0).toLocaleString()} HTG envoyés sur ${tx.accountNumber}`);
-                                } catch (err: any) {
-                                  toast.error(`MonCashConnect: ${err.message}`);
-                                }
-                              }}
-                            >
-                              <LucideIcons.Zap className="h-4 w-4" />
-                              Payer MonCash{tx.accountNumber ? ` → ${tx.accountNumber}` : ''}
-                            </Button>
-                          )}
                           <Button
                             className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm gap-2"
                             disabled={isLoading}
@@ -7545,56 +7481,6 @@ function EmailLogsPanel() {
                                className="rounded-xl border-rose-100 focus:ring-rose-200"
                              />
                            </div>
-                        </div>
-
-                        {/* MonCashConnect Integration */}
-                        <div className="space-y-4 p-4 rounded-3xl bg-blue-50/40 border border-blue-200">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="h-8 w-8 rounded-xl bg-white shadow-sm flex items-center justify-center">
-                              <LucideIcons.Zap className="h-4 w-4 text-blue-600" />
-                            </div>
-                            <span className="text-sm font-black text-blue-700">MonCashConnect (API)</span>
-                          </div>
-
-                          {/* Webhook URL */}
-                          <div className="space-y-1">
-                            <Label className="text-[10px] font-bold text-blue-600/70 uppercase">URL Webhook — à coller dans votre tableau de bord MonCashConnect</Label>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 text-xs bg-white border border-blue-200 rounded-xl px-3 py-2 font-mono text-blue-900 break-all select-all">
-                                {window.location.origin}/api/webhooks/moncashconnect
-                              </code>
-                              <button
-                                type="button"
-                                className="shrink-0 h-9 w-9 flex items-center justify-center rounded-xl bg-white border border-blue-200 hover:bg-blue-50 transition-colors"
-                                title="Copier"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/moncashconnect`);
-                                  toast.success('URL copiée !');
-                                }}
-                              >
-                                <LucideIcons.Copy className="h-4 w-4 text-blue-600" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Format clé */}
-                          <div className="rounded-xl bg-white border border-blue-100 px-3 py-2 space-y-1">
-                            <p className="text-[10px] font-black text-blue-600/70 uppercase">Format de la clé secrète attendu</p>
-                            <p className="font-mono text-xs text-blue-900">sk_proj_… &nbsp;(production)</p>
-                            <p className="font-mono text-xs text-blue-400">sk_test_proj_… &nbsp;(sandbox)</p>
-                            <p className="text-[10px] text-gray-400 mt-1">Obtenez votre clé sur moncashconnect.com → Paramètres → API</p>
-                          </div>
-
-                          {/* Lien tableau de bord */}
-                          <a
-                            href="https://moncashconnect.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 w-full h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black transition-colors"
-                          >
-                            <LucideIcons.ExternalLink className="h-3.5 w-3.5" />
-                            Ouvrir MonCashConnect
-                          </a>
                         </div>
 
                         {/* NatCash Settings */}

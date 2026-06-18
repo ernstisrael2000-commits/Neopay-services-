@@ -193,7 +193,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [isWithdrawOpen,    setIsWithdrawOpen]    = useState(false);
   const [isTransferOpen,    setIsTransferOpen]    = useState(false);
   const [actionLoading,     setActionLoading]     = useState(false);
-  const [moncashLoading,    setMoncashLoading]    = useState(false);
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
 
   // Deposit state
@@ -521,35 +520,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       toast.error(err.message);
       depositCaptchaRef.current?.reset(); setDepositCaptchaToken(null);
     } finally { setActionLoading(false); }
-  };
-
-  const handleMoncashDeposit = async () => {
-    const htg = parseFloat(htgAmount);
-    if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
-    if (htg < minDeposit * rate) { toast.error(`Montant minimum: ${Math.round(minDeposit * rate).toLocaleString()} HTG`); return; }
-    if (!client) { toast.error('Erreur client.'); return; }
-    setMoncashLoading(true);
-    try {
-      const res = await fetch('/api/deposit/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId:       client.id,
-          clientName:     client.name,
-          clientWalletId: client.walletId,
-          amount:         htg,
-          exchangeRate:   rate,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Erreur lors de l'initiation."); return; }
-      setIsDepositOpen(false);
-      window.location.href = data.paymentUrl;
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur réseau.');
-    } finally {
-      setMoncashLoading(false);
-    }
   };
 
   const handleWithdraw = async (e: React.FormEvent) => {
@@ -1107,7 +1077,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             {/* ── 2. Infos compte + QR (s'affiche après sélection) ── */}
             {(() => {
               if (!depositMethod) return null;
-              if (depositMethod.id === 'moncash') return null;
               const num = depositMethod.number || depositMethod.address
                 || (depositMethod.id === 'moncash' ? (settings as any)?.moncashNumber : null)
                 || (depositMethod.id === 'natcash' ? (settings as any)?.natcashNumber : null)
@@ -1204,28 +1173,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               )}
             </div>
 
-            {/* ── MonCash direct (MonCashConnect) ── */}
-            {depositMethod?.id === 'moncash' ? (
-              <>
-                <div className="bg-rose-50 border border-rose-100 rounded-xl p-3.5 space-y-1.5 text-xs text-rose-800">
-                  <p className="font-black text-sm flex items-center gap-2">
-                    <span>🔒</span> Paiement sécurisé via MonCashConnect
-                  </p>
-                  <p className="text-rose-600 leading-relaxed">Vous serez redirigé vers la page de paiement MonCash. Votre solde sera crédité automatiquement après confirmation.</p>
-                </div>
-
-                <Button
-                  type="button"
-                  onClick={handleMoncashDeposit}
-                  disabled={moncashLoading || !htgAmount || parseFloat(htgAmount) <= 0}
-                  className="w-full h-12 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black border-0 flex items-center justify-center gap-2">
-                  {moncashLoading
-                    ? <Loader2 className="h-5 w-5 animate-spin" />
-                    : <><Smartphone className="h-4 w-4" /> Payer avec MonCash →</>}
-                </Button>
-              </>
-            ) : (
-            <>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Référence / ID transaction</Label>
               <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}
@@ -1257,7 +1204,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve →'}
             </Button>
-            </>)}
             </>)}
           </form>
         </DialogContent>
