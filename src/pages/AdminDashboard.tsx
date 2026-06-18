@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useDeferredValue, useCallback, useRef } from 'react';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { useUniversalFCM } from '../hooks/useUniversalFCM';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -959,6 +960,7 @@ function PurchaseNotifCard({
 }
 
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
+  useUniversalFCM('admin', admin?.id || null);
   const { supported: pushSupported, permission: pushPermission, subscription: pushSub, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
   const [showScrollTop, setShowScrollTop] = useState(false);
 

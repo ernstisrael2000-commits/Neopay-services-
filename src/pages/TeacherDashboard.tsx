@@ -6,6 +6,9 @@ import {
   Loader2, BookOpen, Video, ChevronUp, ChevronDown, X,
   BarChart2, DollarSign, AlertTriangle, RefreshCw, ArrowUpDown
 } from 'lucide-react';
+import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
+import { useUniversalFCM } from '../hooks/useUniversalFCM';
+import NotificationBell from '../components/NotificationBell';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -65,6 +68,8 @@ function fmtDate(ts: any) {
 export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboardProps) {
   const { settings } = useSettings();
   const rate = settings?.exchangeRate ?? 146;
+  const { notifications: notifs, unreadCount: notifCount, loading: notifsLoading, markRead, markAllRead, clearAll } = useRealtimeNotifs('teacher', teacher.id || null);
+  useUniversalFCM('teacher', teacher.id || null);
 
   const [activeTab, setActiveTab] = useState<DashTab>('formations');
   const [teacherBalance, setTeacherBalance] = useState<number>(teacher.balance ?? 0);
@@ -362,6 +367,14 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
               <p className="text-xs text-gray-400 font-bold">Solde</p>
               <p className="font-black text-sm text-emerald-600">{balanceHTG.toLocaleString()} HTG</p>
             </div>
+            <NotificationBell
+              notifications={notifs}
+              unreadCount={notifCount}
+              loading={notifsLoading}
+              onMarkRead={markRead}
+              onMarkAllRead={markAllRead}
+              onClearAll={clearAll}
+            />
             <button
               onClick={onLogout}
               className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-red-500 transition-colors px-3 py-2 rounded-xl hover:bg-red-50"

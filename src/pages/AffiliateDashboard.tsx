@@ -8,8 +8,6 @@ import {
   useMonthlyRankings,
   useAllAffiliates,
   getAffiliateLevelInfo,
-  useNotifications,
-  markNotificationAsRead,
   ensureWalletId,
   ensureCommissionWalletId,
   submitTransfer,
@@ -17,8 +15,11 @@ import {
   useWalletTransactions,
   findAffiliateByWalletId
 } from '../services/affiliateService';
+import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
+import { useUniversalFCM } from '../hooks/useUniversalFCM';
+import NotificationBell from '../components/NotificationBell';
 import { getAgentByCode, submitAgentDepositRequest } from '../services/agentService';
-import { Affiliate, WithdrawalRequest, AffiliateNotification, WalletTransaction, TransactionStatus } from '../types';
+import { Affiliate, WithdrawalRequest, WalletTransaction, TransactionStatus } from '../types';
 import { Progress } from '../components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -109,9 +110,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const { topAffiliates, loading: topLoading } = useTopAffiliates();
   const { rankings: monthlyRankings, loading: rankingsLoading } = useMonthlyRankings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
-  const { notifications, loading: notificationsLoading } = useNotifications(affiliateId);
+  const { notifications, unreadCount, loading: notificationsLoading, markRead, markAllRead, clearAll } = useRealtimeNotifs('affiliate', affiliateId);
   const { transactions, loading: transactionsLoading } = useWalletTransactions(affiliateId);
   const { settings } = useSettings();
+  useUniversalFCM('affiliate', affiliateId);
 
   // Tab navigation
   const [activeTab, setActiveTab] = useState<Tab>('accueil');
@@ -142,7 +144,6 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   // General
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -444,7 +445,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       .slice(0, 3);
   }, [affiliates]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // unreadCount comes from useRealtimeNotifs
   const recentTx = transactions.slice(0, 5);
 
   // Ensure both wallet IDs exist
@@ -631,50 +632,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <Dialog open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
-              <DialogTrigger render={
-                <button className="relative h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
-                  <Bell className="h-4.5 w-4.5 text-gray-600" />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[7px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-              } />
-              <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem]">
-                <DialogHeader className="p-6 bg-primary text-white relative">
-                  <DialogTitle className="flex items-center gap-2 text-base font-black">
-                    <Bell className="h-4 w-4" /> Notifications
-                  </DialogTitle>
-                  <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
-                    <X className="h-4 w-4" />
-                  </DialogClose>
-                </DialogHeader>
-                <div className="max-h-[60vh] overflow-y-auto p-4 space-y-2">
-                  {notificationsLoading ? (
-                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-                  ) : notifications.length > 0 ? notifications.map(n => (
-                    <div key={n.id} onClick={() => n.id && markNotificationAsRead(n.id)}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-colors ${n.read ? 'bg-gray-50 border-gray-100' : 'bg-blue-50 border-blue-100'}`}>
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="font-black text-sm text-dark">{n.title}</h4>
-                        {!n.read && <div className="w-2 h-2 bg-primary rounded-full shrink-0 mt-0.5" />}
-                      </div>
-                      <p className="text-xs text-gray-600 leading-relaxed">{n.message}</p>
-                      <p className="text-[10px] text-gray-400 mt-1.5">
-                        {n.createdAt?.toDate ? format(n.createdAt.toDate(), 'dd MMM • HH:mm', { locale: fr }) : ''}
-                      </p>
-                    </div>
-                  )) : (
-                    <div className="text-center py-12 text-gray-400">
-                      <Bell className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm font-medium">Aucune notification</p>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadCount}
+              loading={notificationsLoading}
+              onMarkRead={markRead}
+              onMarkAllRead={markAllRead}
+              onClearAll={clearAll}
+            />
             <button onClick={onLogout}
               className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
               <LogOut className="h-4 w-4" />

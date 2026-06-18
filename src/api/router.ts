@@ -264,6 +264,98 @@ function pushClientEvent(clientId: string, event: string, data: object): void {
   }
 }
 
+// ── SSE: Multi-role real-time connections (affiliate, agent, teacher, admin) ──
+type SseRole = 'affiliate' | 'agent' | 'teacher' | 'admin';
+const roleSseConnections: Record<SseRole, Map<string, Set<express.Response>>> = {
+  affiliate: new Map(),
+  agent:     new Map(),
+  teacher:   new Map(),
+  admin:     new Map(),
+};
+
+function pushRoleEvent(role: SseRole, userId: string, event: string, data: object): void {
+  const map = roleSseConnections[role];
+  const connections = map.get(userId);
+  if (!connections || connections.size === 0) return;
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of [...connections]) {
+    try { res.write(payload); } catch { connections.delete(res); }
+  }
+}
+
+function pushAllAdminsEvent(event: string, data: object): void {
+  const map = roleSseConnections['admin'];
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const conns of map.values()) {
+    for (const res of [...conns]) {
+      try { res.write(payload); } catch { conns.delete(res); }
+    }
+  }
+}
+
+function makeSseHandler(role: SseRole, paramName: string) {
+  return (req: express.Request, res: express.Response) => {
+    const userId = req.params[paramName];
+    if (!userId) { res.status(400).end(); return; }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    const map = roleSseConnections[role];
+    if (!map.has(userId)) map.set(userId, new Set());
+    const conns = map.get(userId)!;
+    conns.add(res);
+    res.write(': connected\n\n');
+    const heartbeat = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
+    }, 25000);
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      conns.delete(res);
+      if (conns.size === 0) map.delete(userId);
+    });
+  };
+}
+
+// ── FCM: send notification to any role's user ─────────────────────────────────
+async function sendFcmToRole(
+  role: string, userId: string,
+  title: string, body: string,
+  data?: Record<string, string>
+): Promise<void> {
+  const fm = getFcmMessaging();
+  if (!fm || !adminDb) return;
+  try {
+    const docId = role === 'client' ? userId : `${role}_${userId}`;
+    const tokenSnap = await adminDb.collection('fcm_tokens').doc(docId).get();
+    if (!tokenSnap.exists) return;
+    const token: string = tokenSnap.data()!.token;
+    if (!token) return;
+    await fm.send({
+      token,
+      notification: { title, body },
+      data: data || {},
+      webpush: {
+        notification: {
+          title, body,
+          icon: '/icon.svg',
+          badge: '/icon.svg',
+          vibrate: [200, 100, 200],
+          requireInteraction: false,
+        },
+      },
+    });
+  } catch (e: any) {
+    const code: string = e?.errorInfo?.code || e?.code || '';
+    if (code.includes('registration-token-not-registered') || code.includes('invalid-registration-token')) {
+      const docId = role === 'client' ? userId : `${role}_${userId}`;
+      try { await adminDb.collection('fcm_tokens').doc(docId).delete(); } catch {}
+    }
+    console.warn(`[FCM] sendFcmToRole(${role},${userId}):`, e?.message || e);
+  }
+}
+
 // ── Public: fee preview (no auth – preview only, server calculates authoritatively) ──
 router.get('/api/client/fees', requireDb, async (_req, res) => {
   try {
@@ -280,6 +372,12 @@ router.get('/api/client/fees', requireDb, async (_req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ── Role SSE endpoints ────────────────────────────────────────────────────────
+router.get('/api/affiliate/events/:affiliateId', makeSseHandler('affiliate', 'affiliateId'));
+router.get('/api/agent/events/:agentId',         makeSseHandler('agent',     'agentId'));
+router.get('/api/teacher/events/:teacherId',     makeSseHandler('teacher',   'teacherId'));
+router.get('/api/admin/events/:adminId',         makeSseHandler('admin',     'adminId'));
 
 // ── Client: SSE event stream (withdrawal confirmations, etc.) ─────────────────
 router.get('/api/client/events/:clientId', (req, res) => {
@@ -540,7 +638,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    await adminDb.collection('admin_notifications').add({
+    const adminDepositNotif = {
       type: 'client_deposit', clientId, clientName,
       clientWalletId: clientWalletId || '', transactionId: txRef.id,
       amount, method,
@@ -551,7 +649,9 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       ...(message && { message }),
       read: false,
       createdAt: FieldValue.serverTimestamp(),
-    });
+    };
+    const adminDepositNotifRef = await adminDb.collection('admin_notifications').add(adminDepositNotif);
+    pushAllAdminsEvent('new_notification', { id: adminDepositNotifRef.id, ...adminDepositNotif, createdAt: { _seconds: Date.now() / 1000 } });
 
     sendAdminEmail(
       `💰 Dépôt — ${clientName}`,
@@ -649,8 +749,7 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    const notifRef = adminDb.collection('admin_notifications').doc();
-    batch.set(notifRef, {
+    const adminWithdrawNotif = {
       type: 'client_withdrawal', clientId, clientName,
       clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
       transactionId: txRef.id, amount, method, accountNumber,
@@ -661,8 +760,11 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       ...(message && { message }),
       read: false,
       createdAt: FieldValue.serverTimestamp(),
-    });
+    };
+    const notifRef = adminDb.collection('admin_notifications').doc();
+    batch.set(notifRef, adminWithdrawNotif);
     await batch.commit();
+    pushAllAdminsEvent('new_notification', { id: notifRef.id, ...adminWithdrawNotif, createdAt: { _seconds: Date.now() / 1000 } });
 
     sendAdminEmail(
       `🏧 Retrait — ${clientName}`,
@@ -2580,6 +2682,16 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
     });
     await batch.commit();
 
+    pushAllAdminsEvent('new_notification', {
+      type: 'affiliate_withdrawal_submitted',
+      affiliateId,
+      affiliateName: affData.name || '',
+      amount: usd,
+      method,
+      read: false,
+      createdAt: { _seconds: Date.now() / 1000 },
+    });
+
     // Email to admin + affiliate
     fireEmail(
       () => emailAffiliateWithdrawalSubmitted({
@@ -2962,7 +3074,24 @@ router.post('/api/admin/withdrawal/:id/approve', requireDb, async (req, res) => 
       createdAt: FieldValue.serverTimestamp(),
     });
 
+    const notifData = {
+      affiliateId: requestData.affiliateId,
+      title: '✅ Retrait approuvé',
+      message: `Votre demande de retrait de $${requestData.amount} a été approuvée. Vous serez payé sur ${requestData.method} dans les plus brefs délais.`,
+      type: 'withdrawal_approved',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+    const notifRef = adminDb.collection('affiliate_notifications').doc();
+    batch.set(notifRef, notifData);
+
     await batch.commit();
+
+    // Real-time: SSE + FCM (fire-and-forget)
+    const ssePayload = { id: notifRef.id, ...notifData, createdAt: { _seconds: Date.now() / 1000 } };
+    pushRoleEvent('affiliate', requestData.affiliateId, 'new_notification', ssePayload);
+    sendFcmToRole('affiliate', requestData.affiliateId, notifData.title, notifData.message).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[admin/withdrawal/approve]', e);
@@ -3000,17 +3129,24 @@ router.post('/api/admin/withdrawal/:id/reject', requireDb, async (req, res) => {
       batch.update(snapTx.docs[0].ref, { status: 'rejected', updatedAt: FieldValue.serverTimestamp() });
     }
 
-    // Affiliate notification
-    batch.set(adminDb.collection('affiliate_notifications').doc(), {
+    const rejectNotifData = {
       affiliateId: requestData.affiliateId,
       title: '❌ Retrait refusé',
       message: `Votre demande de retrait de $${requestData.amount} a été refusée.${reason ? ` Raison : ${reason}` : ''}`,
-      type: 'system',
+      type: 'withdrawal_rejected',
       read: false,
       createdAt: FieldValue.serverTimestamp(),
-    });
+    };
+    const rejectNotifRef = adminDb.collection('affiliate_notifications').doc();
+    batch.set(rejectNotifRef, rejectNotifData);
 
     await batch.commit();
+
+    // Real-time: SSE + FCM (fire-and-forget)
+    const rejectSsePayload = { id: rejectNotifRef.id, ...rejectNotifData, createdAt: { _seconds: Date.now() / 1000 } };
+    pushRoleEvent('affiliate', requestData.affiliateId, 'new_notification', rejectSsePayload);
+    sendFcmToRole('affiliate', requestData.affiliateId, rejectNotifData.title, rejectNotifData.message).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[admin/withdrawal/reject]', e);
@@ -3631,6 +3767,23 @@ router.patch('/api/admin/formations/payment-requests/:id', requireDb, async (req
                 updatedAt: FieldValue.serverTimestamp(),
               });
               await teacherBatch.commit();
+
+              // Real-time: notify teacher of sale via SSE + FCM (fire-and-forget)
+              const teacherNotifData = {
+                teacherId,
+                title: '💰 Nouvelle vente de formation',
+                message: `"${data.formationTitle || 'Formation'}" achetée par ${data.userName || 'un client'}. Crédit : $${teacherAmount.toFixed(2)}`,
+                type: 'sale_credit',
+                amount: teacherAmount,
+                formationId: data.formationId,
+                read: false,
+                createdAt: FieldValue.serverTimestamp(),
+              };
+              const teacherNotifRef = adminDb.collection('teacher_notifications').doc();
+              await teacherNotifRef.set(teacherNotifData);
+              const teacherSsePayload = { id: teacherNotifRef.id, ...teacherNotifData, createdAt: { _seconds: Date.now() / 1000 } };
+              pushRoleEvent('teacher', teacherId, 'new_notification', teacherSsePayload);
+              sendFcmToRole('teacher', teacherId, teacherNotifData.title, teacherNotifData.message).catch(() => {});
             }
           }
         }
@@ -4629,14 +4782,21 @@ router.get('/api/admin/formations/:formationId/students', requireDb, requireAdmi
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// ── FCM Token Registration ────────────────────────────────────────────────────
+// ── FCM Token Registration (multi-role) ──────────────────────────────────────
 router.post('/api/fcm/register', requireDb, async (req, res) => {
   try {
-    const { clientId, token } = req.body;
-    if (!clientId || typeof clientId !== 'string' || !token || typeof token !== 'string')
-      return res.status(400).json({ error: 'clientId et token (string) requis.' });
-    await adminDb.collection('fcm_tokens').doc(clientId).set({
-      clientId,
+    const { clientId, token, role, userId } = req.body;
+    if (!token || typeof token !== 'string')
+      return res.status(400).json({ error: 'token (string) requis.' });
+    // Support legacy { clientId } and new { role, userId }
+    const resolvedRole = role || 'client';
+    const resolvedUserId = userId || clientId;
+    if (!resolvedUserId || typeof resolvedUserId !== 'string')
+      return res.status(400).json({ error: 'userId requis.' });
+    const docId = resolvedRole === 'client' ? resolvedUserId : `${resolvedRole}_${resolvedUserId}`;
+    await adminDb.collection('fcm_tokens').doc(docId).set({
+      userId: resolvedUserId,
+      role: resolvedRole,
       token,
       platform: 'web',
       updatedAt: FieldValue.serverTimestamp(),
@@ -4648,11 +4808,11 @@ router.post('/api/fcm/register', requireDb, async (req, res) => {
   }
 });
 
-router.delete('/api/fcm/unregister/:clientId', requireDb, async (req, res) => {
+router.delete('/api/fcm/unregister/:docId', requireDb, async (req, res) => {
   try {
-    const { clientId } = req.params;
-    if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
-    await adminDb.collection('fcm_tokens').doc(clientId).delete();
+    const { docId } = req.params;
+    if (!docId) return res.status(400).json({ error: 'docId requis.' });
+    await adminDb.collection('fcm_tokens').doc(docId).delete();
     res.json({ success: true });
   } catch (e: any) {
     console.error('[FCM] unregister error:', e);
@@ -5151,6 +5311,137 @@ router.put('/api/admin/formation-fee', requireDb, async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── Notifications: affiliate ──────────────────────────────────────────────────
+router.get('/api/affiliate/notifications/:affiliateId', requireDb, async (req, res) => {
+  try {
+    const { affiliateId } = req.params;
+    if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
+    const snap = await adminDb.collection('affiliate_notifications')
+      .where('affiliateId', '==', affiliateId)
+      .orderBy('createdAt', 'desc').limit(50).get();
+    res.json({ notifications: snap.docs.map(serializeDoc) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/affiliate/notifications/:id/read', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('affiliate_notifications').doc(req.params.id).update({ read: true });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/affiliate/notifications/read-all/:affiliateId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('affiliate_notifications')
+      .where('affiliateId', '==', req.params.affiliateId).where('read', '==', false).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/affiliate/notifications/clear-all/:affiliateId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('affiliate_notifications')
+      .where('affiliateId', '==', req.params.affiliateId).limit(200).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Notifications: agent ──────────────────────────────────────────────────────
+router.get('/api/agent/notifications/:agentId', requireDb, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    if (!agentId) return res.status(400).json({ error: 'agentId requis.' });
+    const snap = await adminDb.collection('agent_notifications')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc').limit(50).get();
+    res.json({ notifications: snap.docs.map(serializeDoc) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/agent/notifications/:id/read', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('agent_notifications').doc(req.params.id).update({ read: true });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/agent/notifications/read-all/:agentId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('agent_notifications')
+      .where('agentId', '==', req.params.agentId).where('read', '==', false).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/agent/notifications/clear-all/:agentId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('agent_notifications')
+      .where('agentId', '==', req.params.agentId).limit(200).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Notifications: teacher ────────────────────────────────────────────────────
+router.get('/api/teacher/notifications/:teacherId', requireDb, async (req, res) => {
+  try {
+    const { teacherId } = req.params;
+    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const snap = await adminDb.collection('teacher_notifications')
+      .where('teacherId', '==', teacherId)
+      .orderBy('createdAt', 'desc').limit(50).get();
+    res.json({ notifications: snap.docs.map(serializeDoc) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/teacher/notifications/:id/read', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('teacher_notifications').doc(req.params.id).update({ read: true });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/teacher/notifications/read-all/:teacherId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('teacher_notifications')
+      .where('teacherId', '==', req.params.teacherId).where('read', '==', false).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/teacher/notifications/clear-all/:teacherId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('teacher_notifications')
+      .where('teacherId', '==', req.params.teacherId).limit(200).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Notifications: admin SSE (push new_notification to all connected admins) ──
+router.get('/api/admin/notifications-sse-count', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('admin_notifications').where('read', '==', false).get();
+    res.json({ count: snap.size });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────

@@ -6,6 +6,9 @@ import {
   rejectAgentDeposit,
 } from '../services/agentService';
 import { useWalletTransactions } from '../services/affiliateService';
+import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
+import { useUniversalFCM } from '../hooks/useUniversalFCM';
+import NotificationBell from '../components/NotificationBell';
 import { Agent, WalletTransaction } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -113,6 +116,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const { agent, loading: agentLoading } = useAgentDataByUid(agentUid);
   const { transactions: agentHistory, loading: historyLoading } = useAgentWithdrawals(agent?.id || null);
   const { settings } = useSettings();
+  const { notifications: notifs, unreadCount: notifCount, loading: notifsLoading, markRead, markAllRead, clearAll } = useRealtimeNotifs('agent', agent?.id || null);
+  useUniversalFCM('agent', agent?.id || null);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -470,10 +475,20 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             </div>
           </div>
         </div>
-        <Button variant="ghost" onClick={onLogout} className="rounded-2xl text-red-500 hover:bg-red-50 h-9 px-4 font-bold text-sm flex items-center gap-2 shrink-0">
-          <LogOut className="h-4 w-4" />
-          Déconnexion
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <NotificationBell
+            notifications={notifs}
+            unreadCount={notifCount}
+            loading={notifsLoading}
+            onMarkRead={markRead}
+            onMarkAllRead={markAllRead}
+            onClearAll={clearAll}
+          />
+          <Button variant="ghost" onClick={onLogout} className="rounded-2xl text-red-500 hover:bg-red-50 h-9 px-4 font-bold text-sm flex items-center gap-2">
+            <LogOut className="h-4 w-4" />
+            Déconnexion
+          </Button>
+        </div>
       </div>
 
       {/* ── Balance Cards ── */}
