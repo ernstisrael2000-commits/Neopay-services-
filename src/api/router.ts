@@ -604,16 +604,14 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
 
     // Validate min/max from settings
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const sData = settingsSnap.exists ? settingsSnap.data()! : {};
     try {
-      const settingsSnap = await adminDb.collection('settings').doc('global').get();
-      if (settingsSnap.exists) {
-        const s = settingsSnap.data()!;
-        const usd = usdAmount || amount;
-        if (s.minWithdrawalUSD && usd < s.minWithdrawalUSD)
-          return res.status(400).json({ error: `Montant minimum: $${s.minWithdrawalUSD.toFixed(2)} USD` });
-        if (s.maxWithdrawalUSD && usd > s.maxWithdrawalUSD)
-          return res.status(400).json({ error: `Montant maximum: $${s.maxWithdrawalUSD.toFixed(2)} USD` });
-      }
+      const usd = usdAmount || amount;
+      if (sData.minWithdrawalUSD && usd < sData.minWithdrawalUSD)
+        return res.status(400).json({ error: `Montant minimum: $${sData.minWithdrawalUSD.toFixed(2)} USD` });
+      if (sData.maxWithdrawalUSD && usd > sData.maxWithdrawalUSD)
+        return res.status(400).json({ error: `Montant maximum: $${sData.maxWithdrawalUSD.toFixed(2)} USD` });
     } catch {}
 
     // Anti double-withdrawal: block if pending withdrawal exists
@@ -632,6 +630,105 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
     if ((clientData.balance || 0) < amount)
       return res.status(400).json({ error: 'Solde insuffisant.' });
 
+    // ── MonCash automatic payout via MonCashConnect ───────────────────────────
+    const isMoncash = method.toLowerCase().includes('moncash');
+    const mccKey    = process.env.MONCASHCONNECT_SECRET_KEY || MCCV2_SECRET_KEY;
+
+    if (isMoncash && mccKey) {
+      const htgAmt    = htgEquivalent || Math.round(amount * Number(sData.exchangeRate || 146));
+      const payoutRef = `WD_${Date.now()}_${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+      const phone     = accountNumber.replace(/\s/g, '');
+
+      console.log(`[withdrawal/auto-moncash] Initiating payout → phone=${phone} htg=${htgAmt} ref=${payoutRef} key_prefix=${mccKey.slice(0,14)}...`);
+
+      const MCC_PAYOUT_URL = 'https://hvlmeoqyxaguzcujpmit.supabase.co/functions/v1/payout';
+      let payoutOk  = false;
+      let payoutErr = '';
+      let mcData: any = {};
+
+      try {
+        const mcRes = await fetch(MCC_PAYOUT_URL, {
+          method : 'POST',
+          headers: {
+            'Content-Type' : 'application/json',
+            'Accept'       : 'application/json',
+            'Authorization': `Bearer ${mccKey}`,
+          },
+          body: JSON.stringify({
+            amount     : htgAmt,
+            phoneNumber: phone,
+            referenceId: payoutRef,
+            description: `Retrait Rena — ${clientName}`,
+          }),
+        });
+        const rawText = await mcRes.text();
+        console.log(`[withdrawal/auto-moncash] payout status=${mcRes.status} body=${rawText.slice(0, 400)}`);
+        try { mcData = JSON.parse(rawText); } catch {}
+        if (mcRes.ok) {
+          payoutOk = true;
+        } else {
+          payoutErr = mcData.message || mcData.error || `Erreur MonCashConnect (${mcRes.status})`;
+        }
+      } catch (fetchErr: any) {
+        payoutErr = fetchErr.message || 'Erreur réseau MonCashConnect';
+      }
+
+      if (!payoutOk) {
+        console.error(`[withdrawal/auto-moncash] ❌ payout failed: ${payoutErr}`);
+        return res.status(502).json({ error: `Retrait MonCash échoué : ${payoutErr}` });
+      }
+
+      // Payout succeeded → deduct balance + record completed transaction atomically
+      const batch  = adminDb.batch();
+      const txRef  = adminDb.collection('client_transactions').doc();
+      const notifRef = adminDb.collection('client_notifications').doc();
+
+      batch.update(clientRef, {
+        balance: Math.max(0, (clientData.balance || 0) - amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      batch.set(txRef, {
+        clientId, clientName, type: 'withdrawal', amount, status: 'approved',
+        method, accountNumber,
+        ...(usdAmount !== undefined && { usdAmount }),
+        ...(htgEquivalent !== undefined && { htgEquivalent: htgAmt }),
+        ...(exchangeRate !== undefined && { exchangeRate }),
+        ...(accountName && { accountName }),
+        ...(message && { message }),
+        payoutProvider : 'moncashconnect',
+        payoutReference: payoutRef,
+        payoutPhone    : phone,
+        payoutResponse : mcData,
+        description    : `Retrait MonCash auto — ${htgAmt.toLocaleString()} HTG → ${phone} — Réf: ${payoutRef}`,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        approvedAt: FieldValue.serverTimestamp(),
+      });
+      batch.set(notifRef, {
+        clientId, type: 'withdrawal_approved',
+        title  : '✅ Retrait approuvé',
+        message: `${htgAmt.toLocaleString()} HTG envoyés automatiquement sur le ${phone}.`,
+        amount, read: false, createdAt: FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+
+      try { pushClientEvent(clientId, 'tx_approved', { type: 'withdrawal', usd: amount }); } catch {}
+      sendFcmToClient(
+        clientId,
+        '✅ Retrait MonCash effectué',
+        `${htgAmt.toLocaleString()} HTG envoyés sur le ${phone} automatiquement.`,
+        { type: 'withdrawal_approved', txId: txRef.id }
+      );
+      fireEmail(
+        () => emailWithdrawalApproved({ clientName, clientEmail: clientData.email, amount: usdAmount || amount }),
+        { type: 'withdrawal_approved', to: clientData.email || '', clientId, amount: usdAmount || amount }
+      );
+
+      console.log(`[withdrawal/auto-moncash] ✅ ${htgAmt} HTG → ${phone} ref=${payoutRef}`);
+      return res.json({ success: true, transactionId: txRef.id, auto: true, payoutReference: payoutRef });
+    }
+
+    // ── Non-MonCash or MonCash without API key → manual pending flow ──────────
     const batch = adminDb.batch();
     batch.update(clientRef, {
       balance: Math.max(0, (clientData.balance || 0) - amount),
@@ -667,8 +764,7 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
 
     sendAdminEmail(
       `🏧 Retrait — ${clientName}`,
-      `Nouvelle demande de retrait.\n\n` +
-      `Client : ${clientName}\nTéléphone : ${clientPhone || 'N/A'}\n` +
+      `Nouvelle demande de retrait.\n\nClient : ${clientName}\nTéléphone : ${clientPhone || 'N/A'}\n` +
       `Wallet ID : ${clientWalletId || 'N/A'}\n` +
       `Montant USD : $${(usdAmount || amount).toFixed ? (usdAmount || amount).toFixed(2) : usdAmount || amount}\n` +
       (htgEquivalent ? `≈ HTG : ${htgEquivalent.toLocaleString()} HTG\n` : '') +
@@ -677,18 +773,14 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       (message ? `Message : ${message}\n` : '') +
       `\n⚠️ Solde débité. Traitez ce retrait depuis le tableau de bord.`
     );
-
-    // Resend email
     fireEmail(
       () => emailWithdrawalSubmitted({ clientName, clientEmail: clientData.email, amount: usdAmount || amount, method, accountNumber, accountName }),
       { type: 'withdrawal_submitted', to: [ADMIN_EMAIL, ...(clientData.email ? [clientData.email] : [])], clientId, amount: usdAmount || amount }
     );
-
     sendPushToAdmins(
       `🏧 Nouveau retrait — ${clientName}`,
       `$${(usdAmount || amount).toFixed ? (usdAmount || amount).toFixed(2) : usdAmount || amount} via ${method} → ${accountNumber}`
     );
-
     sendFcmToClient(
       clientId,
       '🏧 Retrait en cours',
@@ -4818,15 +4910,53 @@ const MCCV2_SECRET_KEY     = process.env.MONCASHCONNECT_SECRET_KEY     || MCC_SE
 const MCCV2_WEBHOOK_SECRET = process.env.MONCASHCONNECT_WEBHOOK_SECRET || MCC_WEBHOOK_SECRET;
 const MCCV2_APP_URL        = process.env.APP_URL || '';
 const MCCV2_API_URL        = 'https://hvlmeoqyxaguzcujpmit.supabase.co/functions/v1/pay-create';
+const MCCV2_PAYOUT_URL     = 'https://hvlmeoqyxaguzcujpmit.supabase.co/functions/v1/payout';
+
+// Log key status at startup for diagnosis
+{
+  const k = process.env.MONCASHCONNECT_SECRET_KEY || '';
+  if (k) {
+    console.log(`[MonCashConnect] Clé chargée — préfixe: ${k.slice(0, 16)}... longueur: ${k.length}`);
+  } else {
+    console.warn('[MonCashConnect] ⚠️  MONCASHCONNECT_SECRET_KEY non définie !');
+  }
+}
+
+// Helper: always reads key fresh from env at call time (never stale constant)
+function getMccKey(): string {
+  return process.env.MONCASHCONNECT_SECRET_KEY || MCCV2_SECRET_KEY;
+}
 
 function mccHeaders() {
-  const key = process.env.MONCASHCONNECT_SECRET_KEY || MCC_SECRET_KEY;
   return {
     'Content-Type' : 'application/json',
     'Accept'       : 'application/json',
-    'Authorization': `Bearer ${key}`,
+    'Authorization': `Bearer ${getMccKey()}`,
   };
 }
+
+// GET /api/admin/moncashconnect/ping — test connectivity & key validity
+router.get('/api/admin/moncashconnect/ping', async (req, res) => {
+  const key = getMccKey();
+  if (!key) return res.status(503).json({ ok: false, error: 'MONCASHCONNECT_SECRET_KEY non définie.' });
+  try {
+    // Try pay-status with a dummy ref to probe if key is valid
+    const probe = await fetch(`https://hvlmeoqyxaguzcujpmit.supabase.co/functions/v1/pay-status?referenceId=PING_TEST`, {
+      method : 'GET',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    });
+    const body = await probe.text();
+    const keyPrefix = key.slice(0, 16) + '...';
+    console.log(`[moncashconnect/ping] status=${probe.status} body=${body.slice(0, 200)}`);
+    // 401 = key rejected, 404 = key valid but ref not found (expected), 200 = found
+    if (probe.status === 401) {
+      return res.json({ ok: false, keyPrefix, httpStatus: 401, error: JSON.parse(body).error || 'Clé rejetée', hint: 'La clé doit commencer par sk_proj_ (prod) ou sk_test_proj_ (sandbox)' });
+    }
+    return res.json({ ok: true, keyPrefix, httpStatus: probe.status, message: 'Clé acceptée par MonCashConnect ✅' });
+  } catch (e: any) {
+    res.status(502).json({ ok: false, error: e.message });
+  }
+});
 
 function generateMoncashRef(): string {
   const year = new Date().getFullYear();
@@ -5205,10 +5335,12 @@ router.post('/api/deposit/create', requireDb, async (req, res) => {
     const base   = MCCV2_APP_URL || `${proto}://${host}`;
     const returnUrl = `${base}/?moncash_ref=${referenceId}`;
 
+    const activeKey = process.env.MONCASHCONNECT_SECRET_KEY || MCCV2_SECRET_KEY;
+    console.log(`[deposit/create] key_prefix=${activeKey.slice(0, 14)}... len=${activeKey.length}`);
     const mcRes = await fetch(MCCV2_API_URL, {
       method : 'POST',
       headers: {
-        'Authorization': `Bearer ${MCCV2_SECRET_KEY}`,
+        'Authorization': `Bearer ${activeKey}`,
         'Content-Type' : 'application/json',
       },
       body: JSON.stringify({ amount: htg, referenceId, returnUrl }),
