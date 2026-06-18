@@ -2159,6 +2159,7 @@ function EmailLogsPanel() {
     {
       title: "Administration & Paramètres",
       items: [
+        { value: 'profits', label: 'Profits', icon: LucideIcons.TrendingUp, permission: 'settings' },
         { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
         { value: 'email-logs', label: 'Logs Emails', icon: LucideIcons.Mail, permission: 'settings' },
@@ -2183,6 +2184,22 @@ function EmailLogsPanel() {
   const [activeTab, setActiveTab] = useState(visibleMenuItems[0]?.value || 'parcels');
   const [isAffiliateDeleteConfirmOpen, setIsAffiliateDeleteConfirmOpen] = useState(false);
   const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
+
+  // ── Profit stats state ──────────────────────────────────────────────────────
+  const [profitStats, setProfitStats] = useState<{
+    feesBalance: number;
+    lastReset: any;
+    breakdown: {
+      clientDepositFees: number;
+      clientWithdrawalFees: number;
+      formationPlatformFees: number;
+      teacherWithdrawalFees: number;
+      affiliateWithdrawalFees: number;
+    };
+  } | null>(null);
+  const [profitStatsLoading, setProfitStatsLoading] = useState(false);
+  const profitStatsLoaded = useRef(false);
+  const [resettingProfit, setResettingProfit] = useState(false);
 
   // ── Teacher management state ────────────────────────────────────────────────
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -2211,6 +2228,30 @@ function EmailLogsPanel() {
       setTeachers(data.teachers || []);
     } catch { toast.error('Erreur chargement professeurs.'); }
     finally { setTeachersLoading(false); }
+  };
+
+  const fetchProfitStats = async () => {
+    setProfitStatsLoading(true);
+    try {
+      const res = await fetch('/api/admin/profit-stats');
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      const data = await res.json();
+      setProfitStats(data);
+      profitStatsLoaded.current = true;
+    } catch { toast.error('Erreur chargement statistiques de profit.'); }
+    finally { setProfitStatsLoading(false); }
+  };
+
+  const handleProfitReset = async () => {
+    if (!confirm('Réinitialiser le solde des profits ? Cette action enregistre un historique et remet les compteurs à zéro.')) return;
+    setResettingProfit(true);
+    try {
+      const res = await fetch('/api/admin/profit/reset', { method: 'POST' });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success('Solde des profits réinitialisé !');
+      fetchProfitStats();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setResettingProfit(false); }
   };
 
   const fetchTeacherWithdrawals = async () => {
@@ -8571,6 +8612,125 @@ function EmailLogsPanel() {
                     </TableBody>
                   </Table>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ── PROFITS TAB ──────────────────────────────────────────────────── */}
+        <TabsContent value="profits" className="space-y-6">
+          {(() => { if (!profitStatsLoaded.current && !profitStatsLoading) fetchProfitStats(); return null; })()}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-dark flex items-center gap-2">
+                <LucideIcons.TrendingUp className="h-5 w-5 text-emerald-600" />
+                Profits de la Plateforme
+              </h2>
+              <p className="text-sm text-gray-500 mt-0.5">Cumul de tous les frais perçus sur l'ensemble des opérations.</p>
+            </div>
+            <Button
+              onClick={handleProfitReset}
+              disabled={resettingProfit}
+              variant="outline"
+              className="border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-bold text-sm h-10 gap-2"
+            >
+              {resettingProfit ? <Loader2 className="h-4 w-4 animate-spin" /> : <LucideIcons.RotateCcw className="h-4 w-4" />}
+              Réinitialiser
+            </Button>
+          </div>
+
+          {profitStatsLoading ? (
+            <div className="flex items-center justify-center py-16 text-gray-400"><Loader2 className="h-8 w-8 animate-spin" /></div>
+          ) : profitStats ? (
+            <>
+              {/* Total profit card */}
+              <Card className="border-0 shadow-xl rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                <CardContent className="p-7">
+                  <p className="text-emerald-100 text-xs font-black uppercase tracking-widest mb-1">Profit Total Accumulé</p>
+                  <p className="text-5xl font-black tracking-tight">
+                    ${(profitStats.feesBalance + profitStats.breakdown.formationPlatformFees).toFixed(2)}
+                  </p>
+                  <p className="text-emerald-200 text-sm mt-1 font-semibold">
+                    ≈ {Math.round((profitStats.feesBalance + profitStats.breakdown.formationPlatformFees) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                  </p>
+                  {profitStats.lastReset?._seconds && (
+                    <p className="text-emerald-200/70 text-xs mt-3 font-semibold">
+                      Dernière réinitialisation : {format(new Date(profitStats.lastReset._seconds * 1000), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Breakdown grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  {
+                    label: 'Frais Dépôts Clients',
+                    value: profitStats.breakdown.clientDepositFees,
+                    icon: LucideIcons.ArrowDownCircle,
+                    color: 'text-blue-600',
+                    bg: 'bg-blue-50',
+                    border: 'border-blue-100',
+                  },
+                  {
+                    label: 'Frais Retraits Clients',
+                    value: profitStats.breakdown.clientWithdrawalFees,
+                    icon: LucideIcons.ArrowUpCircle,
+                    color: 'text-orange-600',
+                    bg: 'bg-orange-50',
+                    border: 'border-orange-100',
+                  },
+                  {
+                    label: 'Commission Formations',
+                    value: profitStats.breakdown.formationPlatformFees,
+                    icon: LucideIcons.GraduationCap,
+                    color: 'text-violet-600',
+                    bg: 'bg-violet-50',
+                    border: 'border-violet-100',
+                  },
+                  {
+                    label: 'Frais Retraits Professeurs',
+                    value: profitStats.breakdown.teacherWithdrawalFees,
+                    icon: LucideIcons.Banknote,
+                    color: 'text-indigo-600',
+                    bg: 'bg-indigo-50',
+                    border: 'border-indigo-100',
+                  },
+                  {
+                    label: 'Frais Retraits Affiliés',
+                    value: profitStats.breakdown.affiliateWithdrawalFees,
+                    icon: LucideIcons.Users,
+                    color: 'text-pink-600',
+                    bg: 'bg-pink-50',
+                    border: 'border-pink-100',
+                  },
+                ].map(({ label, value, icon: Icon, color, bg, border }) => (
+                  <Card key={label} className={`border ${border} shadow-none rounded-2xl`}>
+                    <CardContent className="p-5 flex items-center gap-4">
+                      <div className={`h-12 w-12 rounded-2xl ${bg} flex items-center justify-center flex-shrink-0`}>
+                        <Icon className={`h-6 w-6 ${color}`} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                        <p className={`text-2xl font-black ${color} mt-0.5`}>${value.toFixed(2)}</p>
+                        <p className="text-xs text-gray-400 font-semibold mt-0.5">
+                          ≈ {Math.round(value * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <p className="text-xs text-gray-400 text-center font-medium">
+                Les commissions formations sont calculées sur l'ensemble de l'historique. Les frais clients/affiliés/professeurs sont remis à zéro lors de la réinitialisation.
+              </p>
+            </>
+          ) : (
+            <Card className="border-dashed border-2 border-gray-200 shadow-none">
+              <CardContent className="py-14 text-center text-gray-400">
+                <LucideIcons.TrendingUp className="h-10 w-10 mx-auto mb-3 text-gray-200" />
+                <p className="font-semibold">Aucune donnée disponible</p>
               </CardContent>
             </Card>
           )}

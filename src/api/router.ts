@@ -5286,6 +5286,139 @@ router.put('/api/admin/teacher-fee', requireDb, async (req, res) => {
   }
 });
 
+// ── Teacher withdrawals (alias routes expected by AdminDashboard) ─────────────
+router.get('/api/admin/teacher-withdrawals', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('teacher_transactions')
+      .where('type', '==', 'withdrawal')
+      .orderBy('createdAt', 'desc')
+      .get();
+    res.json({ withdrawals: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch('/api/admin/teacher-withdrawals/:id', requireDb, async (req, res) => {
+  const { action, reason } = req.body as { action: 'approve' | 'reject'; reason?: string };
+  if (action !== 'approve' && action !== 'reject')
+    return res.status(400).json({ error: 'action doit être "approve" ou "reject".' });
+
+  try {
+    const txRef = adminDb.collection('teacher_transactions').doc(req.params.id);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const tx = txSnap.data()!;
+    if (tx.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+
+    if (action === 'approve') {
+      const teacherRef = adminDb.collection('teachers').doc(tx.teacherId);
+      const teacherSnap = await teacherRef.get();
+      if (!teacherSnap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
+      const teacherData = teacherSnap.data()!;
+      const newBalance = Math.max(0, (teacherData.balance || 0) - (tx.amount || 0));
+      const feeAmount = parseFloat(((tx.amount || 0) - (tx.netAmount || 0)).toFixed(4));
+      const batch = adminDb.batch();
+      batch.update(txRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+      batch.update(teacherRef, { balance: newBalance, updatedAt: FieldValue.serverTimestamp() });
+      if (feeAmount > 0) {
+        batch.update(adminDb.collection('settings').doc('global'), {
+          feesBalance: FieldValue.increment(feeAmount),
+          teacherWithdrawalFeesTotal: FieldValue.increment(feeAmount),
+        });
+      }
+      await batch.commit();
+    } else {
+      await txRef.update({
+        status: 'rejected',
+        rejectionReason: reason || '',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Profit stats (combined fees from all sources) ──────────────────────
+router.get('/api/admin/profit-stats', requireDb, async (_req, res) => {
+  try {
+    const [globalSnap, txSnap, teacherTxSnap] = await Promise.all([
+      adminDb.collection('settings').doc('global').get(),
+      adminDb.collection('client_transactions').where('adminFeeShare', '>', 0).get(),
+      adminDb.collection('teacher_transactions').get(),
+    ]);
+
+    const globalData = globalSnap.exists ? globalSnap.data()! : {};
+    const feesBalance = globalData.feesBalance || 0;
+    const lastReset = globalData.lastProfitReset || null;
+
+    // Formation platform fees (sum of platformFee from sale_credit)
+    let formationFees = 0;
+    let teacherWithdrawalFees = 0;
+    for (const doc of teacherTxSnap.docs) {
+      const d = doc.data();
+      if (d.type === 'sale_credit' && d.platformFee) formationFees += d.platformFee;
+      if (d.type === 'withdrawal' && d.status === 'approved') {
+        const fee = parseFloat(((d.amount || 0) - (d.netAmount || 0)).toFixed(4));
+        if (fee > 0) teacherWithdrawalFees += fee;
+      }
+    }
+
+    // Client/agent fee breakdown from client_transactions
+    let depositFees = 0, withdrawalFees = 0;
+    for (const doc of txSnap.docs) {
+      const d = doc.data();
+      const share = d.adminFeeShare || 0;
+      if (d.type === 'deposit') depositFees += share;
+      else withdrawalFees += share;
+    }
+
+    // Affiliate withdrawal fees (tracked separately in settings)
+    const affiliateWithdrawalFees = globalData.affiliateWithdrawalFeesTotal || 0;
+    const teacherWdFeesTotal = globalData.teacherWithdrawalFeesTotal || 0;
+
+    res.json({
+      feesBalance,
+      lastReset,
+      breakdown: {
+        clientDepositFees: parseFloat(depositFees.toFixed(4)),
+        clientWithdrawalFees: parseFloat(withdrawalFees.toFixed(4)),
+        formationPlatformFees: parseFloat(formationFees.toFixed(4)),
+        teacherWithdrawalFees: parseFloat((teacherWdFeesTotal || teacherWithdrawalFees).toFixed(4)),
+        affiliateWithdrawalFees: parseFloat(affiliateWithdrawalFees.toFixed(4)),
+      },
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Reset accumulated profit balance ───────────────────────────────────
+router.post('/api/admin/profit/reset', requireDb, async (req, res) => {
+  try {
+    const settingsRef = adminDb.collection('settings').doc('global');
+    const snap = await settingsRef.get();
+    const current = snap.exists ? (snap.data()!.feesBalance || 0) : 0;
+    await settingsRef.set({
+      feesBalance: 0,
+      lastProfitReset: FieldValue.serverTimestamp(),
+      teacherWithdrawalFeesTotal: 0,
+      affiliateWithdrawalFeesTotal: 0,
+    }, { merge: true });
+    await adminDb.collection('admin_notifications').add({
+      type: 'profit_reset',
+      previousBalance: current,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, previousBalance: current });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Formation purchase fee (platform commission on formation sales) ────────────
 router.get('/api/admin/formation-fee', requireDb, async (_req, res) => {
   try {

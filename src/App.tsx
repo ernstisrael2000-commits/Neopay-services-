@@ -1,24 +1,26 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Navbar from './layouts/Navbar';
 import BottomNav from './layouts/BottomNav';
 import FormationsNavbar from './layouts/FormationsNavbar';
-import TrackingView from './pages/TrackingView';
-import AdminDashboard from './pages/AdminDashboard';
-import HomeView from './pages/HomeView';
-import ShippingView from './pages/ShippingView';
-import FormationsView from './pages/FormationsView';
-import ProductsView from './pages/ProductsView';
-import ServicesView from './pages/ServicesView';
-import AffiliateDashboard from './pages/AffiliateDashboard';
-import ClientDashboard from './pages/ClientDashboard';
-import PaymentSuccessView from './pages/PaymentSuccessView';
-import PaymentSuccessPage from './pages/PaymentSuccessPage';
-import AdminLogin from './components/AdminLogin';
-import AffiliateLogin from './components/AffiliateLogin';
-import TeacherLogin from './components/TeacherLogin';
-import TeacherDashboard from './pages/TeacherDashboard';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
+
+// Heavy pages — loaded only when the user navigates to them
+const HomeView = lazy(() => import('./pages/HomeView'));
+const TrackingView = lazy(() => import('./pages/TrackingView'));
+const ShippingView = lazy(() => import('./pages/ShippingView'));
+const FormationsView = lazy(() => import('./pages/FormationsView'));
+const ProductsView = lazy(() => import('./pages/ProductsView'));
+const ServicesView = lazy(() => import('./pages/ServicesView'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AffiliateDashboard = lazy(() => import('./pages/AffiliateDashboard'));
+const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'));
+const PaymentSuccessView = lazy(() => import('./pages/PaymentSuccessView'));
+const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
+const AdminLogin = lazy(() => import('./components/AdminLogin'));
+const AffiliateLogin = lazy(() => import('./components/AffiliateLogin'));
+const TeacherLogin = lazy(() => import('./components/TeacherLogin'));
+const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import UserAuthModal from './components/UserAuthModal';
@@ -319,6 +321,7 @@ export default function App() {
         )}
 
         <main className={`animate-in fade-in duration-500 ${view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'} flex-grow relative ${!['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[74px]' : ''}`}>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-[40vh]"><div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
               <Button 
@@ -413,6 +416,7 @@ export default function App() {
             )
           )}
 
+        </Suspense>
         </main>
 
         {!['admin', 'affiliate', 'teacher', 'formations'].includes(view) && (
@@ -438,33 +442,35 @@ export default function App() {
 
         <Toaster position="top-right" />
 
-        <AnimatePresence>
-          {showClientDashboard && loggedClient && (
-            <ClientDashboard
-              clientId={loggedClient.id!}
-              onLogout={handleClientLogout}
-              open={showClientDashboard}
-              onClose={() => setShowClientDashboard(false)}
-            />
-          )}
-        </AnimatePresence>
+        <Suspense fallback={null}>
+          <AnimatePresence>
+            {showClientDashboard && loggedClient && (
+              <ClientDashboard
+                clientId={loggedClient.id!}
+                onLogout={handleClientLogout}
+                open={showClientDashboard}
+                onClose={() => setShowClientDashboard(false)}
+              />
+            )}
+          </AnimatePresence>
 
-        <AnimatePresence>
-          {moncashReturnRef && (
-            <PaymentSuccessView
-              referenceId={moncashReturnRef}
-              onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
-            />
-          )}
-        </AnimatePresence>
+          <AnimatePresence>
+            {moncashReturnRef && (
+              <PaymentSuccessView
+                referenceId={moncashReturnRef}
+                onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
+              />
+            )}
+          </AnimatePresence>
 
-        <AnimatePresence>
-          {showPaymentSuccess && (
-            <PaymentSuccessPage
-              onClose={() => { setShowPaymentSuccess(false); setShowClientDashboard(true); }}
-            />
-          )}
-        </AnimatePresence>
+          <AnimatePresence>
+            {showPaymentSuccess && (
+              <PaymentSuccessPage
+                onClose={() => { setShowPaymentSuccess(false); setShowClientDashboard(true); }}
+              />
+            )}
+          </AnimatePresence>
+        </Suspense>
 
         <UserAuthModal
           open={showAuthModal}
@@ -476,7 +482,7 @@ export default function App() {
           onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
         />
 
-        <PWAInstallPrompt />
+        <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
       </div>
     </ErrorBoundary>
   );
