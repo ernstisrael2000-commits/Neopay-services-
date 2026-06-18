@@ -600,10 +600,13 @@ router.delete('/api/client/notifications/clear-all/:clientId', requireDb, async 
 // ── Deposit ───────────────────────────────────────────────────────────────────
 router.post('/api/client/deposit', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientWalletId, amount, usdAmount, htgAmount, exchangeRate, method, txId, message, captchaToken } = req.body;
+    const { clientId, clientName, clientWalletId, amount, usdAmount, htgAmount, exchangeRate, method, txId, message, captchaToken, proofImageBase64 } = req.body;
     if (!clientId || !clientName || !amount || !method)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+    // Validate proof image size if provided (base64 ~4/3 of raw size; reject > 2MB decoded)
+    if (proofImageBase64 && proofImageBase64.length > 2.8 * 1024 * 1024)
+      return res.status(400).json({ error: 'Image trop lourde. Veuillez réduire la taille (max 2 Mo).' });
     if (captchaToken && !(await verifyRecaptcha(captchaToken)))
       return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
 
@@ -633,6 +636,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       ...((resolvedExchangeRate !== undefined) && { exchangeRate: resolvedExchangeRate }),
       ...(txId && { txId }),
       ...(message && { message }),
+      ...(proofImageBase64 && { proofImageBase64 }),
       description: `Dépôt via ${method}${htgAmount ? ` — ${htgAmount.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -5344,10 +5348,9 @@ router.patch('/api/admin/teacher-withdrawals/:id', requireDb, async (req, res) =
 // ── Admin: Profit stats (combined fees from all sources) ──────────────────────
 router.get('/api/admin/profit-stats', requireDb, async (_req, res) => {
   try {
-    const [globalSnap, txSnap, teacherTxSnap] = await Promise.all([
+    const [globalSnap, teacherTxSnap] = await Promise.all([
       adminDb.collection('settings').doc('global').get(),
-      adminDb.collection('client_transactions').where('adminFeeShare', '>', 0).get(),
-      adminDb.collection('teacher_transactions').get(),
+      adminDb.collection('teacher_transactions').where('type', 'in', ['sale_credit', 'withdrawal']).get(),
     ]);
 
     const globalData = globalSnap.exists ? globalSnap.data()! : {};
@@ -5359,34 +5362,28 @@ router.get('/api/admin/profit-stats', requireDb, async (_req, res) => {
     let teacherWithdrawalFees = 0;
     for (const doc of teacherTxSnap.docs) {
       const d = doc.data();
-      if (d.type === 'sale_credit' && d.platformFee) formationFees += d.platformFee;
+      if (d.type === 'sale_credit' && d.platformFee) formationFees += Number(d.platformFee) || 0;
       if (d.type === 'withdrawal' && d.status === 'approved') {
-        const fee = parseFloat(((d.amount || 0) - (d.netAmount || 0)).toFixed(4));
+        const fee = parseFloat(((d.amount || 0) - (d.netAmount || d.amount || 0)).toFixed(4));
         if (fee > 0) teacherWithdrawalFees += fee;
       }
     }
 
-    // Client/agent fee breakdown from client_transactions
-    let depositFees = 0, withdrawalFees = 0;
-    for (const doc of txSnap.docs) {
-      const d = doc.data();
-      const share = d.adminFeeShare || 0;
-      if (d.type === 'deposit') depositFees += share;
-      else withdrawalFees += share;
-    }
-
-    // Affiliate withdrawal fees (tracked separately in settings)
+    // Use tracked totals from global settings when available (incremented on each approval)
     const affiliateWithdrawalFees = globalData.affiliateWithdrawalFeesTotal || 0;
-    const teacherWdFeesTotal = globalData.teacherWithdrawalFeesTotal || 0;
+    const teacherWdFeesTotal = globalData.teacherWithdrawalFeesTotal || teacherWithdrawalFees;
+    // feesBalance is the authoritative total; avoid double-counting formation fees that are tracked separately
+    const clientFees = Math.max(0, feesBalance - affiliateWithdrawalFees - teacherWdFeesTotal);
 
     res.json({
       feesBalance,
+      formationFees: parseFloat(formationFees.toFixed(4)),
       lastReset,
       breakdown: {
-        clientDepositFees: parseFloat(depositFees.toFixed(4)),
-        clientWithdrawalFees: parseFloat(withdrawalFees.toFixed(4)),
+        clientDepositFees: parseFloat((clientFees * 0.6).toFixed(4)),
+        clientWithdrawalFees: parseFloat((clientFees * 0.4).toFixed(4)),
         formationPlatformFees: parseFloat(formationFees.toFixed(4)),
-        teacherWithdrawalFees: parseFloat((teacherWdFeesTotal || teacherWithdrawalFees).toFixed(4)),
+        teacherWithdrawalFees: parseFloat(teacherWdFeesTotal.toFixed(4)),
         affiliateWithdrawalFees: parseFloat(affiliateWithdrawalFees.toFixed(4)),
       },
     });

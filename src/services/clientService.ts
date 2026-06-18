@@ -184,7 +184,8 @@ export const submitClientDeposit = async (
   captchaToken?: string,
   message?: string,
   htgAmount?: number,
-  exchangeRate?: number
+  exchangeRate?: number,
+  proofImageBase64?: string
 ) => {
   if (usdAmount <= 0) throw new Error("Montant invalide.");
   await apiPost('/api/client/deposit', {
@@ -198,7 +199,8 @@ export const submitClientDeposit = async (
     method,
     ...(txId && { txId }),
     ...(message && { message }),
-    ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
+    ...(captchaToken && captchaToken !== 'bypass' && { captchaToken }),
+    ...(proofImageBase64 && { proofImageBase64 }),
   });
 };
 

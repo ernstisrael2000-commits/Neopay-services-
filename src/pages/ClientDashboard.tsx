@@ -202,6 +202,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [depositMessage,      setDepositMessage]      = useState('');
   const [depositCaptchaToken, setDepositCaptchaToken] = useState<string | null>(null);
   const depositCaptchaRef = useRef<ReCAPTCHA>(null);
+  const [depositProofFile,    setDepositProofFile]    = useState<File | null>(null);
+  const [depositProofPreview, setDepositProofPreview] = useState<string | null>(null);
+  const depositProofRef = useRef<HTMLInputElement>(null);
 
   // Withdrawal state
   const [withdrawMethod,       setWithdrawMethod]       = useState<PaymentMethod | null>(null);
@@ -308,6 +311,22 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setHtgAmount(''); setDepositTxId(''); setDepositMessage('');
     setDepositCaptchaToken(null); depositCaptchaRef.current?.reset();
     setDepositMode('standard'); setAgentQrAmount(''); setTxCode(null);
+    setDepositProofFile(null); setDepositProofPreview(null);
+    if (depositProofRef.current) depositProofRef.current.value = '';
+  };
+
+  const handleDepositProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image trop lourde (max 2 Mo). Veuillez compresser l\'image.');
+      e.target.value = '';
+      return;
+    }
+    setDepositProofFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setDepositProofPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
   const resetWithdraw = () => {
@@ -503,8 +522,17 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     if (RECAPTCHA_SITE_KEY && !depositCaptchaToken) { toast.error('Validez le captcha.'); return; }
     setActionLoading(true);
     try {
+      let proofImageBase64: string | undefined;
+      if (depositProofFile) {
+        proofImageBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(depositProofFile);
+        });
+      }
       await submitClientDeposit(client!, usd, depositMethod.name, depositTxId || undefined,
-        depositCaptchaToken || undefined, depositMessage || undefined, htg, effectiveDepositRate);
+        depositCaptchaToken || undefined, depositMessage || undefined, htg, effectiveDepositRate, proofImageBase64);
       const msg = `Bonjour Rena 👋,\n\nDemande de *DÉPÔT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
         `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htg.toLocaleString()} HTG* (taux: ${effectiveDepositRate})\n` +
@@ -1178,6 +1206,47 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}
                 placeholder="Ex: TX-1234567890" className="h-11 rounded-xl font-mono" />
             </div>
+
+            {/* ── Proof image upload (MonCash / NatCash only) ── */}
+            {depositMethod && (depositMethod.id === 'moncash' || depositMethod.id === 'natcash' || depositMethod.type === 'mobile_money') && (
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                  Preuve de paiement <span className="text-emerald-600">(capture d'écran)</span>
+                </Label>
+                {depositProofPreview ? (
+                  <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-200">
+                    <img src={depositProofPreview} alt="Preuve" className="w-full h-32 object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => { setDepositProofFile(null); setDepositProofPreview(null); if (depositProofRef.current) depositProofRef.current.value = ''; }}
+                      className="absolute top-2 right-2 h-7 w-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-emerald-600/90 text-white text-[10px] font-black text-center py-1 uppercase tracking-wider">
+                      Preuve sélectionnée ✓
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 border-dashed border-emerald-200 bg-emerald-50/50 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50 transition-colors">
+                    <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                      <Send className="h-5 w-5 text-emerald-600 rotate-[-45deg]" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-black text-emerald-700">Téléverser la preuve</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">JPG, PNG · max 2 Mo</p>
+                    </div>
+                    <input
+                      ref={depositProofRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleDepositProofChange}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>

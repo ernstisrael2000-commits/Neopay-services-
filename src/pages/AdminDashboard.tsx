@@ -1474,7 +1474,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     }
   };
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
 // New component to isolate state and prevent massive re-renders
 const AffiliateEditForm = ({ 
@@ -4094,6 +4094,16 @@ function EmailLogsPanel() {
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            variant="outline"
+            className="flex-none h-11 px-3 sm:px-4 rounded-2xl border-gray-200 bg-gray-50 hover:bg-white hover:border-primary/40 hover:text-primary font-bold gap-2"
+          >
+            {isSidebarOpen ? <LucideIcons.X className="h-5 w-5 shrink-0" /> : <LucideIcons.Menu className="h-5 w-5 shrink-0" />}
+            <span className="hidden sm:inline text-sm max-w-[120px] truncate">
+              {visibleMenuItems.find(i => i.value === activeTab)?.label || 'Menu'}
+            </span>
+          </Button>
           {admin.isSuperAdmin && (
             <Button 
               variant="outline" 
@@ -4115,127 +4125,107 @@ function EmailLogsPanel() {
         </div>
       </div>
 
-      {/* Main Admin Content with Sidebar Layout */}
-      <div className="flex flex-col lg:flex-row gap-8 relative items-start">
-        {/* Toggle Button for Mobile/Collapsed */}
-        {!isSidebarOpen && (
-          <Button
-            onClick={() => setIsSidebarOpen(true)}
-            className="fixed left-6 bottom-6 z-50 h-16 w-16 rounded-full bg-black text-white border-0 shadow-2xl hover:scale-110 active:scale-95 flex items-center justify-center p-0 group overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <LucideIcons.Settings2 className="h-7 w-7 relative z-10" />
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0 border-2 border-white/20 rounded-full scale-90"
+      {/* Burger Menu Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
             />
-          </Button>
-        )}
-
-        <AnimatePresence mode="wait">
-          {isSidebarOpen && (
-            <motion.aside 
-              initial={{ x: -300, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -300, opacity: 0 }}
+            <motion.aside
+              initial={{ x: -320 }}
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="lg:w-80 shrink-0 w-full lg:sticky lg:top-24 z-40"
+              className="fixed left-0 top-0 bottom-0 w-80 bg-white z-50 shadow-2xl flex flex-col"
             >
-              <Card className="rounded-[2.5rem] p-6 bg-white border-0 shadow-2xl overflow-hidden relative group">
-                <div className="absolute top-0 right-0 p-4">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => setIsSidebarOpen(false)}
-                    className="h-10 w-10 rounded-2xl bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary transition-all"
-                  >
-                    <LucideIcons.PanelLeftClose className="h-5 w-5" />
-                  </Button>
+              <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-2xl bg-primary flex items-center justify-center shrink-0 shadow-lg shadow-primary/30">
+                    <Shield className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-black text-dark text-sm leading-tight">Navigation</p>
+                    <p className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">{admin.fullName}</p>
+                  </div>
                 </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(false)}
+                  className="h-9 w-9 rounded-xl hover:bg-gray-100 shrink-0">
+                  <LucideIcons.X className="h-4 w-4" />
+                </Button>
+              </div>
 
-                <div className="space-y-8 mt-4">
-                  {menuGroups.map((group, groupIdx) => {
-                    const visibleItemsInGroup = group.items.filter(item => 
-                      visibleMenuItems.some(v => v.value === item.value)
-                    );
-                    
-                    if (visibleItemsInGroup.length === 0) return null;
-
-                    return (
-                      <div key={groupIdx} className="space-y-3">
-                        <h4 className="px-4 text-[11px] font-black text-gray-400 uppercase tracking-widest leading-none flex items-center gap-2">
-                          <span className="h-px bg-gray-100 flex-1"></span>
-                          {group.title}
-                        </h4>
-                        <div className="space-y-1">
-                          {visibleItemsInGroup.map((item) => (
-                            <button
-                              key={item.value}
-                              onClick={() => {
-                                setActiveTab(item.value);
-                                if (window.innerWidth < 1024) setIsSidebarOpen(false);
-                              }}
-                              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group relative ${
-                                activeTab === item.value 
-                                ? 'bg-primary text-white shadow-xl shadow-primary/30 scale-[1.02]' 
-                                : 'text-gray-500 hover:bg-accent-light hover:text-primary'
-                              }`}
-                            >
-                              <item.icon className={`h-5 w-5 transition-transform ${activeTab === item.value ? 'scale-110' : 'group-hover:scale-110'}`} />
-                              <span className="font-black text-sm tracking-tight">{item.label}</span>
-                              
-                              {/* Sidebar Badges */}
-                              {item.value === 'affiliates' && pendingRegistrations.length > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-indigo-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingRegistrations.length}
-                                </span>
-                              )}
-                              {item.value === 'withdrawals' && pendingWithdrawals.length > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingWithdrawals.length}
-                                </span>
-                              )}
-                              {item.value === 'client-requests' && (pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length) > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-500 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length}
-                                </span>
-                              )}
-                              {item.value === 'clients-tx' && pendingClientTxCount > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-primary animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingClientTxCount}
-                                </span>
-                              )}
-                              {item.value === 'transfers' && pendingTransfersCount > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-orange-500 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingTransfersCount}
-                                </span>
-                              )}
-                              {item.value === 'notifications' && totalPending > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {totalPending}
-                                </span>
-                              )}
-
-                              {activeTab === item.value && (
-                                <motion.div 
-                                  layoutId="active-tab-indicator"
-                                  className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-sm"
-                                />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
+              <div className="flex-1 overflow-y-auto p-4 space-y-5">
+                {menuGroups.map((group, groupIdx) => {
+                  const visibleItemsInGroup = group.items.filter(item =>
+                    visibleMenuItems.some(v => v.value === item.value)
+                  );
+                  if (visibleItemsInGroup.length === 0) return null;
+                  return (
+                    <div key={groupIdx} className="space-y-1">
+                      <h4 className="px-2 text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <span className="h-px bg-gray-100 flex-1" />
+                        {group.title}
+                        <span className="h-px bg-gray-100 flex-1" />
+                      </h4>
+                      {visibleItemsInGroup.map((item) => (
+                        <button
+                          key={item.value}
+                          onClick={() => { setActiveTab(item.value); setIsSidebarOpen(false); }}
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all text-left relative ${
+                            activeTab === item.value
+                              ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-primary'
+                          }`}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span className="font-bold text-sm flex-1">{item.label}</span>
+                          {item.value === 'affiliates' && pendingRegistrations.length > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-black text-white">
+                              {pendingRegistrations.length}
+                            </span>
+                          )}
+                          {item.value === 'withdrawals' && pendingWithdrawals.length > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white">
+                              {pendingWithdrawals.length}
+                            </span>
+                          )}
+                          {item.value === 'client-requests' && (pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length) > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white">
+                              {pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length}
+                            </span>
+                          )}
+                          {item.value === 'clients-tx' && pendingClientTxCount > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">
+                              {pendingClientTxCount}
+                            </span>
+                          )}
+                          {item.value === 'transfers' && pendingTransfersCount > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-orange-500 text-[10px] font-black text-white">
+                              {pendingTransfersCount}
+                            </span>
+                          )}
+                          {item.value === 'notifications' && totalPending > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white">
+                              {totalPending}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
             </motion.aside>
-          )}
-        </AnimatePresence>
+          </>
+        )}
+      </AnimatePresence>
 
-        <div className="flex-1 min-w-0 w-full transition-all duration-500">
+      <div className="w-full">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="space-y-8">
             <TabsContent value="analytics" className="focus-visible:outline-none focus-visible:ring-0 mt-0">
               <AnalyticsDashboard stats={stats} loading={analyticsLoading} />
@@ -6089,7 +6079,7 @@ function EmailLogsPanel() {
                 {pendingClientRequests.filter(t => t.type === 'deposit').length}
               </p>
               <p className="text-xs text-emerald-600 mt-0.5">
-                {pendingClientRequests.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0).toLocaleString()} HTG total
+                {pendingClientRequests.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.htgAmount || Math.round(t.amount * (settings?.exchangeRate || 146))), 0).toLocaleString()} HTG total
               </p>
             </div>
             <div className="rounded-2xl bg-red-50 border border-red-100 p-4">
@@ -6098,7 +6088,7 @@ function EmailLogsPanel() {
                 {pendingClientRequests.filter(t => t.type === 'withdrawal').length}
               </p>
               <p className="text-xs text-red-600 mt-0.5">
-                {pendingClientRequests.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0).toLocaleString()} HTG total
+                {pendingClientRequests.filter(t => t.type === 'withdrawal').reduce((s, t) => s + (t.htgAmount || t.htgEquivalent || Math.round(t.amount * (settings?.exchangeRate || 146))), 0).toLocaleString()} HTG total
               </p>
             </div>
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 col-span-2 sm:col-span-1">
@@ -6124,7 +6114,8 @@ function EmailLogsPanel() {
             <div className="space-y-4">
               {pendingClientRequests.map(tx => {
                 const isDeposit = tx.type === 'deposit';
-                const usdAmt = ((tx.amount) / (settings?.exchangeRate || 146)).toFixed(2);
+                const htgAmt = tx.htgAmount || tx.htgEquivalent || Math.round((tx.usdAmount || tx.amount) * (settings?.exchangeRate || 146));
+                const usdAmt = (tx.usdAmount || tx.amount).toFixed(2);
                 const isLoading = clientTxActionLoading === tx.id;
                 return (
                   <Card key={tx.id} className={`overflow-hidden border-2 shadow-sm ${isDeposit ? 'border-emerald-200' : 'border-red-200'}`}>
@@ -6153,7 +6144,7 @@ function EmailLogsPanel() {
                             <div>
                               <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Montant</p>
                               <p className={`font-black text-lg ${isDeposit ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {isDeposit ? '+' : '-'}{tx.amount.toLocaleString()} HTG
+                                {isDeposit ? '+' : '-'}{htgAmt.toLocaleString()} HTG
                               </p>
                               <p className="text-xs text-gray-400">≈ ${usdAmt} USD</p>
                             </div>
@@ -6177,6 +6168,17 @@ function EmailLogsPanel() {
                               </p>
                             </div>
                           </div>
+                          {/* Proof image */}
+                          {tx.proofImageBase64 && (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider mb-2">Preuve de paiement</p>
+                              <a href={tx.proofImageBase64} target="_blank" rel="noopener noreferrer"
+                                className="inline-block rounded-xl overflow-hidden border-2 border-emerald-200 hover:border-emerald-400 transition-colors">
+                                <img src={tx.proofImageBase64} alt="Preuve" className="h-28 w-auto object-cover" />
+                              </a>
+                              <p className="text-[10px] text-gray-400 mt-1">Cliquez pour agrandir</p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Actions */}
@@ -8546,74 +8548,80 @@ function EmailLogsPanel() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50/50">
-                        <TableHead>Professeur</TableHead>
-                        <TableHead>Montant</TableHead>
-                        <TableHead>Méthode</TableHead>
-                        <TableHead>Compte</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {teacherWithdrawals.map(wd => (
-                        <TableRow key={wd.id}>
-                          <TableCell className="font-bold text-sm">{wd.teacherName || '—'}</TableCell>
-                          <TableCell>
-                            <span className="font-black text-red-600">
-                              {Math.round((wd.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
-                            </span>
-                          </TableCell>
-                          <TableCell><Badge variant="outline">{wd.method || '—'}</Badge></TableCell>
-                          <TableCell className="text-gray-500 font-mono text-xs">{wd.accountNumber || '—'}</TableCell>
-                          <TableCell className="text-xs text-gray-400">
-                            {wd.createdAt?._seconds ? format(new Date(wd.createdAt._seconds * 1000), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                              wd.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                              wd.status === 'rejected' ? 'bg-red-100 text-red-600' :
-                              'bg-amber-100 text-amber-700'
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {teacherWithdrawals.map(wd => {
+                const htgWd = wd.htgAmount || Math.round((wd.amount || 0) * (settings?.exchangeRate || 146));
+                const usdWd = (wd.amount || 0).toFixed(2);
+                const isPending = wd.status === 'pending';
+                const isApproved = wd.status === 'approved';
+                const isRejected = wd.status === 'rejected';
+                const isActing = approvingTeacherTx === wd.id;
+                return (
+                  <Card key={wd.id} className={`overflow-hidden border-2 shadow-sm ${
+                    isPending ? 'border-amber-200' :
+                    isApproved ? 'border-emerald-200' : 'border-red-200'
+                  }`}>
+                    <div className={`h-1.5 w-full ${isPending ? 'bg-amber-400' : isApproved ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-violet-100 flex items-center justify-center shrink-0">
+                          <LucideIcons.GraduationCap className="h-6 w-6 text-violet-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <p className="font-black text-dark text-sm">{wd.teacherName || 'Professeur'}</p>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              isPending ? 'bg-amber-100 text-amber-700' :
+                              isApproved ? 'bg-emerald-100 text-emerald-700' :
+                              'bg-red-100 text-red-600'
                             }`}>
-                              {wd.status === 'approved' ? 'Approuvé' : wd.status === 'rejected' ? 'Rejeté' : 'En attente'}
+                              {isPending ? 'En attente' : isApproved ? 'Approuvé' : 'Rejeté'}
                             </span>
-                          </TableCell>
-                          <TableCell>
-                            {wd.status === 'pending' && (
-                              <div className="flex items-center justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleTeacherWithdrawalAction(wd.id, 'approve')}
-                                  disabled={approvingTeacherTx === wd.id}
-                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white border-0 rounded-xl text-xs font-bold shadow-sm"
-                                >
-                                  {approvingTeacherTx === wd.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Approuver'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleTeacherWithdrawalAction(wd.id, 'reject')}
-                                  disabled={approvingTeacherTx === wd.id}
-                                  className="h-8 rounded-xl text-xs font-bold"
-                                >
-                                  Rejeter
-                                </Button>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Montant</p>
+                              <p className="font-black text-red-600 text-base">{htgWd.toLocaleString()} HTG</p>
+                              <p className="text-[11px] text-gray-400">${usdWd} USD</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Méthode</p>
+                              <p className="font-bold text-dark text-sm">{wd.method || '—'}</p>
+                              {wd.accountNumber && <p className="text-[11px] text-gray-500 font-mono">{wd.accountNumber}</p>}
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Date</p>
+                              <p className="text-xs text-gray-600">
+                                {wd.createdAt?._seconds ? format(new Date(wd.createdAt._seconds * 1000), 'dd MMM yyyy, HH:mm', { locale: fr }) : '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {isPending && (
+                        <div className="flex gap-2 mt-4">
+                          <Button
+                            className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white border-0 rounded-2xl text-sm font-bold shadow-sm"
+                            onClick={() => handleTeacherWithdrawalAction(wd.id, 'approve')}
+                            disabled={isActing}
+                          >
+                            {isActing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><LucideIcons.CheckCircle2 className="h-4 w-4 mr-1.5" />Approuver</>}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1 h-10 border-2 border-red-200 text-red-600 hover:bg-red-50 rounded-2xl text-sm font-bold"
+                            onClick={() => handleTeacherWithdrawalAction(wd.id, 'reject')}
+                            disabled={isActing}
+                          >
+                            <LucideIcons.XCircle className="h-4 w-4 mr-1.5" />Rejeter
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
 
@@ -8648,10 +8656,10 @@ function EmailLogsPanel() {
                 <CardContent className="p-7">
                   <p className="text-emerald-100 text-xs font-black uppercase tracking-widest mb-1">Profit Total Accumulé</p>
                   <p className="text-5xl font-black tracking-tight">
-                    ${(profitStats.feesBalance + profitStats.breakdown.formationPlatformFees).toFixed(2)}
+                    ${((profitStats.feesBalance || 0) + (profitStats.formationFees || 0)).toFixed(2)}
                   </p>
                   <p className="text-emerald-200 text-sm mt-1 font-semibold">
-                    ≈ {Math.round((profitStats.feesBalance + profitStats.breakdown.formationPlatformFees) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                    ≈ {Math.round(((profitStats.feesBalance || 0) + (profitStats.formationFees || 0)) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
                   </p>
                   {profitStats.lastReset?._seconds && (
                     <p className="text-emerald-200/70 text-xs mt-3 font-semibold">
@@ -8738,7 +8746,6 @@ function EmailLogsPanel() {
 
           </Tabs>
         </div>
-      </div>
 
       {/* Teacher dialog */}
       <Dialog open={isTeacherDialogOpen} onOpenChange={setIsTeacherDialogOpen}>
