@@ -4410,7 +4410,10 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 let pushEnabled = false;
 if (webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   try {
-    webpush.setVapidDetails('mailto:renaservices@gmail.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    let privKey = VAPID_PRIVATE_KEY.trim();
+    // Normalize URL-safe base64 to standard base64, then back to URL-safe (web-push expects URL-safe, no padding)
+    privKey = privKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    webpush.setVapidDetails('mailto:renaservices@gmail.com', VAPID_PUBLIC_KEY, privKey);
     pushEnabled = true;
     console.log('[Push] VAPID configured');
   } catch (e) {
