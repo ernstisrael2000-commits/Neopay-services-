@@ -4920,7 +4920,10 @@ router.post('/api/payments/moncash/verify', requireDb, async (req, res) => {
   try {
     const { referenceId } = req.body;
     if (!referenceId) return res.status(400).json({ error: 'referenceId manquant.' });
-    if (!MCC_SECRET_KEY)
+
+    // Use v2 key if available, fall back to v1
+    const secretKey = MCCV2_SECRET_KEY || MCC_SECRET_KEY;
+    if (!secretKey)
       return res.status(503).json({ error: 'MonCash non configuré.' });
 
     const snap = await adminDb.collection('moncash_deposits').doc(referenceId).get();
@@ -4928,11 +4931,14 @@ router.post('/api/payments/moncash/verify', requireDb, async (req, res) => {
     const d = snap.data()!;
     if (d.status !== 'pending') return res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
 
-    // MonCashConnect: POST /pay-check or GET /pay-status/:referenceId
-    const mcRes = await fetch(`${MCC_BASE_URL}/pay-check`, {
-      method : 'POST',
-      headers: mccHeaders(),
-      body   : JSON.stringify({ referenceId }),
+    // MonCashConnect v2: GET .../pay-status?referenceId=xxx
+    const MCC_STATUS_URL = 'https://hvlmeoqyxaguzcujpmit.supabase.co/functions/v1/pay-status';
+    const mcRes = await fetch(`${MCC_STATUS_URL}?referenceId=${encodeURIComponent(referenceId)}`, {
+      method : 'GET',
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Content-Type' : 'application/json',
+      },
     });
     const rawText = await mcRes.text();
     console.log(`[moncash/verify] mcc status=${mcRes.status} body=${rawText.slice(0, 300)}`);
@@ -4942,7 +4948,7 @@ router.post('/api/payments/moncash/verify', requireDb, async (req, res) => {
     const mcStatus = (mcData?.status || mcData?.payment?.status || '').toLowerCase();
     const transactionId = mcData?.transactionId || mcData?.transaction_id || mcData?.payment?.transaction_id || '';
 
-    if (['transaction_success', 'success'].includes(mcStatus) || mcData?.payment?.cost > 0) {
+    if (['completed', 'transaction_success', 'success', 'paid'].includes(mcStatus) || mcData?.netAmount > 0) {
       // Payment confirmed — trigger same logic as webhook
       const settingsSnap = await adminDb.collection('settings').doc('global').get();
       const sData    = settingsSnap.exists ? settingsSnap.data()! : {};
@@ -5193,13 +5199,10 @@ router.post('/api/deposit/create', requireDb, async (req, res) => {
       if (!ex.exists) unique = true;
     }
 
-    const returnUrl = MCCV2_APP_URL
-      ? `${MCCV2_APP_URL}/payment-success`
-      : (() => {
-          const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
-          const host  = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
-          return `${proto}://${host}/payment-success`;
-        })();
+    const proto  = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const host   = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
+    const base   = MCCV2_APP_URL || `${proto}://${host}`;
+    const returnUrl = `${base}/?moncash_ref=${referenceId}`;
 
     const mcRes = await fetch(MCCV2_API_URL, {
       method : 'POST',

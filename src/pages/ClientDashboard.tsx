@@ -1204,8 +1204,28 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               )}
             </div>
 
-            {/* ── Flux manuel ── */}
-            {(<>
+            {/* ── MonCash direct (MonCashConnect) ── */}
+            {depositMethod?.id === 'moncash' ? (
+              <>
+                <div className="bg-rose-50 border border-rose-100 rounded-xl p-3.5 space-y-1.5 text-xs text-rose-800">
+                  <p className="font-black text-sm flex items-center gap-2">
+                    <span>🔒</span> Paiement sécurisé via MonCashConnect
+                  </p>
+                  <p className="text-rose-600 leading-relaxed">Vous serez redirigé vers la page de paiement MonCash. Votre solde sera crédité automatiquement après confirmation.</p>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleMoncashDeposit}
+                  disabled={moncashLoading || !htgAmount || parseFloat(htgAmount) <= 0}
+                  className="w-full h-12 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black border-0 flex items-center justify-center gap-2">
+                  {moncashLoading
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : <><Smartphone className="h-4 w-4" /> Payer avec MonCash →</>}
+                </Button>
+              </>
+            ) : (
+            <>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Référence / ID transaction</Label>
               <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}

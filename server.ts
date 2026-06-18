@@ -16,7 +16,7 @@ async function startServer() {
   const PORT = parseInt(process.env.PORT || '5000', 10);
 
   // Raw body capture for MonCash webhook HMAC verification (must be before express.json())
-  app.use('/api/webhooks/moncash', (req: any, _res: any, next: any) => {
+  const captureRawBody = (req: any, _res: any, next: any) => {
     let raw = '';
     req.setEncoding('utf8');
     req.on('data', (chunk: string) => { raw += chunk; });
@@ -25,7 +25,9 @@ async function startServer() {
       try { req.body = JSON.parse(raw); } catch { req.body = {}; }
       next();
     });
-  });
+  };
+  app.use('/api/webhooks/moncash', captureRawBody);
+  app.use('/api/webhooks/moncashconnect', captureRawBody);
 
   app.use(express.json({ limit: '2mb' }));
 
