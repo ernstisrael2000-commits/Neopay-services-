@@ -1428,6 +1428,27 @@ function AiChatPanel() {
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
+  // ── Clé Groq ──────────────────────────────────────────────────────────────
+  const [showKeyConfig, setShowKeyConfig] = React.useState(false);
+  const [keyInput, setKeyInput] = React.useState('');
+  const [savedKey, setSavedKey] = React.useState(() => sessionStorage.getItem('chat_groq_key') || '');
+  const [keyVisible, setKeyVisible] = React.useState(false);
+
+  const saveKey = () => {
+    const k = keyInput.trim();
+    if (!k) return;
+    sessionStorage.setItem('chat_groq_key', k);
+    setSavedKey(k);
+    setKeyInput('');
+    setShowKeyConfig(false);
+    setError('');
+  };
+  const clearKey = () => {
+    sessionStorage.removeItem('chat_groq_key');
+    setSavedKey('');
+    setKeyInput('');
+  };
+
   React.useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
@@ -1454,10 +1475,12 @@ function AiChatPanel() {
     setMessages(newMessages);
     setLoading(true);
     try {
+      const body: Record<string, any> = { messages: newMessages.map(({ role, content }) => ({ role, content })) };
+      if (savedKey) body.apiKey = savedKey;
       const res = await fetch('/api/admin/ai-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur serveur');
@@ -1524,21 +1547,87 @@ function AiChatPanel() {
     <div className="flex flex-col h-full max-w-3xl mx-auto" style={{ height: 'calc(100vh - 180px)' }}>
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 pb-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-200 flex-shrink-0">
-            <LucideIcons.MessageSquareCode className="h-5 w-5 text-white" />
+      <div className="flex-shrink-0 space-y-3 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-200 flex-shrink-0">
+              <LucideIcons.MessageSquareCode className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-gray-900">Chat Dev IA</h2>
+              <p className="text-[10px] text-gray-400 flex items-center gap-1.5">
+                Développeur senior — connaît votre projet Rena
+                {savedKey && <span className="inline-flex items-center gap-0.5 text-emerald-600 font-black"><LucideIcons.KeyRound className="h-2.5 w-2.5" />Clé active</span>}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-black text-gray-900">Chat Dev IA</h2>
-            <p className="text-[10px] text-gray-400">Développeur senior — connaît votre projet Rena</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowKeyConfig(v => !v); setError(''); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 text-[10px] font-black transition-all ${
+                showKeyConfig
+                  ? 'border-violet-400 bg-violet-50 text-violet-700'
+                  : savedKey
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 text-gray-500 hover:border-violet-300'
+              }`}
+            >
+              <LucideIcons.KeyRound className="h-3 w-3" />
+              {savedKey ? 'Clé Groq ✓' : 'Clé Groq'}
+            </button>
+            {messages.length > 0 && (
+              <button onClick={() => { setMessages([]); setError(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 text-[10px] font-black transition-all">
+                <LucideIcons.Trash2 className="h-3 w-3" /> Effacer
+              </button>
+            )}
           </div>
         </div>
-        {messages.length > 0 && (
-          <button onClick={() => { setMessages([]); setError(''); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 text-[10px] font-black transition-all">
-            <LucideIcons.Trash2 className="h-3 w-3" /> Effacer
-          </button>
+
+        {/* Key config panel */}
+        {showKeyConfig && (
+          <div className="rounded-2xl border-2 border-violet-200 bg-violet-50/60 p-4 space-y-3">
+            <div>
+              <p className="text-xs font-black text-gray-800">Clé API Groq</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Obtenez une clé gratuite sur{' '}
+                <a href="https://console.groq.com/keys" target="_blank" rel="noopener" className="text-violet-600 font-bold underline">console.groq.com/keys</a>.
+                Elle est stockée uniquement en mémoire de session (effacée à la fermeture du navigateur).
+              </p>
+            </div>
+            {savedKey ? (
+              <div className="flex items-center gap-3">
+                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl bg-white border-2 border-emerald-200">
+                  <LucideIcons.CheckCircle className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                  <span className="text-[11px] font-mono text-gray-600">
+                    {keyVisible ? savedKey : savedKey.slice(0, 8) + '••••••••' + savedKey.slice(-4)}
+                  </span>
+                  <button onClick={() => setKeyVisible(v => !v)} className="ml-auto text-gray-400 hover:text-gray-600 transition-colors">
+                    {keyVisible ? <LucideIcons.EyeOff className="h-3.5 w-3.5" /> : <LucideIcons.Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                <button onClick={clearKey}
+                  className="flex items-center gap-1 px-3 py-2 rounded-xl border-2 border-red-200 text-red-500 hover:bg-red-50 text-[10px] font-black transition-all">
+                  <LucideIcons.Trash2 className="h-3 w-3" /> Supprimer
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={keyInput}
+                  onChange={e => setKeyInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveKey()}
+                  placeholder="gsk_…"
+                  className="flex-1 h-9 rounded-xl border-2 border-gray-200 bg-white px-3 text-xs font-mono focus:outline-none focus:border-violet-400 transition-all"
+                />
+                <button onClick={saveKey} disabled={!keyInput.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white text-[10px] font-black transition-all">
+                  <LucideIcons.Save className="h-3 w-3" /> Enregistrer
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

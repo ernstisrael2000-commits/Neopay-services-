@@ -5766,27 +5766,21 @@ router.post('/api/admin/ai-chat', async (req, res) => {
     if (!Array.isArray(messages) || messages.length === 0)
       return res.status(400).json({ error: 'messages[] requis.' });
 
-    const key = apiKey?.trim() || process.env.GROQ_API_KEY;
-    if (!key) {
-      // Try to get key from Firestore ai_config
-      let firestoreKey: string | undefined;
+    // Resolve key: body param → env var → Firestore ai_config (any agent key)
+    let resolvedKey = apiKey?.trim() || process.env.GROQ_API_KEY || '';
+    if (!resolvedKey) {
       try {
         if (adminDb) {
           const cfgSnap = await adminDb.collection('settings').doc('ai_config').get();
           if (cfgSnap.exists) {
             const cfg = cfgSnap.data() as Record<string, string>;
-            firestoreKey = cfg.security || cfg.ui || cfg.performance || cfg.admin;
+            resolvedKey = cfg.security || cfg.ui || cfg.performance || cfg.admin || '';
           }
         }
       } catch {}
-      if (!firestoreKey)
-        return res.status(503).json({ error: 'Aucune clé GROQ_API_KEY configurée.' });
     }
-
-    const resolvedKey = key || (() => {
-      // already checked above — this branch won't run, but TypeScript needs it
-      throw new Error('No key');
-    })();
+    if (!resolvedKey)
+      return res.status(503).json({ error: 'Aucune clé Groq configurée. Ajoutez-en une dans le chat ou dans Analyse IA → Clés API.' });
 
     // Keep last 12 messages max to stay within context limit
     const trimmed = messages.slice(-12);
