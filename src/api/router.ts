@@ -5574,6 +5574,23 @@ router.get('/api/admin/notifications-sse-count', requireDb, async (_req, res) =>
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── AI Multi-agent code analyzer ─────────────────────────────────────────────
+router.post('/api/admin/analyze', async (req, res) => {
+  try {
+    const { code } = req.body as { code?: string };
+    if (!code || code.trim().length < 50)
+      return res.status(400).json({ error: 'Le champ `code` est requis (min 50 caractères).' });
+    if (!process.env.GROQ_API_KEY)
+      return res.status(503).json({ error: 'GROQ_API_KEY non configurée sur le serveur.' });
+
+    const { orchestrate } = await import('./ai/orchestrator.ts');
+    const report = await orchestrate(code);
+    res.json(report);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur interne du système IA.' });
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });
