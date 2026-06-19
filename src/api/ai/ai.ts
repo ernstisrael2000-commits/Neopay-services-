@@ -1,30 +1,26 @@
 // ─── Groq API caller ──────────────────────────────────────────────────────────
-// Supports an optional per-call apiKey so each agent can use its own key,
-// multiplying the effective TPM by the number of distinct keys.
-// Auto-retries on 429 with the exact wait time from the error body.
+// max_tokens kept low (300) so each call stays under ~800 tokens total,
+// which lets 4 sequential agents fit within a 6 000 TPM budget.
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 2;
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
-// Parse "Please try again in 16.235s" → ms + 1 s buffer
-function parseRetryDelay(errBody: string): number {
-  const m = errBody.match(/try again in ([\d.]+)s/i);
-  return m ? Math.ceil(parseFloat(m[1]) * 1000) + 1000 : 20_000;
+function parseRetryDelay(body: string): number {
+  const m = body.match(/try again in ([\d.]+)s/i);
+  return m ? Math.ceil(parseFloat(m[1]) * 1000) + 2000 : 65_000;
 }
 
 export async function callGroq(
   prompt: string,
   systemPrompt?: string,
-  apiKey?: string,          // per-agent key (falls back to env var)
+  apiKey?: string,
   model = DEFAULT_MODEL,
 ): Promise<string> {
   const key = apiKey || process.env.GROQ_API_KEY;
-  if (!key) throw new Error('Aucune GROQ_API_KEY configurée.');
+  if (!key) throw new Error('Aucune clé GROQ_API_KEY configurée.');
 
   const messages: { role: string; content: string }[] = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
@@ -33,11 +29,9 @@ export async function callGroq(
   const body = JSON.stringify({
     model,
     messages,
-    temperature: 0.4,
-    max_tokens: 800,  // reduced from 2048 to stay well under 6K TPM
+    temperature: 0.3,
+    max_tokens: 300,   // ← 300 output + ~450 input = ~750 tokens/call → 4 agents = ~3 000 TPM
   });
-
-  let lastError = '';
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const response = await fetch(GROQ_API_URL, {
@@ -54,11 +48,10 @@ export async function callGroq(
     }
 
     const errBody = await response.text();
-    lastError = errBody;
 
     if (response.status === 429 && attempt < MAX_RETRIES - 1) {
       const delay = parseRetryDelay(errBody);
-      console.log(`[AI] Agent 429 — attente ${(delay / 1000).toFixed(1)}s (tentative ${attempt + 1}/${MAX_RETRIES})`);
+      console.log(`[AI] 429 — attente ${(delay / 1000).toFixed(0)}s avant retry ${attempt + 2}/${MAX_RETRIES}`);
       await sleep(delay);
       continue;
     }
@@ -66,5 +59,5 @@ export async function callGroq(
     throw new Error(`Groq ${response.status}: ${errBody}`);
   }
 
-  throw new Error(`Limite Groq dépassée après ${MAX_RETRIES} tentatives. ${lastError}`);
+  throw new Error('Limite Groq dépassée. Attendez 1 minute ou ajoutez une clé dédiée par agent dans Clés API.');
 }
