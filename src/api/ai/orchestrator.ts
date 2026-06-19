@@ -23,8 +23,8 @@ export interface AnalysisReport {
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
-// 1 200 chars ≈ 300 tokens of code input — keeps total call under ~750 tokens
-const MAX_CODE_CHARS = 1_200;
+// 8 000 chars ≈ 2 000 tokens of code input — keeps total call under Groq free-tier limits
+const MAX_CODE_CHARS = 8_000;
 
 // Gap between agents: 15 s ensures the rolling TPM window resets between calls
 const AGENT_GAP_MS = 15_000;

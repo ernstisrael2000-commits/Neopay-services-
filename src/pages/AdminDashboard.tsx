@@ -1544,7 +1544,7 @@ function AiChatPanel() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto" style={{ height: 'calc(100vh - 180px)' }}>
+    <div className="flex flex-col max-w-3xl mx-auto w-full" style={{ height: 'calc(100dvh - 160px)', minHeight: '400px' }}>
 
       {/* Header */}
       <div className="flex-shrink-0 space-y-3 pb-3">
@@ -1561,10 +1561,11 @@ function AiChatPanel() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={() => { setShowKeyConfig(v => !v); setError(''); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 text-[10px] font-black transition-all ${
+              title={savedKey ? 'Clé Groq configurée' : 'Configurer la clé Groq'}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border-2 text-[10px] font-black transition-all ${
                 showKeyConfig
                   ? 'border-violet-400 bg-violet-50 text-violet-700'
                   : savedKey
@@ -1573,12 +1574,15 @@ function AiChatPanel() {
               }`}
             >
               <LucideIcons.KeyRound className="h-3 w-3" />
-              {savedKey ? 'Clé Groq ✓' : 'Clé Groq'}
+              <span className="hidden sm:inline">{savedKey ? 'Clé Groq ✓' : 'Clé Groq'}</span>
+              {savedKey && <span className="sm:hidden text-emerald-600">✓</span>}
             </button>
             {messages.length > 0 && (
               <button onClick={() => { setMessages([]); setError(''); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 text-[10px] font-black transition-all">
-                <LucideIcons.Trash2 className="h-3 w-3" /> Effacer
+                title="Effacer la conversation"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border-2 border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 text-[10px] font-black transition-all">
+                <LucideIcons.Trash2 className="h-3 w-3" />
+                <span className="hidden sm:inline">Effacer</span>
               </button>
             )}
           </div>
@@ -1644,10 +1648,10 @@ function AiChatPanel() {
               <p className="text-sm font-black text-gray-800">Posez une question sur votre code</p>
               <p className="text-xs text-gray-400">Je connais la structure de Rena, les fichiers, les routes et les patterns utilisés.</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
+            <div className="grid grid-cols-1 gap-2 w-full max-w-xl">
               {CHAT_SUGGESTIONS.map((s, i) => (
                 <button key={i} onClick={() => sendMessage(s)}
-                  className="text-left px-4 py-3 rounded-2xl border-2 border-gray-200 hover:border-violet-300 hover:bg-violet-50 text-[11px] text-gray-600 hover:text-violet-700 font-semibold transition-all group">
+                  className="text-left px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl border-2 border-gray-200 hover:border-violet-300 hover:bg-violet-50 text-[11px] text-gray-600 hover:text-violet-700 font-semibold transition-all group">
                   <span className="text-violet-400 mr-1.5 group-hover:text-violet-600">→</span>{s}
                 </button>
               ))}
@@ -1727,7 +1731,7 @@ function AiChatPanel() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Posez votre question… (Entrée pour envoyer, Maj+Entrée pour saut de ligne)"
+            placeholder="Posez votre question… (Entrée pour envoyer)"
             rows={1}
             className="flex-1 resize-none bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none px-2 py-1.5 leading-relaxed"
             style={{ maxHeight: '120px', overflowY: 'auto' }}
@@ -9552,7 +9556,7 @@ function EmailLogsPanel() {
         {/* ──────────────────────────────────────────────────────────────────── */}
         {/* Chat Dev IA — chat libre avec contexte du projet                    */}
         {/* ──────────────────────────────────────────────────────────────────── */}
-        <TabsContent value="ai-chat" className="pt-6 px-6 pb-4 h-full flex flex-col overflow-hidden">
+        <TabsContent value="ai-chat" className="pt-4 sm:pt-6 px-3 sm:px-6 pb-4 h-full flex flex-col overflow-hidden">
           <AiChatPanel />
         </TabsContent>
 
