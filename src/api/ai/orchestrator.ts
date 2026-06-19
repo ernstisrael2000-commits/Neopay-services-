@@ -30,36 +30,30 @@ const MAX_CODE_CHARS = 8_000;
 // Gap between agents: 15 s ensures the rolling TPM window resets between calls
 const AGENT_GAP_MS = 15_000;
 
-// Backend-only file patterns — UX agent should skip these
-const BACKEND_FILE_PATTERNS = [
-  'router.ts', 'server.ts', 'firebase-admin', 'nodemailer',
-  'firestore.rules', 'src/api/',
-];
-
 /**
  * From a combined code string (with `// ═══ FICHIER : path ═══` headers),
- * extract only the sections for frontend files (tsx, hooks, lib, components).
- * Returns the filtered string, or a fallback message if nothing frontend was found.
+ * extract ONLY .tsx component files for the UX agent.
+ * Hooks (.ts), services (.ts), API routes, server files are all excluded —
+ * they contain no JSX and produce hallucinated UX "issues".
  */
-function extractFrontendCode(code: string): string {
-  // Split by file headers
+function extractTsxOnlyCode(code: string): string {
   const sections = code.split(/(?=\/\/ ═══ FICHIER : )/);
 
-  const frontendSections = sections.filter(section => {
+  const tsxSections = sections.filter(section => {
     const headerMatch = section.match(/\/\/ ═══ FICHIER : (.+?) ═══/);
     if (!headerMatch) return false;
     const filePath = headerMatch[1].trim();
-    const isBackend = BACKEND_FILE_PATTERNS.some(p => filePath.includes(p));
-    return !isBackend;
+    // Only keep files that are React component files (.tsx)
+    return filePath.endsWith('.tsx');
   });
 
-  if (frontendSections.length === 0) {
-    return '// Aucun fichier frontend (TSX/hooks/lib) dans cet extrait — analyse UX/UI non applicable.';
+  if (tsxSections.length === 0) {
+    return '// Ce scope ne contient aucun composant React (.tsx). Analyse UX/UI non applicable pour ce scope — choisissez "Dashboard Admin" ou "Dashboard Client".';
   }
 
-  const combined = frontendSections.join('\n\n');
+  const combined = tsxSections.join('\n\n');
   return combined.length > MAX_CODE_CHARS
-    ? combined.slice(0, MAX_CODE_CHARS) + '\n// [tronqué]'
+    ? combined.slice(0, MAX_CODE_CHARS) + '\n// [tronqué — seuls les fichiers .tsx sont analysés pour UX/UI]'
     : combined;
 }
 
@@ -71,8 +65,8 @@ export async function orchestrate(code: string, keys: AgentKeys = {}): Promise<A
     ? code.slice(0, MAX_CODE_CHARS) + `\n// [tronqué — ${code.length.toLocaleString()} chars total]`
     : code;
 
-  // Frontend-only excerpt for the UX agent
-  const frontendExcerpt = extractFrontendCode(code);
+  // TSX-only excerpt for the UX agent (hooks/services/api excluded)
+  const frontendExcerpt = extractTsxOnlyCode(code);
 
   const start = Date.now();
 

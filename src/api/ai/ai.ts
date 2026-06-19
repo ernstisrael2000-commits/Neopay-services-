@@ -3,7 +3,7 @@
 // which lets 4 sequential agents fit within a 6 000 TPM budget.
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-export const DEFAULT_MODEL = 'llama-3.1-8b-instant';
+export const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const MAX_RETRIES = 2;
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
@@ -29,8 +29,8 @@ export async function callGroq(
   const body = JSON.stringify({
     model,
     messages,
-    temperature: 0.3,
-    max_tokens: 600,   // ← 600 output + ~500 input = ~1 100 tokens/call → réponses complètes avec code
+    temperature: 0.15,
+    max_tokens: 900,
   });
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
