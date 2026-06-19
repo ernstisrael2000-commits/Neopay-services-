@@ -1407,6 +1407,265 @@ function AiAnalyzerPanel() {
   );
 }
 
+// ─── AiChatPanel ──────────────────────────────────────────────────────────────
+interface ChatMessage { role: 'user' | 'assistant'; content: string; id: string; }
+
+const CHAT_SUGGESTIONS = [
+  'Comment ajouter une nouvelle route API sécurisée ?',
+  'Comment optimiser une requête Firestore lente ?',
+  'Quelle est la meilleure façon de gérer les erreurs dans Express ?',
+  'Comment créer un nouveau hook React pour ce projet ?',
+  'Explique la structure d\'authentification de ce projet',
+  'Comment ajouter un envoi d\'email automatique ?',
+];
+
+function AiChatPanel() {
+  const [messages, setMessages] = React.useState<ChatMessage[]>([]);
+  const [input, setInput] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const bottomRef = React.useRef<HTMLDivElement>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const copyText = (text: string, id: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = text; document.body.appendChild(el); el.select();
+      document.execCommand('copy'); document.body.removeChild(el);
+      setCopiedId(id); setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
+  const sendMessage = async (text?: string) => {
+    const content = (text ?? input).trim();
+    if (!content || loading) return;
+    setInput('');
+    setError('');
+    const userMsg: ChatMessage = { role: 'user', content, id: Date.now().toString() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages.map(({ role, content }) => ({ role, content })) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      const assistantMsg: ChatMessage = { role: 'assistant', content: data.reply, id: (Date.now() + 1).toString() };
+      setMessages(prev => [...prev, assistantMsg]);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
+
+  // Render markdown with code blocks + copy buttons
+  const renderChatMarkdown = (text: string, msgId: string) => {
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let inCode = false, codeLines: string[] = [], codeLang = '', codeIdx = 0;
+
+    lines.forEach((line, i) => {
+      if (line.startsWith('```')) {
+        if (!inCode) { inCode = true; codeLines = []; codeLang = line.slice(3).trim(); }
+        else {
+          inCode = false;
+          const codeText = codeLines.join('\n');
+          const copyKey = `${msgId}-code-${codeIdx++}`;
+          elements.push(
+            <div key={i} className="relative my-2 group/code">
+              <pre className="bg-gray-950 text-green-300 rounded-xl p-4 overflow-x-auto text-[11px] font-mono leading-relaxed pr-14">
+                {codeLang && <span className="text-[9px] text-gray-500 uppercase block mb-1">{codeLang}</span>}
+                <code>{codeText}</code>
+              </pre>
+              <button onClick={() => copyText(codeText, copyKey)}
+                className="absolute top-2 right-2 opacity-0 group-hover/code:opacity-100 flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-[10px] font-black text-gray-300 hover:text-white transition-all">
+                {copiedId === copyKey ? <><LucideIcons.Check className="h-3 w-3 text-emerald-400" /><span className="text-emerald-400">Copié</span></> : <><LucideIcons.Copy className="h-3 w-3" />Copier</>}
+              </button>
+            </div>
+          );
+          codeLines = [];
+        }
+        return;
+      }
+      if (inCode) { codeLines.push(line); return; }
+      if (line.startsWith('## ')) { elements.push(<h3 key={i} className="text-sm font-black text-gray-900 mt-4 mb-2 pb-1 border-b border-gray-200 first:mt-0">{line.slice(3)}</h3>); return; }
+      if (line.startsWith('### ')) { elements.push(<h4 key={i} className="text-xs font-black text-gray-700 mt-3 mb-1">{line.slice(4)}</h4>); return; }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        const html = line.slice(2).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code class="bg-white/60 text-violet-700 px-1 rounded text-[10px] font-mono">$1</code>');
+        elements.push(<li key={i} className="text-xs text-gray-700 ml-4 list-disc leading-relaxed my-0.5" dangerouslySetInnerHTML={{ __html: html }} />);
+        return;
+      }
+      if (line.trim() === '') { elements.push(<div key={i} className="h-1.5" />); return; }
+      const html = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code class="bg-white/60 text-violet-700 px-1 rounded text-[10px] font-mono">$1</code>');
+      elements.push(<p key={i} className="text-xs text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />);
+    });
+    return elements;
+  };
+
+  const isEmpty = messages.length === 0;
+
+  return (
+    <div className="flex flex-col h-full max-w-3xl mx-auto" style={{ height: 'calc(100vh - 180px)' }}>
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 pb-4 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-200 flex-shrink-0">
+            <LucideIcons.MessageSquareCode className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-gray-900">Chat Dev IA</h2>
+            <p className="text-[10px] text-gray-400">Développeur senior — connaît votre projet Rena</p>
+          </div>
+        </div>
+        {messages.length > 0 && (
+          <button onClick={() => { setMessages([]); setError(''); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 border-gray-200 text-gray-400 hover:border-red-200 hover:text-red-500 text-[10px] font-black transition-all">
+            <LucideIcons.Trash2 className="h-3 w-3" /> Effacer
+          </button>
+        )}
+      </div>
+
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto space-y-4 pb-4 custom-scrollbar pr-1">
+
+        {/* Empty state */}
+        {isEmpty && (
+          <div className="flex flex-col items-center justify-center h-full gap-6 py-8">
+            <div className="h-20 w-20 rounded-3xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
+              <LucideIcons.BrainCircuit className="h-10 w-10 text-violet-400" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-sm font-black text-gray-800">Posez une question sur votre code</p>
+              <p className="text-xs text-gray-400">Je connais la structure de Rena, les fichiers, les routes et les patterns utilisés.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-xl">
+              {CHAT_SUGGESTIONS.map((s, i) => (
+                <button key={i} onClick={() => sendMessage(s)}
+                  className="text-left px-4 py-3 rounded-2xl border-2 border-gray-200 hover:border-violet-300 hover:bg-violet-50 text-[11px] text-gray-600 hover:text-violet-700 font-semibold transition-all group">
+                  <span className="text-violet-400 mr-1.5 group-hover:text-violet-600">→</span>{s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {msg.role === 'assistant' && (
+              <div className="h-7 w-7 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                <LucideIcons.BrainCircuit className="h-3.5 w-3.5 text-white" />
+              </div>
+            )}
+            <div className={`max-w-[85%] group relative ${msg.role === 'user' ? 'order-first' : ''}`}>
+              <div className={`rounded-2xl px-4 py-3 ${
+                msg.role === 'user'
+                  ? 'bg-violet-600 text-white rounded-tr-sm'
+                  : 'bg-white border-2 border-gray-100 shadow-sm rounded-tl-sm'
+              }`}>
+                {msg.role === 'user'
+                  ? <p className="text-sm leading-relaxed">{msg.content}</p>
+                  : <div className="space-y-0.5">{renderChatMarkdown(msg.content, msg.id)}</div>
+                }
+              </div>
+              {/* Copy message button */}
+              <button onClick={() => copyText(msg.content, `msg-${msg.id}`)}
+                className={`absolute -bottom-5 ${msg.role === 'user' ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black transition-all ${
+                  copiedId === `msg-${msg.id}` ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'
+                }`}>
+                {copiedId === `msg-${msg.id}` ? <><LucideIcons.Check className="h-2.5 w-2.5" />Copié</> : <><LucideIcons.Copy className="h-2.5 w-2.5" />Copier</>}
+              </button>
+            </div>
+            {msg.role === 'user' && (
+              <div className="h-7 w-7 rounded-xl bg-gray-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <LucideIcons.User className="h-3.5 w-3.5 text-white" />
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Typing indicator */}
+        {loading && (
+          <div className="flex gap-3 justify-start">
+            <div className="h-7 w-7 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+              <LucideIcons.BrainCircuit className="h-3.5 w-3.5 text-white" />
+            </div>
+            <div className="bg-white border-2 border-gray-100 shadow-sm rounded-2xl rounded-tl-sm px-4 py-3">
+              <div className="flex items-center gap-1.5">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="h-2 w-2 rounded-full bg-violet-400"
+                    style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }} />
+                ))}
+                <span className="text-[10px] text-gray-400 ml-1 font-semibold">Analyse en cours…</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-2xl">
+            <LucideIcons.AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-700 font-semibold">{error}</p>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input area */}
+      <div className="flex-shrink-0 pt-3 border-t border-gray-100">
+        <div className="flex gap-2 items-end bg-white border-2 border-gray-200 focus-within:border-violet-400 rounded-2xl p-2 transition-all shadow-sm">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Posez votre question… (Entrée pour envoyer, Maj+Entrée pour saut de ligne)"
+            rows={1}
+            className="flex-1 resize-none bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none px-2 py-1.5 leading-relaxed"
+            style={{ maxHeight: '120px', overflowY: 'auto' }}
+            onInput={e => {
+              const el = e.currentTarget;
+              el.style.height = 'auto';
+              el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+            }}
+            disabled={loading}
+          />
+          <button
+            onClick={() => sendMessage()}
+            disabled={loading || !input.trim()}
+            className="h-9 w-9 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all flex-shrink-0 shadow-sm shadow-violet-200"
+          >
+            {loading
+              ? <LucideIcons.Loader2 className="h-4 w-4 text-white animate-spin" />
+              : <LucideIcons.Send className="h-4 w-4 text-white" />
+            }
+          </button>
+        </div>
+        <p className="text-[9px] text-gray-400 text-center mt-1.5">Propulsé par Groq · Llama 3.1 · Contexte limité aux 12 derniers messages</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
   useUniversalFCM('admin', admin?.id || null);
   const { supported: pushSupported, permission: pushPermission, subscription: pushSub, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
@@ -2609,6 +2868,7 @@ function EmailLogsPanel() {
       items: [
         { value: 'profits', label: 'Profits', icon: LucideIcons.TrendingUp, permission: 'settings' },
         { value: 'ai-analyzer', label: 'Analyse IA', icon: LucideIcons.BrainCircuit, permission: 'settings' },
+        { value: 'ai-chat', label: 'Chat Dev IA', icon: LucideIcons.MessageSquareCode, permission: 'settings' },
         { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
         { value: 'email-logs', label: 'Logs Emails', icon: LucideIcons.Mail, permission: 'settings' },
@@ -9198,6 +9458,13 @@ function EmailLogsPanel() {
         {/* ──────────────────────────────────────────────────────────────────── */}
         <TabsContent value="ai-analyzer" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
           <AiAnalyzerPanel />
+        </TabsContent>
+
+        {/* ──────────────────────────────────────────────────────────────────── */}
+        {/* Chat Dev IA — chat libre avec contexte du projet                    */}
+        {/* ──────────────────────────────────────────────────────────────────── */}
+        <TabsContent value="ai-chat" className="pt-6 px-6 pb-4 h-full flex flex-col overflow-hidden">
+          <AiChatPanel />
         </TabsContent>
 
           </Tabs>

@@ -5739,6 +5739,89 @@ router.post('/api/admin/analyze', async (req, res) => {
   }
 });
 
+// ── AI Chat libre ─────────────────────────────────────────────────────────────
+const AI_CHAT_SYSTEM = `Tu es un développeur senior React/Node.js/TypeScript/Firebase avec 10 ans d'expérience.
+Tu travailles sur le projet "Rena" — une plateforme logistique/fintech avec :
+- Frontend : React 19, Vite, Tailwind CSS 4, shadcn/ui
+- Backend : Express 4 (server.ts + src/api/router.ts)
+- Base de données : Cloud Firestore (Firebase Admin SDK, DB nommée "ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2")
+- Auth : custom (admin/affilié/agent = Firestore credentials, client = Firebase Auth)
+- Fichiers principaux : src/api/router.ts (50+ routes), src/pages/AdminDashboard.tsx, src/pages/ClientDashboard.tsx, src/hooks/useAuth.ts
+
+Règles de réponse :
+1. Réponds TOUJOURS en français
+2. Quand tu identifies un fichier, cite-le exactement (ex: \`src/api/router.ts\`)
+3. Quand tu proposes du code, cite la fonction/ligne concernée et fournis un extrait complet prêt à coller
+4. Si tu dois modifier router.ts, rappelle que c'est la source unique de toutes les routes — pas de duplication
+5. Sois précis et direct — pas de blabla inutile
+6. Format markdown : ## pour les sections, \`\`\`ts pour le code, **gras** pour les points importants`;
+
+router.post('/api/admin/ai-chat', async (req, res) => {
+  try {
+    const { messages, apiKey } = req.body as {
+      messages: { role: 'user' | 'assistant'; content: string }[];
+      apiKey?: string;
+    };
+
+    if (!Array.isArray(messages) || messages.length === 0)
+      return res.status(400).json({ error: 'messages[] requis.' });
+
+    const key = apiKey?.trim() || process.env.GROQ_API_KEY;
+    if (!key) {
+      // Try to get key from Firestore ai_config
+      let firestoreKey: string | undefined;
+      try {
+        if (adminDb) {
+          const cfgSnap = await adminDb.collection('settings').doc('ai_config').get();
+          if (cfgSnap.exists) {
+            const cfg = cfgSnap.data() as Record<string, string>;
+            firestoreKey = cfg.security || cfg.ui || cfg.performance || cfg.admin;
+          }
+        }
+      } catch {}
+      if (!firestoreKey)
+        return res.status(503).json({ error: 'Aucune clé GROQ_API_KEY configurée.' });
+    }
+
+    const resolvedKey = key || (() => {
+      // already checked above — this branch won't run, but TypeScript needs it
+      throw new Error('No key');
+    })();
+
+    // Keep last 12 messages max to stay within context limit
+    const trimmed = messages.slice(-12);
+
+    const body = JSON.stringify({
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        { role: 'system', content: AI_CHAT_SYSTEM },
+        ...trimmed,
+      ],
+      temperature: 0.4,
+      max_tokens: 800,
+    });
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${resolvedKey}` },
+      body,
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      return res.status(response.status).json({ error: `Groq ${response.status}: ${errBody}` });
+    }
+
+    const data = (await response.json()) as { choices: { message: { content: string } }[] };
+    const reply = data.choices?.[0]?.message?.content;
+    if (!reply) return res.status(500).json({ error: 'Réponse Groq vide.' });
+
+    res.json({ reply });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur IA.' });
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });
