@@ -4568,8 +4568,21 @@ let pushEnabled = false;
 if (webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   try {
     let privKey = VAPID_PRIVATE_KEY.trim();
-    // Normalize URL-safe base64 to standard base64, then back to URL-safe (web-push expects URL-safe, no padding)
-    privKey = privKey.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    // Normalize: remove whitespace/newlines, convert standard base64 to URL-safe base64, strip padding
+    privKey = privKey.replace(/\s+/g, '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    // If key decodes to 65 bytes (uncompressed EC point), extract the 32-byte private scalar
+    try {
+      const decoded = Buffer.from(privKey, 'base64');
+      if (decoded.length === 65 || decoded.length === 33) {
+        // This looks like a public key, not private — skip silently
+        throw new Error('Key appears to be a public key, not private');
+      }
+      if (decoded.length !== 32) {
+        // Re-encode exactly 32 bytes if possible
+        const trimmed = decoded.slice(decoded.length - 32);
+        privKey = trimmed.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+    } catch {}
     webpush.setVapidDetails('mailto:renaservices@gmail.com', VAPID_PUBLIC_KEY, privKey);
     pushEnabled = true;
     console.log('[Push] VAPID configured');
