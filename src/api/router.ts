@@ -5575,13 +5575,88 @@ router.get('/api/admin/notifications-sse-count', requireDb, async (_req, res) =>
 });
 
 // ── AI Multi-agent code analyzer ─────────────────────────────────────────────
+
+// Scopes: each maps to a list of project file paths (relative to cwd)
+const AI_SCOPES: Record<string, { label: string; files: string[] }> = {
+  api: {
+    label: 'Routes API',
+    files: ['src/api/router.ts'],
+  },
+  client: {
+    label: 'Dashboard Client',
+    files: ['src/pages/ClientDashboard.tsx', 'src/services/clientService.ts'],
+  },
+  admin: {
+    label: 'Dashboard Admin',
+    files: ['src/pages/AdminDashboard.tsx'],
+  },
+  services: {
+    label: 'Services & Auth',
+    files: ['src/hooks/useAuth.ts', 'src/lib/firebase.ts', 'src/services/clientService.ts'],
+  },
+  config: {
+    label: 'Config & Sécurité',
+    files: ['server.ts', 'firestore.rules', 'src/api/router.ts'],
+  },
+  all: {
+    label: 'Vue globale',
+    files: [
+      'server.ts',
+      'src/api/router.ts',
+      'src/hooks/useAuth.ts',
+      'src/lib/firebase.ts',
+      'src/services/clientService.ts',
+      'src/pages/ClientDashboard.tsx',
+      'src/pages/AdminDashboard.tsx',
+    ],
+  },
+};
+
+// Maximum chars per file excerpt sent to agents
+const MAX_FILE_CHARS = 6_000;
+// Maximum total chars of combined code (stays comfortably within Groq context)
+const MAX_TOTAL_CHARS = 14_000;
+
+router.get('/api/admin/analyze/scopes', (_req, res) => {
+  res.json(Object.entries(AI_SCOPES).map(([id, s]) => ({ id, label: s.label, files: s.files })));
+});
+
 router.post('/api/admin/analyze', async (req, res) => {
   try {
-    const { code } = req.body as { code?: string };
-    if (!code || code.trim().length < 50)
-      return res.status(400).json({ error: 'Le champ `code` est requis (min 50 caractères).' });
     if (!process.env.GROQ_API_KEY)
       return res.status(503).json({ error: 'GROQ_API_KEY non configurée sur le serveur.' });
+
+    const { scope, code: rawCode } = req.body as { scope?: string; code?: string };
+
+    let code = '';
+
+    if (scope && AI_SCOPES[scope]) {
+      // Read actual project files from disk
+      const { readFile } = await import('node:fs/promises');
+      const { join } = await import('node:path');
+      const cwd = process.cwd();
+      const parts: string[] = [];
+
+      for (const filePath of AI_SCOPES[scope].files) {
+        try {
+          const full = join(cwd, filePath);
+          const content = await readFile(full, 'utf-8');
+          const excerpt = content.length > MAX_FILE_CHARS
+            ? content.slice(0, MAX_FILE_CHARS) + `\n\n// [... ${filePath} tronqué — ${content.length.toLocaleString()} chars au total ...]`
+            : content;
+          parts.push(`// ═══ FICHIER : ${filePath} ═══\n${excerpt}`);
+        } catch {
+          parts.push(`// ═══ FICHIER : ${filePath} — non trouvé ═══`);
+        }
+      }
+
+      code = parts.join('\n\n');
+      if (code.length > MAX_TOTAL_CHARS) code = code.slice(0, MAX_TOTAL_CHARS) + '\n\n// [... combinaison tronquée à ' + MAX_TOTAL_CHARS.toLocaleString() + ' chars ...]';
+    } else if (rawCode && rawCode.trim().length >= 50) {
+      code = rawCode;
+    } else {
+      return res.status(400).json({ error: 'Fournissez un `scope` valide ou un champ `code` (min 50 caractères).' });
+    }
 
     const { orchestrate } = await import('./ai/orchestrator.ts');
     const report = await orchestrate(code);
