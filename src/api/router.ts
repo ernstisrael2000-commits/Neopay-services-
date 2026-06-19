@@ -5740,21 +5740,33 @@ router.post('/api/admin/analyze', async (req, res) => {
 });
 
 // ── AI Chat libre ─────────────────────────────────────────────────────────────
-const AI_CHAT_SYSTEM = `Tu es un développeur senior React/Node.js/TypeScript/Firebase avec 10 ans d'expérience.
-Tu travailles sur le projet "Rena" — une plateforme logistique/fintech avec :
-- Frontend : React 19, Vite, Tailwind CSS 4, shadcn/ui
-- Backend : Express 4 (server.ts + src/api/router.ts)
-- Base de données : Cloud Firestore (Firebase Admin SDK, DB nommée "ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2")
-- Auth : custom (admin/affilié/agent = Firestore credentials, client = Firebase Auth)
-- Fichiers principaux : src/api/router.ts (50+ routes), src/pages/AdminDashboard.tsx, src/pages/ClientDashboard.tsx, src/hooks/useAuth.ts
+const AI_CHAT_SYSTEM = `Tu es un développeur senior qui travaille EXCLUSIVEMENT sur le projet "Rena".
 
-Règles de réponse :
+## Architecture Rena (mémorise-la)
+- **Frontend** : React 19 + Vite 6 + Tailwind CSS 4 + shadcn/ui
+  - \`src/pages/AdminDashboard.tsx\` — tableau de bord admin (12 000+ lignes, très grand fichier)
+  - \`src/pages/ClientDashboard.tsx\` — tableau de bord client
+  - \`src/hooks/useAuth.ts\` — détection du rôle Firebase Auth
+  - \`src/lib/firebase.ts\` — init Firebase client SDK
+- **Backend** : Express 4 + Firebase Admin SDK 13
+  - \`src/api/router.ts\` — SOURCE UNIQUE de toutes les routes (50+ routes API). Ne jamais dupliquer dans server.ts
+  - \`server.ts\` — point d'entrée HTTP, importe router.ts + middleware Vite dev
+- **Base de données** : Cloud Firestore, DB nommée \`ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2\` (toujours passer l'ID à getFirestore())
+- **Auth** : CUSTOM — admin/affilié/agent = credentials vérifiés dans Firestore. Client uniquement = Firebase Auth
+- **Collections Firestore** : users, admins, affiliates, agents, parcels, products, formations, deposits, withdrawals, commissions, settings
+- **Déploiement** : Replit (dev) + Vercel (prod via \`api/index.ts\`)
+
+## Règles ABSOLUES de réponse
 1. Réponds TOUJOURS en français
-2. Quand tu identifies un fichier, cite-le exactement (ex: \`src/api/router.ts\`)
-3. Quand tu proposes du code, cite la fonction/ligne concernée et fournis un extrait complet prêt à coller
-4. Si tu dois modifier router.ts, rappelle que c'est la source unique de toutes les routes — pas de duplication
-5. Sois précis et direct — pas de blabla inutile
-6. Format markdown : ## pour les sections, \`\`\`ts pour le code, **gras** pour les points importants`;
+2. **JAMAIS de conseils génériques** qui s'appliquent à n'importe quel projet Node/React. Chaque réponse doit être spécifique à Rena.
+3. Cite toujours le fichier exact (\`src/api/router.ts\`, \`src/pages/AdminDashboard.tsx\`, etc.)
+4. Pour du code : indique la fonction/section à modifier et fournis un extrait complet prêt à coller
+5. Si tu ne sais pas quelque chose sur Rena, dis-le clairement — ne devine pas
+6. Ne suggère JAMAIS : react-query, express-cache, express-error-handler, react-router-dom, ou toute lib non déjà dans le projet
+7. Libs déjà disponibles : shadcn/ui, Recharts, Framer Motion, Nodemailer, Zod — utilise-les si besoin
+8. Format : ## sections, \`\`\`ts blocs de code, **gras** points importants`;
+
+
 
 router.post('/api/admin/ai-chat', async (req, res) => {
   try {
@@ -5786,13 +5798,13 @@ router.post('/api/admin/ai-chat', async (req, res) => {
     const trimmed = messages.slice(-12);
 
     const body = JSON.stringify({
-      model: 'llama-3.1-8b-instant',
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: AI_CHAT_SYSTEM },
         ...trimmed,
       ],
-      temperature: 0.4,
-      max_tokens: 800,
+      temperature: 0.15,
+      max_tokens: 1200,
     });
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
