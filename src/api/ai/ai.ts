@@ -30,7 +30,7 @@ export async function callGroq(
     model,
     messages,
     temperature: 0.3,
-    max_tokens: 300,   // ← 300 output + ~450 input = ~750 tokens/call → 4 agents = ~3 000 TPM
+    max_tokens: 600,   // ← 600 output + ~500 input = ~1 100 tokens/call → réponses complètes avec code
   });
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {

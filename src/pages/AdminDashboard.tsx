@@ -1045,36 +1045,113 @@ function AiAnalyzerPanel() {
     }
   };
 
+  // ── Copy helpers ──────────────────────────────────────────────────────────
+  const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    }).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
+    });
+  };
+
+  const buildFullReport = () => {
+    if (!report) return '';
+    const scope = AI_SCOPES.find(s => s.id === selectedScope);
+    const lines: string[] = [
+      `# Rapport Analyse IA — ${scope?.label || selectedScope}`,
+      `Analysé le ${new Date(report.analyzedAt).toLocaleString('fr-FR')} (${(report.durationMs / 1000).toFixed(1)}s)`,
+      '',
+    ];
+    AI_AGENT_META.forEach(({ key, label }) => {
+      lines.push(`---\n## Agent ${label}\n`);
+      lines.push(report[key]);
+      lines.push('');
+    });
+    return lines.join('\n');
+  };
+
   // ── Markdown renderer ─────────────────────────────────────────────────────
   const renderMarkdown = (text: string) => {
     const lines = text.split('\n');
     const elements: React.ReactNode[] = [];
     let inCode = false;
     let codeLines: string[] = [];
+    let codeLang = '';
 
     lines.forEach((line, i) => {
       if (line.startsWith('```')) {
-        if (!inCode) { inCode = true; codeLines = []; }
-        else {
+        if (!inCode) {
+          inCode = true;
+          codeLines = [];
+          codeLang = line.slice(3).trim();
+        } else {
           inCode = false;
+          const codeText = codeLines.join('\n');
           elements.push(
-            <pre key={i} className="mt-2 mb-3 bg-gray-900 text-green-300 rounded-xl p-4 overflow-x-auto text-[11px] font-mono leading-relaxed">
-              <code>{codeLines.join('\n')}</code>
-            </pre>
+            <div key={i} className="relative mt-2 mb-3 group/code">
+              <pre className="bg-gray-950 text-green-300 rounded-xl p-4 overflow-x-auto text-[11px] font-mono leading-relaxed pr-16">
+                {codeLang && <span className="absolute top-2 left-3 text-[9px] font-mono text-gray-500 uppercase">{codeLang}</span>}
+                <code className={codeLang ? 'mt-3 block' : ''}>{codeText}</code>
+              </pre>
+              <button
+                onClick={() => copyToClipboard(codeText, `code-${i}`)}
+                className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-[10px] font-black text-gray-300 hover:text-white transition-all opacity-0 group-hover/code:opacity-100"
+              >
+                {copiedKey === `code-${i}`
+                  ? <><LucideIcons.Check className="h-3 w-3 text-emerald-400" /><span className="text-emerald-400">Copié</span></>
+                  : <><LucideIcons.Copy className="h-3 w-3" />Copier</>
+                }
+              </button>
+            </div>
           );
           codeLines = [];
+          codeLang = '';
         }
         return;
       }
       if (inCode) { codeLines.push(line); return; }
-      if (line.startsWith('## '))  { elements.push(<h3 key={i} className="text-sm font-black text-gray-900 mt-6 mb-2 pb-1 border-b border-gray-200 first:mt-0">{line.slice(3)}</h3>); return; }
-      if (line.startsWith('### ')) { elements.push(<h4 key={i} className="text-xs font-black text-gray-700 mt-4 mb-1">{line.slice(4)}</h4>); return; }
+
+      // H2 — section titre (## 🔴 Problème…)
+      if (line.startsWith('## ')) {
+        const content = line.slice(3);
+        const isProb = content.includes('🔴') || content.includes('🟠') || content.includes('Problème');
+        elements.push(
+          <h3 key={i} className={`text-sm font-black mt-6 mb-3 pb-2 border-b first:mt-0 ${isProb ? 'text-red-800 border-red-200' : 'text-gray-900 border-gray-200'}`}>
+            {content}
+          </h3>
+        );
+        return;
+      }
+      // H3
+      if (line.startsWith('### ')) {
+        elements.push(<h4 key={i} className="text-xs font-black text-gray-700 mt-4 mb-1">{line.slice(4)}</h4>);
+        return;
+      }
+      // Bold label lines (📁 Fichier, 📍 Localisation, etc.)
+      if (line.startsWith('**') && line.includes(':**')) {
+        const html = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-violet-700 px-1.5 py-0.5 rounded text-[10px] font-mono">$1</code>');
+        elements.push(<p key={i} className="text-xs text-gray-800 leading-relaxed mt-2" dangerouslySetInnerHTML={{ __html: html }} />);
+        return;
+      }
+      // List items
       if (line.startsWith('- ') || line.startsWith('* ')) {
-        elements.push(<li key={i} className="text-xs text-gray-700 ml-5 list-disc leading-relaxed my-0.5" dangerouslySetInnerHTML={{ __html: line.slice(2).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />);
+        const html = line.slice(2).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-violet-700 px-1 rounded text-[10px] font-mono">$1</code>');
+        elements.push(<li key={i} className="text-xs text-gray-700 ml-5 list-disc leading-relaxed my-0.5" dangerouslySetInnerHTML={{ __html: html }} />);
         return;
       }
       if (line.trim() === '') { elements.push(<div key={i} className="h-2" />); return; }
-      elements.push(<p key={i} className="text-xs text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />);
+      const html = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-violet-700 px-1 rounded text-[10px] font-mono">$1</code>');
+      elements.push(<p key={i} className="text-xs text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />);
     });
     return elements;
   };
@@ -1271,6 +1348,19 @@ function AiAnalyzerPanel() {
             <div className="flex items-center gap-3 text-[10px] text-gray-400 font-semibold">
               <span className="flex items-center gap-1"><LucideIcons.Clock className="h-3 w-3" />{(report.durationMs / 1000).toFixed(1)}s</span>
               <span>{new Date(report.analyzedAt).toLocaleTimeString('fr-FR')}</span>
+              <button
+                onClick={() => copyToClipboard(buildFullReport(), 'full-report')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 transition-all font-black text-[10px] ${
+                  copiedKey === 'full-report'
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 text-gray-500 hover:border-violet-300 hover:text-violet-600 bg-white'
+                }`}
+              >
+                {copiedKey === 'full-report'
+                  ? <><LucideIcons.Check className="h-3 w-3" />Copié !</>
+                  : <><LucideIcons.ClipboardCopy className="h-3 w-3" />Copier tout</>
+                }
+              </button>
               <button onClick={() => { setReport(null); setSelectedScope(null); }}
                 className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors">
                 <LucideIcons.RefreshCw className="h-3 w-3" /> Réinitialiser
@@ -1289,9 +1379,24 @@ function AiAnalyzerPanel() {
             ))}
           </div>
 
-          {AI_AGENT_META.map(({ key, bg, border }) =>
+          {AI_AGENT_META.map(({ key, bg, border, color }) =>
             activeTab === key ? (
-              <div key={key} className={`rounded-3xl border-2 ${border} ${bg} p-6`}>
+              <div key={key} className={`rounded-3xl border-2 ${border} ${bg} p-6 space-y-1`}>
+                <div className="flex justify-end mb-3">
+                  <button
+                    onClick={() => copyToClipboard(report[key], `agent-${key}`)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 text-[10px] font-black transition-all ${
+                      copiedKey === `agent-${key}`
+                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : `border-gray-200 bg-white text-gray-500 hover:${border} hover:${color}`
+                    }`}
+                  >
+                    {copiedKey === `agent-${key}`
+                      ? <><LucideIcons.Check className="h-3 w-3" />Copié !</>
+                      : <><LucideIcons.Copy className="h-3 w-3" />Copier ce rapport</>
+                    }
+                  </button>
+                </div>
                 <div className="space-y-0.5">{renderMarkdown(report[key])}</div>
               </div>
             ) : null
