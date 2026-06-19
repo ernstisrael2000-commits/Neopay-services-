@@ -986,6 +986,45 @@ function AiAnalyzerPanel() {
   const [error, setError] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<AgentKey>('security');
 
+  // ── Config panel state ────────────────────────────────────────────────────
+  const [showConfig, setShowConfig] = React.useState(false);
+  const [configKeys, setConfigKeys] = React.useState<Record<AgentKey, string>>({ security: '', ui: '', performance: '', admin: '' });
+  const [hasKeys, setHasKeys] = React.useState<Record<AgentKey, boolean>>({ security: false, ui: false, performance: false, admin: false });
+  const [configSaving, setConfigSaving] = React.useState(false);
+  const [configMsg, setConfigMsg] = React.useState('');
+
+  React.useEffect(() => {
+    fetch('/api/admin/ai-config')
+      .then(r => r.json())
+      .then(d => { if (d.hasKeys) setHasKeys(d.hasKeys); })
+      .catch(() => {});
+  }, []);
+
+  const saveConfig = async () => {
+    const payload: Record<string, string> = {};
+    (Object.keys(configKeys) as AgentKey[]).forEach(k => { if (configKeys[k].trim()) payload[k] = configKeys[k].trim(); });
+    if (!Object.keys(payload).length) { setConfigMsg('Entrez au moins une clé à sauvegarder.'); return; }
+    setConfigSaving(true); setConfigMsg('');
+    try {
+      const res = await fetch('/api/admin/ai-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const newHas = { ...hasKeys };
+      (Object.keys(payload) as AgentKey[]).forEach(k => { newHas[k] = true; });
+      setHasKeys(newHas);
+      setConfigKeys({ security: '', ui: '', performance: '', admin: '' });
+      setConfigMsg('✓ Clés sauvegardées avec succès.');
+    } catch (e: any) { setConfigMsg('Erreur : ' + e.message); }
+    finally { setConfigSaving(false); }
+  };
+
+  const deleteKey = async (agent: AgentKey) => {
+    try {
+      await fetch(`/api/admin/ai-config/${agent}`, { method: 'DELETE' });
+      setHasKeys(prev => ({ ...prev, [agent]: false }));
+    } catch {}
+  };
+
+  // ── Analysis ─────────────────────────────────────────────────────────────
   const handleAnalyze = async (scopeId: string) => {
     setSelectedScope(scopeId);
     setError(''); setLoading(true); setReport(null);
@@ -1006,20 +1045,17 @@ function AiAnalyzerPanel() {
     }
   };
 
+  // ── Markdown renderer ─────────────────────────────────────────────────────
   const renderMarkdown = (text: string) => {
     const lines = text.split('\n');
     const elements: React.ReactNode[] = [];
     let inCode = false;
     let codeLines: string[] = [];
-    let codeLang = '';
 
     lines.forEach((line, i) => {
       if (line.startsWith('```')) {
-        if (!inCode) {
-          inCode = true;
-          codeLang = line.slice(3).trim();
-          codeLines = [];
-        } else {
+        if (!inCode) { inCode = true; codeLines = []; }
+        else {
           inCode = false;
           elements.push(
             <pre key={i} className="mt-2 mb-3 bg-gray-900 text-green-300 rounded-xl p-4 overflow-x-auto text-[11px] font-mono leading-relaxed">
@@ -1031,48 +1067,125 @@ function AiAnalyzerPanel() {
         return;
       }
       if (inCode) { codeLines.push(line); return; }
-      if (line.startsWith('## '))       { elements.push(<h3 key={i} className="text-sm font-black text-gray-900 mt-6 mb-2 pb-1 border-b border-gray-200 first:mt-0">{line.slice(3)}</h3>); return; }
-      if (line.startsWith('### '))      { elements.push(<h4 key={i} className="text-xs font-black text-gray-700 mt-4 mb-1">{line.slice(4)}</h4>); return; }
+      if (line.startsWith('## '))  { elements.push(<h3 key={i} className="text-sm font-black text-gray-900 mt-6 mb-2 pb-1 border-b border-gray-200 first:mt-0">{line.slice(3)}</h3>); return; }
+      if (line.startsWith('### ')) { elements.push(<h4 key={i} className="text-xs font-black text-gray-700 mt-4 mb-1">{line.slice(4)}</h4>); return; }
       if (line.startsWith('- ') || line.startsWith('* ')) {
-        const content = line.slice(2);
-        const bold = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        elements.push(<li key={i} className="text-xs text-gray-700 ml-5 list-disc leading-relaxed my-0.5" dangerouslySetInnerHTML={{ __html: bold }} />);
+        elements.push(<li key={i} className="text-xs text-gray-700 ml-5 list-disc leading-relaxed my-0.5" dangerouslySetInnerHTML={{ __html: line.slice(2).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />);
         return;
       }
       if (line.trim() === '') { elements.push(<div key={i} className="h-2" />); return; }
-      const bold = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-      elements.push(<p key={i} className="text-xs text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: bold }} />);
+      elements.push(<p key={i} className="text-xs text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>') }} />);
     });
     return elements;
   };
 
   const currentScope = AI_SCOPES.find(s => s.id === selectedScope);
+  const totalKeys = Object.values(hasKeys).filter(Boolean).length + (process.env.GROQ_API_KEY ? 1 : 0);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
 
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="h-14 w-14 rounded-3xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-purple-200 flex-shrink-0">
-          <LucideIcons.BrainCircuit className="h-7 w-7 text-white" />
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-3xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-xl shadow-purple-200 flex-shrink-0">
+            <LucideIcons.BrainCircuit className="h-7 w-7 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-gray-900">Analyse IA Multi-Agent</h2>
+            <p className="text-xs text-gray-500 mt-0.5">4 agents lisent directement le code source et proposent des corrections concrètes</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-2xl font-black text-gray-900">Analyse IA Multi-Agent</h2>
-          <p className="text-xs text-gray-500 mt-0.5">4 agents IA lisent directement le code source de votre site et proposent des améliorations concrètes</p>
-        </div>
+        <button
+          onClick={() => { setShowConfig(v => !v); setConfigMsg(''); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl border-2 text-xs font-black transition-all ${
+            showConfig ? 'border-violet-400 bg-violet-50 text-violet-700' : 'border-gray-200 text-gray-500 hover:border-violet-300'
+          }`}
+        >
+          <LucideIcons.KeyRound className="h-3.5 w-3.5" />
+          Clés API
+          {Object.values(hasKeys).some(Boolean) && (
+            <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+              {Object.values(hasKeys).filter(Boolean).length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Agent badges */}
+      {/* ── Config panel ── */}
+      {showConfig && (
+        <div className="rounded-3xl border-2 border-violet-200 bg-violet-50/40 p-6 space-y-5">
+          <div>
+            <p className="text-sm font-black text-gray-800">Configuration des clés Groq par agent</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Chaque agent peut utiliser une clé Groq différente — cela multiplie votre limite TPM (tokens/minute) par le nombre de clés distinctes.
+              Obtenez des clés gratuites sur <a href="https://console.groq.com/keys" target="_blank" rel="noopener" className="text-violet-600 font-bold underline">console.groq.com/keys</a>.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {AI_AGENT_META.map(({ key, label, icon: Icon, color, bg, border }) => (
+              <div key={key} className={`rounded-2xl border-2 ${hasKeys[key] ? `${border} ${bg}` : 'border-gray-200 bg-white'} p-4 space-y-2`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 ${color}`} />
+                    <p className="text-xs font-black text-gray-700">Agent {label}</p>
+                  </div>
+                  {hasKeys[key] ? (
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600">
+                        <LucideIcons.CheckCircle className="h-3 w-3" />
+                        Configurée
+                      </span>
+                      <button onClick={() => deleteKey(key)} className="text-[10px] text-red-400 hover:text-red-600 font-black">Supprimer</button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-gray-400 font-semibold">Utilise la clé par défaut</span>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  value={configKeys[key]}
+                  onChange={e => setConfigKeys(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={hasKeys[key] ? 'Nouvelle clé pour remplacer…' : 'gsk_…'}
+                  className="w-full h-9 rounded-xl border border-gray-200 bg-white px-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 transition-all"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={saveConfig}
+              disabled={configSaving}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 text-white text-xs font-black hover:bg-violet-700 disabled:opacity-50 transition-all"
+            >
+              {configSaving ? <LucideIcons.Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LucideIcons.Save className="h-3.5 w-3.5" />}
+              Sauvegarder les clés
+            </button>
+            {configMsg && (
+              <p className={`text-xs font-semibold ${configMsg.startsWith('✓') ? 'text-emerald-600' : 'text-red-600'}`}>{configMsg}</p>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+            <strong>Astuce TPM :</strong> Avec 4 clés différentes, chaque agent a sa propre limite de 6 000 TPM = 24 000 TPM effectifs au total, sans aucune erreur 429.
+          </div>
+        </div>
+      )}
+
+      {/* ── Agent badges ── */}
       <div className="flex flex-wrap gap-2">
         {AI_AGENT_META.map(({ key, label, icon: Icon, color, bg, border }) => (
           <span key={key} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[11px] font-black ${bg} ${border} ${color}`}>
             <Icon className="h-3 w-3" />
             {label}
+            {hasKeys[key] && <LucideIcons.KeyRound className="h-2.5 w-2.5 opacity-70" />}
           </span>
         ))}
       </div>
 
-      {/* Scope selector */}
+      {/* ── Scope selector ── */}
       <div className="space-y-3">
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez la section à analyser</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1085,120 +1198,101 @@ function AiAnalyzerPanel() {
                 onClick={() => !loading && handleAnalyze(id)}
                 disabled={loading}
                 className={`relative text-left rounded-2xl border-2 p-4 transition-all group ${
-                  isActive
-                    ? 'border-violet-400 bg-violet-50 shadow-lg shadow-violet-100'
-                    : 'border-gray-200 bg-white hover:border-violet-300 hover:shadow-md hover:shadow-violet-50'
+                  isActive ? 'border-violet-400 bg-violet-50 shadow-lg shadow-violet-100'
+                           : 'border-gray-200 bg-white hover:border-violet-300 hover:shadow-md hover:shadow-violet-50'
                 } disabled:opacity-60 disabled:cursor-not-allowed`}
               >
                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center mb-3 ${isActive ? 'bg-violet-500' : 'bg-gray-100 group-hover:bg-violet-100'}`}>
-                  {isLoading ? (
-                    <LucideIcons.Loader2 className="h-4 w-4 text-white animate-spin" />
-                  ) : (
-                    <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-violet-600'}`} />
-                  )}
+                  {isLoading ? <LucideIcons.Loader2 className="h-4 w-4 text-white animate-spin" />
+                             : <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-violet-600'}`} />}
                 </div>
                 <p className={`text-sm font-black ${isActive ? 'text-violet-700' : 'text-gray-800'}`}>{label}</p>
                 <p className="text-[10px] text-gray-400 mt-0.5 leading-relaxed">{desc}</p>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {files.map(f => (
-                    <span key={f} className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md">{f.split('/').pop()}</span>
-                  ))}
+                  {files.map(f => <span key={f} className="text-[9px] font-mono bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md">{f.split('/').pop()}</span>)}
                 </div>
                 {isActive && !isLoading && report && (
                   <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
                     <LucideIcons.Check className="h-3 w-3 text-white" />
                   </div>
                 )}
-                {isLoading && (
-                  <div className="absolute top-3 right-3">
-                    <span className="text-[9px] font-black text-violet-500 animate-pulse">ANALYSE…</span>
-                  </div>
-                )}
+                {isLoading && <div className="absolute top-3 right-3"><span className="text-[9px] font-black text-violet-500 animate-pulse">ANALYSE…</span></div>}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Loading state */}
+      {/* ── Loading ── */}
       {loading && (
-        <div className="rounded-3xl border-2 border-dashed border-violet-200 bg-violet-50/50 p-8 text-center space-y-3">
+        <div className="rounded-3xl border-2 border-dashed border-violet-200 bg-violet-50/50 p-8 text-center space-y-4">
           <div className="flex justify-center gap-3">
             {AI_AGENT_META.map(({ key, icon: Icon, color }, i) => (
-              <div key={key} className={`h-10 w-10 rounded-2xl bg-white shadow flex items-center justify-center`}
-                style={{ animation: `pulse 1.5s ease-in-out ${i * 0.3}s infinite` }}>
+              <div key={key} className="h-10 w-10 rounded-2xl bg-white shadow flex items-center justify-center"
+                style={{ animation: `pulse 1.5s ease-in-out ${i * 0.4}s infinite` }}>
                 <Icon className={`h-5 w-5 ${color}`} />
               </div>
             ))}
           </div>
-          <p className="text-sm font-black text-violet-700">4 agents IA analysent <em>{currentScope?.label}</em>…</p>
-          <p className="text-xs text-gray-400">Les agents travaillent en parallèle. Résultat dans ~30 secondes.</p>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && !loading && (
-        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-700">
-          <LucideIcons.AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="font-black">Erreur</p>
-            <p className="text-xs mt-0.5">{error}</p>
+            <p className="text-sm font-black text-violet-700">4 agents analysent <em>{currentScope?.label}</em>…</p>
+            <p className="text-xs text-gray-400 mt-1">Les agents s'exécutent séquentiellement pour respecter les limites Groq. Résultat dans ~2 min.</p>
+          </div>
+          <div className="w-full bg-violet-100 rounded-full h-1.5 overflow-hidden">
+            <div className="bg-violet-500 h-full rounded-full animate-pulse" style={{ width: '60%' }} />
           </div>
         </div>
       )}
 
-      {/* Results */}
+      {/* ── Error ── */}
+      {error && !loading && (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl">
+          <LucideIcons.AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0 text-red-600" />
+          <div>
+            <p className="text-sm font-black text-red-700">Erreur</p>
+            <p className="text-xs text-red-600 mt-0.5">{error}</p>
+            {error.includes('429') && (
+              <p className="text-xs text-amber-700 mt-2 font-semibold">
+                💡 Ajoutez plusieurs clés Groq (bouton <strong>Clés API</strong> en haut) pour multiplier votre limite TPM.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Results ── */}
       {report && !loading && (
         <div className="space-y-4">
-          {/* Result header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <p className="text-xs font-black text-gray-700 uppercase tracking-widest">
-                Rapport — {currentScope?.label}
-              </p>
+              <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Rapport — {currentScope?.label}</p>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-gray-400 font-semibold">
-              <span className="flex items-center gap-1">
-                <LucideIcons.Clock className="h-3 w-3" />
-                {(report.durationMs / 1000).toFixed(1)}s
-              </span>
+              <span className="flex items-center gap-1"><LucideIcons.Clock className="h-3 w-3" />{(report.durationMs / 1000).toFixed(1)}s</span>
               <span>{new Date(report.analyzedAt).toLocaleTimeString('fr-FR')}</span>
-              <button
-                onClick={() => { setReport(null); setSelectedScope(null); }}
-                className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <LucideIcons.RefreshCw className="h-3 w-3" />
-                Réinitialiser
+              <button onClick={() => { setReport(null); setSelectedScope(null); }}
+                className="flex items-center gap-1 text-gray-400 hover:text-gray-600 transition-colors">
+                <LucideIcons.RefreshCw className="h-3 w-3" /> Réinitialiser
               </button>
             </div>
           </div>
 
-          {/* Agent tabs */}
           <div className="flex gap-2 flex-wrap">
             {AI_AGENT_META.map(({ key, label, icon: Icon, color, bg, border }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
+              <button key={key} onClick={() => setActiveTab(key)}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-black border-2 transition-all ${
-                  activeTab === key
-                    ? `${bg} ${border} ${color} shadow-sm`
-                    : 'border-gray-200 text-gray-400 bg-white hover:border-gray-300'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
+                  activeTab === key ? `${bg} ${border} ${color} shadow-sm` : 'border-gray-200 text-gray-400 bg-white hover:border-gray-300'
+                }`}>
+                <Icon className="h-3.5 w-3.5" />{label}
               </button>
             ))}
           </div>
 
-          {/* Active agent report */}
-          {AI_AGENT_META.map(({ key, bg, border, color }) =>
+          {AI_AGENT_META.map(({ key, bg, border }) =>
             activeTab === key ? (
               <div key={key} className={`rounded-3xl border-2 ${border} ${bg} p-6`}>
-                <div className="space-y-0.5">
-                  {renderMarkdown(report[key])}
-                </div>
+                <div className="space-y-0.5">{renderMarkdown(report[key])}</div>
               </div>
             ) : null
           )}

@@ -1,98 +1,36 @@
 // ─── Agents IA spécialisés ────────────────────────────────────────────────────
-// Chaque agent produit un prompt orienté "audit + solutions concrètes"
-// pour une dimension précise du projet.
+// Chaque agent accepte une clé API optionnelle (pour distribuer la charge
+// TPM sur plusieurs comptes Groq).
 
 import { callGroq } from './ai.ts';
 
 const SYSTEM = `Tu es un expert senior en développement web (React, Node.js, Firebase, TypeScript, Tailwind CSS).
 Tu audites du code source réel d'un site web en production (application fintech/logistique appelée Rena).
-Réponds TOUJOURS en français.
+Réponds TOUJOURS en français. Sois concis et précis.
 Structure ta réponse ainsi :
 ## Problèmes identifiés
-- liste des problèmes avec une brève explication
+- liste des problèmes (3-5 maximum, les plus importants)
 ## Solutions concrètes
-Pour chaque problème, donne une solution avec des extraits de code ou des étapes précises.
+Pour chaque problème, donne une solution avec un extrait de code ou des étapes précises.
 ## Priorité d'action
 Classe les améliorations du plus critique au moins urgent.`;
 
-// ── Agent sécurité ─────────────────────────────────────────────────────────────
-export async function securityAgent(code: string): Promise<string> {
-  const prompt = `Effectue un AUDIT DE SÉCURITÉ complet sur ce code :
-
-\`\`\`
-${code}
-\`\`\`
-
-Analyse spécifiquement :
-- Failles d'authentification / autorisation (admin, affiliate, agent, client)
-- Exposition des routes API (vérification de rôle manquante, injection, etc.)
-- Gestion des données sensibles (mots de passe, tokens, paiements MonCash/NatCash)
-- Sécurité Firebase (règles Firestore, clés exposées côté client)
-- Validation des entrées utilisateur (dépôts, retraits, formulaires)
-- CORS, rate limiting, CSRF, XSS
-
-Pour CHAQUE problème trouvé, propose une correction concrète avec du code.`;
-  return callGroq(prompt, SYSTEM);
+export async function securityAgent(code: string, apiKey?: string): Promise<string> {
+  const prompt = `AUDIT DE SÉCURITÉ sur ce code :\n\`\`\`\n${code}\n\`\`\`\nAnalyse : auth/autorisation, routes API exposées, données sensibles (paiements, tokens), règles Firestore, validation des entrées. Propose une correction concrète par problème.`;
+  return callGroq(prompt, SYSTEM, apiKey);
 }
 
-// ── Agent UX/UI ────────────────────────────────────────────────────────────────
-export async function uiAgent(code: string): Promise<string> {
-  const prompt = `Effectue un AUDIT UX/UI complet sur ce code :
-
-\`\`\`
-${code}
-\`\`\`
-
-Analyse spécifiquement :
-- Expérience utilisateur (flux de navigation, clarté des actions)
-- Design et cohérence visuelle (Tailwind CSS, shadcn/ui)
-- Responsive design et accessibilité (mobile-first, aria, contraste)
-- Performance perçue (états de chargement, feedback utilisateur)
-- Formulaires et dialogues (dépôt, retrait, tracking)
-- Lisibilité des dashboards (client, admin, affilié, agent)
-
-Pour CHAQUE point, propose des améliorations concrètes (JSX, classes Tailwind, structure).`;
-  return callGroq(prompt, SYSTEM);
+export async function uiAgent(code: string, apiKey?: string): Promise<string> {
+  const prompt = `AUDIT UX/UI sur ce code :\n\`\`\`\n${code}\n\`\`\`\nAnalyse : navigation, cohérence visuelle Tailwind/shadcn, responsive mobile, états de chargement, formulaires (dépôt/retrait). Propose des améliorations concrètes (JSX, classes Tailwind).`;
+  return callGroq(prompt, SYSTEM, apiKey);
 }
 
-// ── Agent performance ──────────────────────────────────────────────────────────
-export async function performanceAgent(code: string): Promise<string> {
-  const prompt = `Effectue un AUDIT DE PERFORMANCE complet sur ce code :
-
-\`\`\`
-${code}
-\`\`\`
-
-Analyse spécifiquement :
-- Requêtes Firestore/API inutiles ou non optimisées
-- Absence de cache (données statiques rechargées trop souvent)
-- Re-rendus React inutiles (memo, useCallback, useMemo manquants)
-- Bundle size (imports lourds, code splitting absent)
-- Gestion des images (base64 en Firestore, taille non optimisée)
-- Appels API en cascade au lieu de Promise.all
-- Paginations manquantes sur les listes longues
-
-Pour CHAQUE problème, propose une solution concrète avec du code optimisé.`;
-  return callGroq(prompt, SYSTEM);
+export async function performanceAgent(code: string, apiKey?: string): Promise<string> {
+  const prompt = `AUDIT DE PERFORMANCE sur ce code :\n\`\`\`\n${code}\n\`\`\`\nAnalyse : requêtes Firestore/API inutiles, re-rendus React (memo manquant), images base64 en DB, appels en cascade vs Promise.all, paginations manquantes. Propose une solution optimisée par problème.`;
+  return callGroq(prompt, SYSTEM, apiKey);
 }
 
-// ── Agent architecture ─────────────────────────────────────────────────────────
-export async function adminAgent(code: string): Promise<string> {
-  const prompt = `Effectue un AUDIT D'ARCHITECTURE ET DE SCALABILITÉ sur ce code :
-
-\`\`\`
-${code}
-\`\`\`
-
-Analyse spécifiquement :
-- Structure du code backend (Express, routes, middleware)
-- Logique métier SaaS (gestion des rôles, permissions, multi-tenant)
-- Gestion des erreurs (try/catch, retours API, logging)
-- Séparation des responsabilités (services, controllers, modèles)
-- Potentiel de scalabilité (Firestore transactions, batch writes)
-- Gestion des états côté React (useState vs contexte vs store)
-- Maintenabilité (duplication de code, fonctions trop longues)
-
-Pour CHAQUE problème, propose une refactorisation concrète avec du code.`;
-  return callGroq(prompt, SYSTEM);
+export async function adminAgent(code: string, apiKey?: string): Promise<string> {
+  const prompt = `AUDIT D'ARCHITECTURE sur ce code :\n\`\`\`\n${code}\n\`\`\`\nAnalyse : structure Express/middleware, gestion des rôles SaaS, séparation des responsabilités, gestion des erreurs, maintenabilité (duplication, fonctions trop longues). Propose une refactorisation concrète par problème.`;
+  return callGroq(prompt, SYSTEM, apiKey);
 }

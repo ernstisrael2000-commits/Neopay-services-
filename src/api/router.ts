@@ -5621,37 +5621,92 @@ router.get('/api/admin/analyze/scopes', (_req, res) => {
   res.json(Object.entries(AI_SCOPES).map(([id, s]) => ({ id, label: s.label, files: s.files })));
 });
 
+// ── AI config: read/write per-agent Groq keys in Firestore ────────────────────
+router.get('/api/admin/ai-config', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('settings').doc('ai_config').get();
+    const data = snap.exists ? snap.data()! : {};
+    // Never send the actual key values — just whether they're set
+    res.json({
+      security:    data.security    ? '••••••••' : '',
+      ui:          data.ui          ? '••••••••' : '',
+      performance: data.performance ? '••••••••' : '',
+      admin:       data.admin       ? '••••••••' : '',
+      hasKeys: {
+        security:    !!data.security,
+        ui:          !!data.ui,
+        performance: !!data.performance,
+        admin:       !!data.admin,
+      },
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/api/admin/ai-config', requireDb, async (req, res) => {
+  try {
+    const { security, ui, performance, admin } = req.body as Record<string, string>;
+    const update: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+    if (typeof security    === 'string' && security.trim())    update.security    = security.trim();
+    if (typeof ui          === 'string' && ui.trim())          update.ui          = ui.trim();
+    if (typeof performance === 'string' && performance.trim()) update.performance = performance.trim();
+    if (typeof admin       === 'string' && admin.trim())       update.admin       = admin.trim();
+    await adminDb.collection('settings').doc('ai_config').set(update, { merge: true });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/ai-config/:agent', requireDb, async (req, res) => {
+  try {
+    const agent = req.params.agent;
+    if (!['security','ui','performance','admin'].includes(agent))
+      return res.status(400).json({ error: 'Agent inconnu.' });
+    await adminDb.collection('settings').doc('ai_config').set(
+      { [agent]: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 router.post('/api/admin/analyze', async (req, res) => {
   try {
-    if (!process.env.GROQ_API_KEY)
-      return res.status(503).json({ error: 'GROQ_API_KEY non configurée sur le serveur.' });
-
     const { scope, code: rawCode } = req.body as { scope?: string; code?: string };
+
+    // Load per-agent keys from Firestore (fallback to env var GROQ_API_KEY)
+    let agentKeys: Record<string, string | undefined> = {};
+    try {
+      if (adminDb) {
+        const cfgSnap = await adminDb.collection('settings').doc('ai_config').get();
+        if (cfgSnap.exists) agentKeys = cfgSnap.data() as Record<string, string>;
+      }
+    } catch {}
+
+    // Ensure at least one key is available
+    const hasAnyKey = agentKeys.security || agentKeys.ui || agentKeys.performance || agentKeys.admin || process.env.GROQ_API_KEY;
+    if (!hasAnyKey)
+      return res.status(503).json({ error: 'Aucune clé GROQ_API_KEY configurée. Ajoutez-en une dans Analyse IA → Configuration.' });
 
     let code = '';
 
     if (scope && AI_SCOPES[scope]) {
-      // Read actual project files from disk
       const { readFile } = await import('node:fs/promises');
       const { join } = await import('node:path');
       const cwd = process.cwd();
       const parts: string[] = [];
-
       for (const filePath of AI_SCOPES[scope].files) {
         try {
-          const full = join(cwd, filePath);
-          const content = await readFile(full, 'utf-8');
+          const content = await readFile(join(cwd, filePath), 'utf-8');
           const excerpt = content.length > MAX_FILE_CHARS
-            ? content.slice(0, MAX_FILE_CHARS) + `\n\n// [... ${filePath} tronqué — ${content.length.toLocaleString()} chars au total ...]`
+            ? content.slice(0, MAX_FILE_CHARS) + `\n\n// [... ${filePath} tronqué — ${content.length.toLocaleString()} chars ...]`
             : content;
           parts.push(`// ═══ FICHIER : ${filePath} ═══\n${excerpt}`);
         } catch {
           parts.push(`// ═══ FICHIER : ${filePath} — non trouvé ═══`);
         }
       }
-
       code = parts.join('\n\n');
-      if (code.length > MAX_TOTAL_CHARS) code = code.slice(0, MAX_TOTAL_CHARS) + '\n\n// [... combinaison tronquée à ' + MAX_TOTAL_CHARS.toLocaleString() + ' chars ...]';
+      if (code.length > MAX_TOTAL_CHARS)
+        code = code.slice(0, MAX_TOTAL_CHARS) + '\n\n// [... combinaison tronquée ...]';
     } else if (rawCode && rawCode.trim().length >= 50) {
       code = rawCode;
     } else {
@@ -5659,7 +5714,12 @@ router.post('/api/admin/analyze', async (req, res) => {
     }
 
     const { orchestrate } = await import('./ai/orchestrator.ts');
-    const report = await orchestrate(code);
+    const report = await orchestrate(code, {
+      security:    agentKeys.security    || undefined,
+      ui:          agentKeys.ui          || undefined,
+      performance: agentKeys.performance || undefined,
+      admin:       agentKeys.admin       || undefined,
+    });
     res.json(report);
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Erreur interne du système IA.' });
