@@ -1544,7 +1544,7 @@ function AiChatPanel() {
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col max-w-3xl mx-auto w-full" style={{ height: 'calc(100dvh - 160px)', minHeight: '400px' }}>
+    <div className="flex flex-col max-w-3xl mx-auto w-full" style={{ height: 'clamp(420px, 70dvh, 820px)' }}>
 
       {/* Header */}
       <div className="flex-shrink-0 space-y-3 pb-3">
@@ -1636,7 +1636,7 @@ function AiChatPanel() {
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4 custom-scrollbar pr-1">
+      <div className="flex-1 overflow-y-auto min-h-0 space-y-4 pb-4 custom-scrollbar pr-1">
 
         {/* Empty state */}
         {isEmpty && (
@@ -9556,7 +9556,7 @@ function EmailLogsPanel() {
         {/* ──────────────────────────────────────────────────────────────────── */}
         {/* Chat Dev IA — chat libre avec contexte du projet                    */}
         {/* ──────────────────────────────────────────────────────────────────── */}
-        <TabsContent value="ai-chat" className="pt-4 sm:pt-6 px-3 sm:px-6 pb-4 h-full flex flex-col overflow-hidden">
+        <TabsContent value="ai-chat" className="pt-4 sm:pt-6 px-3 sm:px-6 pb-6">
           <AiChatPanel />
         </TabsContent>
 
