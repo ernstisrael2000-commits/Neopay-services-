@@ -998,7 +998,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       <QrCode className="h-8 w-8 text-emerald-600 shrink-0" />
                       <div>
                         <p className="font-black text-emerald-800 text-sm">Dépôt via Agent QR</p>
-                        <p className="text-[11px] text-emerald-600 mt-1 leading-relaxed">L'agent scanne le code, votre solde est crédité immédiatement. Valide 15 min.</p>
+                        <p className="text-[11px] text-emerald-600 mt-1 leading-relaxed">L'agent scanne le code, votre solde est crédité immédiatement. Valide 60 min.</p>
                       </div>
                     </div>
                     <div className="space-y-1.5">
@@ -1322,7 +1322,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       <QrCode className="h-8 w-8 text-rose-600 shrink-0" />
                       <div>
                         <p className="font-black text-rose-800 text-sm">Retrait via Agent QR</p>
-                        <p className="text-[11px] text-rose-600 mt-1 leading-relaxed">L'agent scanne le code, votre solde est débité et vous recevez le cash. Valide 15 min.</p>
+                        <p className="text-[11px] text-rose-600 mt-1 leading-relaxed">L'agent scanne le code, votre solde est débité et vous recevez le cash. Valide 60 min.</p>
                       </div>
                     </div>
                     <div className="space-y-1.5">

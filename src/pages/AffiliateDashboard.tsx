@@ -390,9 +390,24 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   };
 
   const startQrScanner = async () => {
-    setScanning(true);
     setScanResult(null);
     setScannedTxInfo(null);
+
+    // Explicitly request camera permission so the browser dialog appears
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(stream => stream.getTracks().forEach(t => t.stop()));
+    } catch {
+      toast.error('Permission caméra refusée. Autorisez l\'accès dans les paramètres.');
+      return;
+    }
+
+    // Set scanning=true so React renders the #qr-scanner-affiliate div
+    setScanning(true);
+
+    // Wait for React to commit the render before Html5Qrcode looks for the div
+    await new Promise(r => setTimeout(r, 150));
+
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
       const scanner = new Html5Qrcode('qr-scanner-affiliate');

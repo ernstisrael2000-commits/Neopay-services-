@@ -4854,7 +4854,7 @@ router.post('/api/client/generate-tx-code', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'Solde insuffisant.' });
 
     const token = randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 15 * 60 * 1000;
+    const expiresAt = Date.now() + 60 * 60 * 1000; // 60 minutes
 
     const codeRef = await adminDb.collection('tx_codes').add({
       clientId,
