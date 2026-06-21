@@ -28,65 +28,119 @@ try {
   // FCM unavailable (offline / CSP) — web-push still works
 }
 
-const CACHE_NAME = 'rena-cache-v1';
-const OFFLINE_URL = '/';
+// ── Cache names (bump version to force refresh) ───────────────────────────────
+const SHELL_CACHE   = 'rena-shell-v3';      // App shell: JS, CSS, fonts
+const IMAGE_CACHE   = 'rena-images-v3';     // Local + Firebase Storage images
+const OFFLINE_URL   = '/';
 
+// Assets pre-cached at install time
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.webmanifest',
   '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
+// ── Install: pre-cache app shell ──────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS).catch(() => {});
-    }).then(() => self.skipWaiting())
+    caches.open(SHELL_CACHE)
+      .then((cache) => cache.addAll(PRECACHE_ASSETS).catch(() => {}))
+      .then(() => self.skipWaiting())
   );
 });
 
+// ── Activate: delete old caches ───────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
+  const CURRENT_CACHES = [SHELL_CACHE, IMAGE_CACHE];
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+    caches.keys()
+      .then((names) =>
+        Promise.all(
+          names
+            .filter((n) => !CURRENT_CACHES.includes(n))
+            .map((n) => caches.delete(n))
+        )
       )
-    ).then(() => self.clients.claim())
+      .then(() => self.clients.claim())
   );
 });
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function isStaticAsset(url) {
+  return /\.(js|css|woff2?|ttf|otf)(\?.*)?$/.test(url.pathname);
+}
+
+function isImageAsset(url) {
+  // Local images or Firebase Storage images
+  return (
+    /\.(png|svg|ico|webp|jpg|jpeg|gif|avif)(\?.*)?$/.test(url.pathname) ||
+    url.hostname.includes('firebasestorage.googleapis.com') ||
+    url.hostname.includes('storage.googleapis.com')
+  );
+}
+
+// ── Fetch: route requests to the right strategy ───────────────────────────────
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api/')) return;
 
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match(OFFLINE_URL).then((r) => r || Response.error()))
-    );
-    return;
-  }
+  // Never intercept API calls or HMR websockets
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/@')) return;
+  if (event.request.headers.get('accept')?.includes('text/event-stream')) return;
 
-  if (url.pathname.match(/\.(js|css|woff2?|png|svg|ico|webp|jpg|jpeg)$/)) {
+  // ── 1. App shell (JS/CSS/fonts): Cache-first, fallback to network ──────────
+  if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached;
         return fetch(event.request).then((response) => {
           if (response.ok) {
             const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+            caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, clone));
           }
           return response;
         }).catch(() => Response.error());
       })
+    );
+    return;
+  }
+
+  // ── 2. Images: Stale-while-revalidate ─────────────────────────────────────
+  //    Serve cached copy instantly, update cache in the background
+  if (isImageAsset(url)) {
+    event.respondWith(
+      caches.open(IMAGE_CACHE).then((cache) => {
+        return cache.match(event.request).then((cached) => {
+          const networkFetch = fetch(event.request).then((response) => {
+            if (response.ok) cache.put(event.request, response.clone());
+            return response;
+          }).catch(() => cached || Response.error());
+
+          // Return cached immediately if available; otherwise wait for network
+          return cached || networkFetch;
+        });
+      })
+    );
+    return;
+  }
+
+  // ── 3. Navigation (HTML): Network-first, fallback to cached shell ─────────
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(OFFLINE_URL).then((r) => r || Response.error())
+        )
     );
   }
 });
