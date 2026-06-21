@@ -2961,7 +2961,6 @@ function EmailLogsPanel() {
       items: [
         { value: 'profits', label: 'Profits', icon: LucideIcons.TrendingUp, permission: 'settings' },
         { value: 'ai-analyzer', label: 'Analyse IA', icon: LucideIcons.BrainCircuit, permission: 'settings' },
-        { value: 'ai-chat', label: 'Chat Dev IA', icon: LucideIcons.MessageSquareCode, permission: 'settings' },
         { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
         { value: 'email-logs', label: 'Logs Emails', icon: LucideIcons.Mail, permission: 'settings' },
@@ -9551,13 +9550,6 @@ function EmailLogsPanel() {
         {/* ──────────────────────────────────────────────────────────────────── */}
         <TabsContent value="ai-analyzer" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
           <AiAnalyzerPanel />
-        </TabsContent>
-
-        {/* ──────────────────────────────────────────────────────────────────── */}
-        {/* Chat Dev IA — chat libre avec contexte du projet                    */}
-        {/* ──────────────────────────────────────────────────────────────────── */}
-        <TabsContent value="ai-chat" className="pt-4 sm:pt-6 px-3 sm:px-6 pb-6">
-          <AiChatPanel />
         </TabsContent>
 
           </Tabs>
