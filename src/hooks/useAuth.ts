@@ -12,7 +12,11 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Max wait: 800ms — if Firebase Auth hasn't responded, unblock the app
+    const timeout = setTimeout(() => setLoading(false), 800);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      clearTimeout(timeout);
       setUser(firebaseUser);
       if (firebaseUser) {
         const docRef = doc(db, 'users', firebaseUser.uid);
@@ -20,7 +24,6 @@ export const useAuth = () => {
         if (docSnap.exists()) {
           setProfile(docSnap.data() as UserProfile);
         } else {
-          // Check if it's the hardcoded admin
           if (ADMIN_EMAILS.includes(firebaseUser.email || '')) {
             setProfile({
               uid: firebaseUser.uid,
@@ -35,7 +38,7 @@ export const useAuth = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { clearTimeout(timeout); unsubscribe(); };
   }, []);
 
   const isAdmin = profile?.role === 'admin' || ADMIN_EMAILS.includes(user?.email || '');

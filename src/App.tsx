@@ -32,7 +32,7 @@ import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Client, Teacher } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
@@ -71,25 +71,27 @@ export default function App() {
     setView('home');
   };
 
-  // Connection Test
+  // Connection Test — passive listener (no network request on startup)
   useEffect(() => {
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, '_connection_test_', 'ping'));
-        setIsOffline(false);
-      } catch (error: any) {
-        if (error?.message?.includes('offline') || error?.code === 'unavailable') {
-          setIsOffline(true);
-          toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
-            description: "Certaines fonctionnalités peuvent être limitées.",
-            duration: Infinity,
-            icon: <WifiOff className="h-4 w-4" />,
-            id: 'offline-toast'
-          });
-        }
-      }
+    const handleOffline = () => {
+      setIsOffline(true);
+      toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
+        description: "Certaines fonctionnalités peuvent être limitées.",
+        duration: Infinity,
+        icon: <WifiOff className="h-4 w-4" />,
+        id: 'offline-toast'
+      });
     };
-    testConnection();
+    const handleOnline = () => {
+      setIsOffline(false);
+      toast.dismiss('offline-toast');
+    };
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
   }, []);
 
   // Detect MonCash return redirect (?moncash_ref=xxx after payment) — legacy support
@@ -107,12 +109,15 @@ export default function App() {
     }
   }, []);
 
-  // Bootstrap Super Admin via API (idempotent — creates only if no admin exists)
+  // Bootstrap Super Admin — deferred so it doesn't compete with initial render
   useEffect(() => {
-    fetch('/api/admin/bootstrap', { method: 'POST' })
-      .then(r => r.json())
-      .then(d => { if (d.bootstrapped) console.log('[Bootstrap] Super Admin créé.'); })
-      .catch(e => console.warn('[Bootstrap] Non critique:', e.message));
+    const t = setTimeout(() => {
+      fetch('/api/admin/bootstrap', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.bootstrapped) console.log('[Bootstrap] Super Admin créé.'); })
+        .catch(e => console.warn('[Bootstrap] Non critique:', e.message));
+    }, 3000);
+    return () => clearTimeout(t);
   }, []);
   
   const handleViewChange = (newView: typeof view) => {

@@ -32,6 +32,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
+      include: [
+        'react', 'react-dom', 'react-dom/client',
+        'firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage',
+        'lucide-react', 'sonner', 'motion/react',
+        'clsx', 'tailwind-merge', 'class-variance-authority',
+      ],
       esbuildOptions: {
         sourcemap: false,
       },
