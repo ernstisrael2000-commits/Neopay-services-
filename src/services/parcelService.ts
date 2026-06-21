@@ -11,6 +11,7 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
+import { cacheGet, cacheSet } from '../lib/localCache';
 import { Parcel, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService, Formation } from '../types';
 
 // ── Admin API helper (toutes les écritures passent par le serveur) ────────────
@@ -56,13 +57,16 @@ const uploadWithProgress = (
 
 // Navigation Buttons Services
 export const useNavButtons = () => {
-  const [buttons, setButtons] = useState<NavButton[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<NavButton[]>('nav_buttons');
+  const [buttons, setButtons] = useState<NavButton[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const q = query(collection(db, 'nav_buttons'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setButtons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as NavButton[]);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as NavButton[];
+      setButtons(data);
+      cacheSet('nav_buttons', data);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching nav buttons:", error);
@@ -160,13 +164,16 @@ export const uploadProof = async (
 
 // Product Services
 export const useProducts = () => {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<Product[]>('products');
+  const [products, setProducts] = useState<Product[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+      setProducts(data);
+      cacheSet('products', data, 60 * 60 * 1000); // 1h TTL
       setLoading(false);
     }, (error) => {
       console.error("Error fetching products:", error);
@@ -216,13 +223,18 @@ export const deleteGame = async (id: string) => {
 
 // Settings Services
 export const useSettings = () => {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<AppSettings>('settings_global');
+  const [settings, setSettings] = useState<AppSettings | null>(cached ?? null);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const docRef = doc(db, 'settings', 'global');
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) setSettings(docSnap.data() as AppSettings);
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppSettings;
+        setSettings(data);
+        cacheSet('settings_global', data);
+      }
       setLoading(false);
     }, (error) => {
       setLoading(false);
@@ -252,14 +264,18 @@ export const uploadLogo = async (
 };
 
 // Slider Images Services
+type SliderImage = { id: string; url: string; title?: string; description?: string };
 export const useSliderImages = () => {
-  const [sliderImages, setSliderImages] = useState<{ id: string, url: string, title?: string, description?: string }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<SliderImage[]>('slider_images');
+  const [sliderImages, setSliderImages] = useState<SliderImage[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const q = query(collection(db, 'slider_images'), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setSliderImages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as { id: string, url: string, title?: string, description?: string }[]);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SliderImage[];
+      setSliderImages(data);
+      cacheSet('slider_images', data);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching slider images:", error);
