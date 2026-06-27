@@ -1,6 +1,5 @@
 {
   "framework": null,
-  "nodeVersion": "20",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
