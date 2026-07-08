@@ -1,2 +1,3 @@
 - [Formations variable name](formations-variable.md) — adminFormations (not formations) is the local alias from useAdminFormations() hook in AdminDashboard
-- [Firebase project mismatch fix](firebase-project.md) — FIRESTORE_DB_ID must be "(default)"; service account belongs to project neopay-446f3, not gen-lang-client-0739219145
+- [Firebase project mismatch fix](firebase-project.md) — FIRESTORE_DB_ID must be "ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2"; service account belongs to gen-lang-client-0739219145 project
+- [Tailwind native binding on Replit](tailwind-oxide-linux.md) — @tailwindcss/oxide-linux-x64-gnu must be installed explicitly on Linux x64 Replit
