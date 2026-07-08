@@ -214,7 +214,7 @@ service cloud.firestore {
     }
 
     match /admin_accounts/{adminId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow update: if isAdmin() || (
         isAuthenticated() && 
         (resource.data.uid == null || resource.data.uid == "" || resource.data.uid == request.auth.uid) &&

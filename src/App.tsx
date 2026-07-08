@@ -483,7 +483,6 @@ export default function App() {
           onClientLogin={(client) => { handleClientLogin(client); setShowAuthModal(false); }}
           onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
           onAffiliateAccess={() => handleViewChange('affiliate')}
-          onAdminPasswordLogin={() => { handleViewChange('admin'); setShowAuthModal(false); }}
           onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
         />
 
