@@ -25,8 +25,9 @@ The Express server starts on port 5000 and spawns the Vite dev server on port 51
 ## Optional Environment Variables
 | Variable | Description |
 |----------|-------------|
-| `SMTP_USER` | Gmail address for admin email notifications |
-| `SMTP_PASS` | Gmail app password |
+| `RESEND_API_KEY` | Clé API Resend pour l'envoi d'emails |
+| `RESEND_FROM_EMAIL` | Adresse expéditeur vérifiée dans Resend (ex: `noreply@rena.ht`) |
+| `ADMIN_EMAIL` | Email administrateur pour les notifications entrantes |
 | `RECAPTCHA_SECRET_KEY` | Google reCAPTCHA v2 secret key |
 | `RECAPTCHA_SITE_KEY` | Google reCAPTCHA v2 site key (exposed to frontend) |
 | `VAPID_PUBLIC_KEY` | Web Push VAPID public key (generate with `npx web-push generate-vapid-keys`) |

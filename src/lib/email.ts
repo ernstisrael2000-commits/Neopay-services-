@@ -1,23 +1,22 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
-export const FROM_EMAIL  = SMTP_USER || 'noreply@rena.ht';
-export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || SMTP_USER || 'ernstisrael2000@gmail.com';
+export const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@rena.ht';
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || FROM_EMAIL;
 
-if (SMTP_USER && SMTP_PASS) {
-  console.log(`[Email] Mode SMTP activé — FROM: ${SMTP_USER}`);
-} else {
-  console.warn('[Email] Aucun service email configuré (SMTP_USER/SMTP_PASS requis)');
+let _resend: Resend | null = null;
+
+function getResendClient(): Resend | null {
+  if (!RESEND_API_KEY) return null;
+  if (!_resend) _resend = new Resend(RESEND_API_KEY);
+  return _resend;
 }
 
-function getSmtpTransport() {
-  if (!SMTP_USER || !SMTP_PASS) return null;
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
+if (RESEND_API_KEY) {
+  console.log(`[Email] Mode Resend activé — FROM: ${FROM_EMAIL}`);
+} else {
+  console.warn('[Email] Aucun service email configuré (RESEND_API_KEY requis)');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -115,24 +114,28 @@ export async function send(
     return { success: false, error: 'No recipient' };
   }
 
-  const smtp = getSmtpTransport();
-  if (smtp) {
+  const resend = getResendClient();
+  if (resend) {
     try {
-      const info = await smtp.sendMail({
-        from: `"Rena Intelligence" <${SMTP_USER}>`,
-        to: validTo.join(', '),
+      const { data, error } = await resend.emails.send({
+        from: `Rena Intelligence <${FROM_EMAIL}>`,
+        to: validTo,
         subject,
         html,
       });
-      console.log(`[Email] ✓ SMTP "${type}" → ${validTo} (id: ${info.messageId})`);
-      return { success: true, id: info.messageId };
+      if (error) {
+        console.error(`[Email] Resend error "${type}" → ${validTo}:`, error);
+        return { success: false, error: error.message };
+      }
+      console.log(`[Email] ✓ Resend "${type}" → ${validTo} (id: ${data?.id})`);
+      return { success: true, id: data?.id };
     } catch (e: any) {
-      console.error(`[Email] SMTP exception "${type}" → ${validTo}:`, e?.message);
+      console.error(`[Email] Resend exception "${type}" → ${validTo}:`, e?.message);
       return { success: false, error: e?.message };
     }
   }
 
-  console.warn(`[Email] Skipped (aucun service configuré) — ${type} → ${validTo}`);
+  console.warn(`[Email] Skipped (RESEND_API_KEY manquant) — ${type} → ${validTo}`);
   return { success: false, error: 'No email service configured' };
 }
 
