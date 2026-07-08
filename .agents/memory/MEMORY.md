@@ -1,1 +1,2 @@
 - [Formations variable name](formations-variable.md) — adminFormations (not formations) is the local alias from useAdminFormations() hook in AdminDashboard
+- [Firebase project mismatch fix](firebase-project.md) — FIRESTORE_DB_ID must be "(default)"; service account belongs to project neopay-446f3, not gen-lang-client-0739219145

@@ -20,7 +20,7 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 
 - **Frontend**: React 19, Vite 6, Tailwind CSS 4, shadcn/ui primitives, Recharts, Framer Motion
 - **Backend**: Express 4, Firebase Admin SDK 13, Nodemailer
-- **Database**: Cloud Firestore (custom DB: `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`)
+- **Database**: Cloud Firestore (database: `(default)`, project: `neopay-446f3`)
 - **Auth**: Firebase Auth (client SDK) + custom role resolution via Firestore
 - **Runtime**: Node 20, tsx (TypeScript runner)
 
@@ -42,7 +42,7 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 - **Single shared API router**: All API routes live in `src/api/router.ts`. Both Replit (`server.ts`) and Vercel (`api/index.ts`) import it — zero duplication, guaranteed parity.
 - **Single Express server serves both API and frontend**: In dev, Vite runs in middleware mode attached to the Express HTTP server. In prod, Express serves the built `/dist` static files.
 - **Firebase Admin SDK only on server**: All privileged Firestore writes go through `/api/*` Express routes using the Admin SDK — never directly from the browser.
-- **Custom Firestore database**: Uses a named Firestore database (not `(default)`) — ID is `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`.
+- **Firestore database**: Uses the `(default)` database in Firebase project `neopay-446f3`.
 - **Role auth is custom**: No Firebase Auth sign-in for most roles. Admin/affiliate/agent log in with credentials checked against Firestore collections. Only clients may use Firebase Auth.
 - **Relative URLs only**: The frontend exclusively uses relative `/api/*` URLs — no hardcoded localhost, Replit, or Vercel URLs anywhere.
 - **Vercel formations workaround**: `api/formations.ts` is a zero-dependency standalone function that replaces the firebase-admin path for the public formations endpoint on Vercel. Routes via `vercel.json` before the catch-all `/api/(.*)` rewrite. Requires `FIREBASE_SERVICE_ACCOUNT` in Vercel env vars.
@@ -76,5 +76,5 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 
 ## Pointers
 
-- Firebase Console: https://console.firebase.google.com/project/gen-lang-client-0739219145
+- Firebase Console: https://console.firebase.google.com/project/neopay-446f3
 - Firestore rules: `firestore.rules`

@@ -24,7 +24,7 @@ try {
 }
 
 // ─── Firebase Admin ────────────────────────────────────────────────────────────
-const FIRESTORE_DB_ID = 'ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2';
+const FIRESTORE_DB_ID = '(default)';
 
 let adminApp: App;
 let adminDb: ReturnType<typeof getFirestore>;
@@ -413,17 +413,41 @@ router.get('/api/client/events/:clientId', (req, res) => {
 router.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // ── Debug (diagnostic Vercel — protégé par x-admin-secret) ───────────────────
-router.get('/api/debug', (req, res) => {
+router.get('/api/debug', async (req, res) => {
   if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
     return res.status(403).json({ error: 'Non autorisé.' });
+
+  // Extract project_id from service account (non-sensitive)
+  let serviceAccountProjectId: string | null = null;
+  let serviceAccountClientEmail: string | null = null;
+  try {
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT || '';
+    const sa = parseServiceAccount(raw);
+    serviceAccountProjectId = sa.project_id || null;
+    serviceAccountClientEmail = sa.client_email ? sa.client_email.split('@')[0] + '@...' : null;
+  } catch {}
+
+  // Live Firestore connectivity test
+  let firestoreTest: { ok: boolean; error?: string; collections?: string[] } = { ok: false };
+  if (adminDb) {
+    try {
+      const snap = await adminDb.listCollections();
+      firestoreTest = { ok: true, collections: snap.map((c: any) => c.id) };
+    } catch (e: any) {
+      firestoreTest = { ok: false, error: `${e?.code} ${e?.message || String(e)}` };
+    }
+  }
+
   res.json({
     adminDbReady: !!adminDb,
     initAttempted: _initAttempted,
     initError: _initError,
+    firestoreDbId: FIRESTORE_DB_ID,
+    serviceAccount: { projectId: serviceAccountProjectId, clientEmail: serviceAccountClientEmail },
+    firestoreTest,
     envVars: {
       FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
       FIREBASE_SERVICE_ACCOUNT_length: process.env.FIREBASE_SERVICE_ACCOUNT?.length ?? 0,
-      FIREBASE_SERVICE_ACCOUNT_starts: process.env.FIREBASE_SERVICE_ACCOUNT?.trim().slice(0, 3) ?? '',
       SMTP_USER: !!process.env.SMTP_USER,
       SMTP_PASS: !!process.env.SMTP_PASS,
       RECAPTCHA_SECRET_KEY: !!process.env.RECAPTCHA_SECRET_KEY,
