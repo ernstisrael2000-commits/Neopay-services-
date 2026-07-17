@@ -1449,17 +1449,22 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           <div className="p-6 space-y-4">
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
-              <Select value={pMethod} onValueChange={setPMethod}>
-                <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl">
-                  <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
-                  <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
-                  <SelectItem value="Virement" className="font-bold">Virement bancaire</SelectItem>
-                  <SelectItem value="Physical" className="font-bold">En personne / Bureau</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {[
+                  { v: 'MonCash', label: 'MonCash', sub: 'Digicel', color: '#dc2626' },
+                  { v: 'NatCash', label: 'NatCash', sub: 'Natcom', color: '#2563eb' },
+                  { v: 'Lajan Cash', label: 'Lajan Cash', sub: '', color: '#16a34a' },
+                  { v: 'Virement', label: 'Virement', sub: 'Bancaire', color: '#4f46e5' },
+                  { v: 'Physical', label: 'Bureau', sub: 'En personne', color: '#374151' },
+                ].map(m => (
+                  <button key={m.v} type="button" onClick={() => setPMethod(m.v)}
+                    className={`flex-shrink-0 flex flex-col items-center justify-center rounded-2xl px-3 py-2 min-w-[68px] border-2 transition-all ${pMethod === m.v ? 'text-white shadow-md scale-105 border-transparent' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
+                    style={pMethod === m.v ? { background: m.color } : {}}>
+                    <span className={`text-[11px] font-black leading-tight ${pMethod === m.v ? 'text-white' : 'text-gray-700'}`}>{m.label}</span>
+                    {m.sub && <span className={`text-[8px] font-medium mt-0.5 ${pMethod === m.v ? 'text-white/70' : 'text-gray-400'}`}>{m.sub}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant (USD)</Label>
@@ -1518,17 +1523,22 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
-              <Select value={pMethod} onValueChange={setPMethod}>
-                <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl">
-                  <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
-                  <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
-                  <SelectItem value="Virement" className="font-bold">Virement bancaire</SelectItem>
-                  <SelectItem value="Physical" className="font-bold">En personne / Bureau</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {[
+                  { v: 'MonCash', label: 'MonCash', sub: 'Digicel', color: '#dc2626' },
+                  { v: 'NatCash', label: 'NatCash', sub: 'Natcom', color: '#2563eb' },
+                  { v: 'Lajan Cash', label: 'Lajan Cash', sub: '', color: '#16a34a' },
+                  { v: 'Virement', label: 'Virement', sub: 'Bancaire', color: '#4f46e5' },
+                  { v: 'Physical', label: 'Bureau', sub: 'En personne', color: '#374151' },
+                ].map(m => (
+                  <button key={m.v} type="button" onClick={() => setPMethod(m.v)}
+                    className={`flex-shrink-0 flex flex-col items-center justify-center rounded-2xl px-3 py-2 min-w-[68px] border-2 transition-all ${pMethod === m.v ? 'text-white shadow-md scale-105 border-transparent' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
+                    style={pMethod === m.v ? { background: m.color } : {}}>
+                    <span className={`text-[11px] font-black leading-tight ${pMethod === m.v ? 'text-white' : 'text-gray-700'}`}>{m.label}</span>
+                    {m.sub && <span className={`text-[8px] font-medium mt-0.5 ${pMethod === m.v ? 'text-white/70' : 'text-gray-400'}`}>{m.sub}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Numéro de compte *</Label>
@@ -1583,35 +1593,27 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             {/* Method */}
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
-              <Select value={selfDepositMethod} onValueChange={setSelfDepositMethod}>
-                <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
-                  <SelectValue placeholder="Choisir une méthode" />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl">
-                  <SelectItem value="MonCash" className="font-bold">
-                    <div className="flex items-center gap-2">
-                      {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                      MonCash (Digicel)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="NatCash" className="font-bold">
-                    <div className="flex items-center gap-2">
-                      {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                      NatCash (Natcom)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="Lajan Cash" className="font-bold">Lajan Cash</SelectItem>
-                  <SelectItem value="Sogebank" className="font-bold">Sogebank</SelectItem>
-                  <SelectItem value="BNC" className="font-bold">BNC (Banque Nationale de Crédit)</SelectItem>
-                  <SelectItem value="Unibank" className="font-bold">Unibank</SelectItem>
-                  <SelectItem value="BH" className="font-bold">BH (Banque de l'Habitat)</SelectItem>
-                  <SelectItem value="BUH" className="font-bold">BUH (Banque de l'Union Haïtienne)</SelectItem>
-                  <SelectItem value="Capital Bank" className="font-bold">Capital Bank</SelectItem>
-                  <SelectItem value="PSB" className="font-bold">PSB (Point Services Bancaires)</SelectItem>
-                  <SelectItem value="Virement" className="font-bold">Virement bancaire</SelectItem>
-                  <SelectItem value="Physical" className="font-bold">Bureau / Proxy (En personne)</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {[
+                  { v: 'MonCash',   label: 'MonCash',    sub: 'Digicel',      color: '#dc2626', logo: settings?.moncashLogoUrl },
+                  { v: 'NatCash',   label: 'NatCash',    sub: 'Natcom',       color: '#2563eb', logo: settings?.natcashLogoUrl },
+                  { v: 'Lajan Cash',label: 'Lajan Cash', sub: '',             color: '#16a34a', logo: undefined },
+                  { v: 'Sogebank',  label: 'Sogebank',   sub: 'Banque',       color: '#1e3a5f', logo: undefined },
+                  { v: 'Unibank',   label: 'Unibank',    sub: 'Banque',       color: '#7c3aed', logo: undefined },
+                  { v: 'Virement',  label: 'Virement',   sub: 'Bancaire',     color: '#4f46e5', logo: undefined },
+                  { v: 'Physical',  label: 'Bureau',     sub: 'En personne',  color: '#374151', logo: undefined },
+                ].map(m => (
+                  <button key={m.v} type="button" onClick={() => setSelfDepositMethod(m.v)}
+                    className={`flex-shrink-0 flex flex-col items-center justify-center rounded-2xl px-3 py-2 min-w-[72px] border-2 transition-all gap-0.5 ${selfDepositMethod === m.v ? 'text-white shadow-md scale-105 border-transparent' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}
+                    style={selfDepositMethod === m.v ? { background: m.color } : {}}>
+                    {m.logo && selfDepositMethod === m.v
+                      ? <img src={m.logo} alt="" className="h-4 w-auto mb-0.5" referrerPolicy="no-referrer" />
+                      : null}
+                    <span className={`text-[11px] font-black leading-tight ${selfDepositMethod === m.v ? 'text-white' : 'text-gray-700'}`}>{m.label}</span>
+                    {m.sub && <span className={`text-[8px] font-medium ${selfDepositMethod === m.v ? 'text-white/70' : 'text-gray-400'}`}>{m.sub}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Amount */}
