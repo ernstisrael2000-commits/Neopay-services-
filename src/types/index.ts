@@ -251,6 +251,23 @@ export interface AppSettings {
   agentDepositCommissionPercent?: number;
   agentWithdrawPercent?: number;
   agentWithdrawAgentSharePercent?: number;
+  // Agent fee mode (percent vs fixed amount)
+  agentDepositFeeMode?: 'percent' | 'fixed';
+  agentDepositCommissionFixed?: number;   // USD fixed per deposit
+  agentWithdrawFeeMode?: 'percent' | 'fixed';
+  agentWithdrawFixed?: number;            // USD fixed per withdrawal
+  // Affiliate commission mode
+  commissionMode?: 'fixed' | 'percentage';
+  // Percentage-based commissions (% of transaction amount)
+  commissionVirtualCardPct?: number;
+  commissionVirtualCardParentPct?: number;
+  commissionVirtualCardGpPct?: number;
+  commissionSubscriptionPct?: number;
+  commissionSubscriptionParentPct?: number;
+  commissionSubscriptionGpPct?: number;
+  commissionPurchasePct?: number;
+  commissionPurchaseParentPct?: number;
+  commissionPurchaseGpPct?: number;
   // Custom exchange rates per payment method (methodId → HTG/USD rate)
   cardRates?: Record<string, number>;
 }

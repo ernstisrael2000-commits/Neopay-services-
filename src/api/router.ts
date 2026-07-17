@@ -929,8 +929,10 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
     const settingsSnap = await adminDb.collection('settings').doc('global').get();
     const feeSettings = settingsSnap.data() || {};
     const agentDepositCommissionPct = Number(feeSettings.agentDepositCommissionPercent || 0);
-    const agentWithdrawPct = Number(feeSettings.agentWithdrawPercent || 0);
+    const agentWithdrawPct          = Number(feeSettings.agentWithdrawPercent          || 0);
     const agentWithdrawAgentSharePct = Number(feeSettings.agentWithdrawAgentSharePercent ?? 100);
+    const agentDepositFeeMode  = feeSettings.agentDepositFeeMode  || 'percent';
+    const agentWithdrawFeeMode = feeSettings.agentWithdrawFeeMode || 'percent';
 
     // Fee calculation
     let commissionAmount = 0;   // commission credited to agent (deposit)
@@ -939,9 +941,13 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
     let adminShareFee = 0;      // admin's share of withdrawal fee
 
     if (type === 'deposit') {
-      commissionAmount = parseFloat((usd * agentDepositCommissionPct / 100).toFixed(4));
+      commissionAmount = agentDepositFeeMode === 'fixed'
+        ? parseFloat(Number(feeSettings.agentDepositCommissionFixed || 0).toFixed(4))
+        : parseFloat((usd * agentDepositCommissionPct / 100).toFixed(4));
     } else {
-      totalFee = parseFloat((usd * agentWithdrawPct / 100).toFixed(4));
+      totalFee = agentWithdrawFeeMode === 'fixed'
+        ? parseFloat(Number(feeSettings.agentWithdrawFixed || 0).toFixed(4))
+        : parseFloat((usd * agentWithdrawPct / 100).toFixed(4));
       agentShareFee = parseFloat((totalFee * agentWithdrawAgentSharePct / 100).toFixed(4));
       adminShareFee = parseFloat((totalFee - agentShareFee).toFixed(4));
     }
@@ -2789,37 +2795,69 @@ router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
 async function triggerAffiliateCommissions(
   directAffiliateId: string,
   type: 'purchase' | 'subscription' | 'virtual_card',
-  itemName?: string
+  itemName?: string,
+  transactionAmountUSD?: number   // used when commissionMode === 'percentage'
 ) {
   try {
     const settingsSnap = await adminDb.collection('settings').doc('global').get();
     const settings = settingsSnap.exists ? settingsSnap.data()! : {};
     const exchangeRate = settings.exchangeRate || 146;
+    const commissionMode = settings.commissionMode || 'fixed';
 
     const isStreaming = itemName && ['netflix','prime','paramount','disney','hbo','iptv','spotify','video','streaming']
       .some(k => (itemName || '').toLowerCase().includes(k));
 
+    let directUSD: number, parentUSD: number, grandparentUSD: number;
     let directHTG: number, parentHTG: number, grandparentHTG: number, pointsEarned: number;
-    if (type === 'virtual_card') {
-      directHTG     = settings.commissionVirtualCardHTG        || 350;
-      parentHTG     = settings.commissionVirtualCardParentHTG  || 40;
-      grandparentHTG= settings.commissionVirtualCardGpHTG      || 10;
-      pointsEarned  = 25;
-    } else if (type === 'subscription') {
-      directHTG     = settings.commissionSubscriptionHTG        || 75;
-      parentHTG     = settings.commissionSubscriptionParentHTG  || 15;
-      grandparentHTG= settings.commissionSubscriptionGpHTG      || 10;
-      pointsEarned  = isStreaming ? 5 : 10;
-    } else {
-      directHTG     = settings.commissionPurchaseHTG        || 2;
-      parentHTG     = settings.commissionPurchaseParentHTG  || 0.5;
-      grandparentHTG= settings.commissionPurchaseGpHTG      || 0.5;
-      pointsEarned  = 1;
-    }
 
-    const directUSD      = directHTG      / exchangeRate;
-    const parentUSD      = parentHTG      / exchangeRate;
-    const grandparentUSD = grandparentHTG / exchangeRate;
+    if (commissionMode === 'percentage' && transactionAmountUSD && transactionAmountUSD > 0) {
+      // ── Percentage of transaction amount ──
+      let dPct: number, pPct: number, gpPct: number;
+      if (type === 'virtual_card') {
+        dPct  = settings.commissionVirtualCardPct       || 0;
+        pPct  = settings.commissionVirtualCardParentPct || 0;
+        gpPct = settings.commissionVirtualCardGpPct     || 0;
+        pointsEarned = 25;
+      } else if (type === 'subscription') {
+        dPct  = settings.commissionSubscriptionPct       || 0;
+        pPct  = settings.commissionSubscriptionParentPct || 0;
+        gpPct = settings.commissionSubscriptionGpPct     || 0;
+        pointsEarned = isStreaming ? 5 : 10;
+      } else {
+        dPct  = settings.commissionPurchasePct       || 0;
+        pPct  = settings.commissionPurchaseParentPct || 0;
+        gpPct = settings.commissionPurchaseGpPct     || 0;
+        pointsEarned = 1;
+      }
+      directUSD      = parseFloat((transactionAmountUSD * dPct  / 100).toFixed(4));
+      parentUSD      = parseFloat((transactionAmountUSD * pPct  / 100).toFixed(4));
+      grandparentUSD = parseFloat((transactionAmountUSD * gpPct / 100).toFixed(4));
+      // HTG display equivalents
+      directHTG      = parseFloat((directUSD      * exchangeRate).toFixed(2));
+      parentHTG      = parseFloat((parentUSD      * exchangeRate).toFixed(2));
+      grandparentHTG = parseFloat((grandparentUSD * exchangeRate).toFixed(2));
+    } else {
+      // ── Fixed HTG amounts (legacy/default) ──
+      if (type === 'virtual_card') {
+        directHTG     = settings.commissionVirtualCardHTG        || 350;
+        parentHTG     = settings.commissionVirtualCardParentHTG  || 40;
+        grandparentHTG= settings.commissionVirtualCardGpHTG      || 10;
+        pointsEarned  = 25;
+      } else if (type === 'subscription') {
+        directHTG     = settings.commissionSubscriptionHTG        || 75;
+        parentHTG     = settings.commissionSubscriptionParentHTG  || 15;
+        grandparentHTG= settings.commissionSubscriptionGpHTG      || 10;
+        pointsEarned  = isStreaming ? 5 : 10;
+      } else {
+        directHTG     = settings.commissionPurchaseHTG        || 2;
+        parentHTG     = settings.commissionPurchaseParentHTG  || 0.5;
+        grandparentHTG= settings.commissionPurchaseGpHTG      || 0.5;
+        pointsEarned  = 1;
+      }
+      directUSD      = directHTG      / exchangeRate;
+      parentUSD      = parentHTG      / exchangeRate;
+      grandparentUSD = grandparentHTG / exchangeRate;
+    }
 
     const affRef  = adminDb.collection('affiliates').doc(directAffiliateId);
     const affSnap = await affRef.get();
@@ -2971,7 +3009,7 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
 
     // Auto-trigger commissions for the affiliate chain (fire-and-forget)
     if (directSponsorId) {
-      triggerAffiliateCommissions(directSponsorId, 'purchase', productName).catch(() => {});
+      triggerAffiliateCommissions(directSponsorId, 'purchase', productName, amount).catch(() => {});
     }
 
     sendFcmToClient(
@@ -4009,7 +4047,7 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
 
     // Auto-commission pour le parrain du client (formation)
     if (price > 0 && clientData.directSponsorId) {
-      triggerAffiliateCommissions(clientData.directSponsorId, 'subscription', formationTitle || 'Formation').catch(() => {});
+      triggerAffiliateCommissions(clientData.directSponsorId, 'subscription', formationTitle || 'Formation', price).catch(() => {});
     }
 
     // Email admin + client pour achat formation

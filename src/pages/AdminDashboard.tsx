@@ -8468,50 +8468,108 @@ function EmailLogsPanel() {
                     <div className="space-y-3 pt-4 border-t border-dashed">
                       <h4 className="text-xs font-black text-dark uppercase tracking-wide flex items-center gap-2">
                         <LucideIcons.Percent className="h-4 w-4 text-violet-500" />
-                        Taux de commissions affiliés (HTG)
+                        Commissions Affiliés
                       </h4>
-                      <p className="text-[10px] text-gray-400">Ces montants sont crédités automatiquement à chaque achat/vente.</p>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          { key: 'commissionPurchaseHTG', label: 'Achat — Direct (HTG)', placeholder: '2' },
-                          { key: 'commissionPurchaseParentHTG', label: 'Achat — Parrain (HTG)', placeholder: '0.5' },
-                          { key: 'commissionSubscriptionHTG', label: 'Abonnement — Direct (HTG)', placeholder: '75' },
-                          { key: 'commissionSubscriptionParentHTG', label: 'Abonnement — Parrain (HTG)', placeholder: '15' },
-                          { key: 'commissionVirtualCardHTG', label: 'Carte Virtuelle — Direct (HTG)', placeholder: '350' },
-                          { key: 'commissionVirtualCardParentHTG', label: 'Carte Virtuelle — Parrain (HTG)', placeholder: '40' },
-                        ].map(({ key, label, placeholder }) => (
-                          <div key={key} className="space-y-1">
-                            <Label className="text-[10px] font-bold text-gray-500">{label}</Label>
-                            <Input
-                              type="number"
-                              placeholder={placeholder}
-                              value={(pendingSettings as any)?.[key] ?? (settings as any)?.[key] ?? placeholder}
-                              onChange={(e) => setPendingSettings(prev => ({ ...prev, [key]: parseFloat(e.target.value) }))}
-                              className="rounded-xl border-gray-100 h-9 text-sm"
-                            />
-                          </div>
-                        ))}
+
+                      {/* Mode toggle */}
+                      <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                        {(['fixed', 'percentage'] as const).map(mode => {
+                          const active = (pendingSettings.commissionMode ?? settings?.commissionMode ?? 'fixed') === mode;
+                          return (
+                            <button
+                              key={mode}
+                              onClick={() => setPendingSettings(prev => ({ ...prev, commissionMode: mode }))}
+                              className={`flex-1 py-2 text-[11px] font-black transition-all ${active ? 'bg-violet-600 text-white' : 'bg-white text-gray-400 hover:text-gray-600'}`}
+                            >
+                              {mode === 'fixed' ? '🔒 Montants fixes (HTG)' : '📊 % du montant'}
+                            </button>
+                          );
+                        })}
                       </div>
+
+                      {(pendingSettings.commissionMode ?? settings?.commissionMode ?? 'fixed') === 'fixed' ? (
+                        <>
+                          <p className="text-[10px] text-gray-400">Montants HTG fixes crédités à chaque vente, peu importe le prix de l'article.</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            {([
+                              { key: 'commissionPurchaseHTG',         label: 'Achat — Direct (HTG)',                  placeholder: '2' },
+                              { key: 'commissionPurchaseParentHTG',    label: 'Achat — Parrain (HTG)',                 placeholder: '0.5' },
+                              { key: 'commissionPurchaseGpHTG',        label: 'Achat — Grand-parrain (HTG)',           placeholder: '0.5' },
+                              { key: 'commissionSubscriptionHTG',      label: 'Abonnement — Direct (HTG)',             placeholder: '75' },
+                              { key: 'commissionSubscriptionParentHTG',label: 'Abonnement — Parrain (HTG)',            placeholder: '15' },
+                              { key: 'commissionSubscriptionGpHTG',    label: 'Abonnement — Grand-parrain (HTG)',      placeholder: '10' },
+                              { key: 'commissionVirtualCardHTG',       label: 'Carte Virtuelle — Direct (HTG)',        placeholder: '350' },
+                              { key: 'commissionVirtualCardParentHTG', label: 'Carte Virtuelle — Parrain (HTG)',       placeholder: '40' },
+                              { key: 'commissionVirtualCardGpHTG',     label: 'Carte Virtuelle — Grand-parrain (HTG)', placeholder: '10' },
+                            ] as {key:string;label:string;placeholder:string}[]).map(({ key, label, placeholder }) => (
+                              <div key={key} className="space-y-1">
+                                <Label className="text-[10px] font-bold text-gray-500">{label}</Label>
+                                <Input
+                                  type="number"
+                                  placeholder={placeholder}
+                                  value={(pendingSettings as any)?.[key] ?? (settings as any)?.[key] ?? placeholder}
+                                  onChange={(e) => setPendingSettings(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+                                  className="rounded-xl border-gray-100 h-9 text-sm"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-gray-400">Pourcentage du montant de la transaction. Ex: 5 = 5% du prix crédité à l'affilié.</p>
+                          <div className="grid grid-cols-3 gap-3">
+                            {([
+                              { key: 'commissionPurchasePct',          label: 'Achat Direct (%)',               placeholder: '0' },
+                              { key: 'commissionPurchaseParentPct',     label: 'Achat Parrain (%)',              placeholder: '0' },
+                              { key: 'commissionPurchaseGpPct',         label: 'Achat Grand-parrain (%)',        placeholder: '0' },
+                              { key: 'commissionSubscriptionPct',       label: 'Abonnement Direct (%)',          placeholder: '0' },
+                              { key: 'commissionSubscriptionParentPct', label: 'Abonn. Parrain (%)',             placeholder: '0' },
+                              { key: 'commissionSubscriptionGpPct',     label: 'Abonn. Grand-parrain (%)',       placeholder: '0' },
+                              { key: 'commissionVirtualCardPct',        label: 'Carte Virt. Direct (%)',         placeholder: '0' },
+                              { key: 'commissionVirtualCardParentPct',  label: 'Carte Virt. Parrain (%)',        placeholder: '0' },
+                              { key: 'commissionVirtualCardGpPct',      label: 'Carte Virt. Grand-parrain (%)',  placeholder: '0' },
+                            ] as {key:string;label:string;placeholder:string}[]).map(({ key, label, placeholder }) => (
+                              <div key={key} className="space-y-1">
+                                <Label className="text-[10px] font-bold text-gray-500">{label}</Label>
+                                <div className="relative">
+                                  <Input
+                                    type="number" min="0" max="100" step="0.1"
+                                    placeholder={placeholder}
+                                    value={(pendingSettings as any)?.[key] ?? (settings as any)?.[key] ?? ''}
+                                    onChange={(e) => setPendingSettings(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+                                    className="rounded-xl border-gray-100 h-9 text-sm pr-6"
+                                  />
+                                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">%</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
                       <Button
                         onClick={async () => {
-                          const commissionKeys = [
-                            'commissionPurchaseHTG', 'commissionPurchaseParentHTG',
-                            'commissionSubscriptionHTG', 'commissionSubscriptionParentHTG',
-                            'commissionVirtualCardHTG', 'commissionVirtualCardParentHTG',
-                          ];
-                          const dataToUpdate: Record<string, number> = {};
-                          commissionKeys.forEach(k => {
+                          const mode = pendingSettings.commissionMode ?? settings?.commissionMode ?? 'fixed';
+                          const keys = mode === 'fixed'
+                            ? ['commissionPurchaseHTG','commissionPurchaseParentHTG','commissionPurchaseGpHTG',
+                               'commissionSubscriptionHTG','commissionSubscriptionParentHTG','commissionSubscriptionGpHTG',
+                               'commissionVirtualCardHTG','commissionVirtualCardParentHTG','commissionVirtualCardGpHTG']
+                            : ['commissionPurchasePct','commissionPurchaseParentPct','commissionPurchaseGpPct',
+                               'commissionSubscriptionPct','commissionSubscriptionParentPct','commissionSubscriptionGpPct',
+                               'commissionVirtualCardPct','commissionVirtualCardParentPct','commissionVirtualCardGpPct'];
+                          const dataToUpdate: Record<string, any> = { commissionMode: mode };
+                          keys.forEach(k => {
                             dataToUpdate[k] = (pendingSettings as any)[k] !== undefined
                               ? (pendingSettings as any)[k]
                               : (settings as any)?.[k] ?? 0;
                           });
                           await updateSettings(dataToUpdate);
-                          toast.success("Taux de commissions mis à jour !");
+                          toast.success("Commissions affiliés mises à jour !");
                         }}
                         className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl"
                       >
-                        Enregistrer les taux de commission
+                        Enregistrer les commissions
                       </Button>
                     </div>
                   </div>
@@ -8737,76 +8795,141 @@ function EmailLogsPanel() {
                   </div>
 
                   {/* ── Agent fee engine ── */}
-                  <div className="space-y-3 pt-4 border-t border-dashed border-gray-200">
+                  <div className="space-y-4 pt-4 border-t border-dashed border-gray-200">
                     <p className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
                       <span>🤝</span> Moteur de Frais Agent
                     </p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500">Commission Dépôt Agent (%)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="20"
-                          step="0.1"
-                          placeholder="0"
-                          value={pendingSettings?.agentDepositCommissionPercent ?? settings?.agentDepositCommissionPercent ?? ''}
-                          onChange={(e) => setPendingSettings(prev => ({ ...prev, agentDepositCommissionPercent: parseFloat(e.target.value) || 0 }))}
-                          className="rounded-xl border-gray-100 font-bold text-center"
-                        />
-                        <p className="text-[10px] text-gray-400">Commission créditée à l'agent à chaque dépôt</p>
+
+                    {/* ── Deposit commission ── */}
+                    <div className="space-y-2 p-3 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                      <p className="text-[11px] font-black text-emerald-700 uppercase tracking-wide">💵 Commission sur Dépôt</p>
+                      <div className="flex rounded-xl overflow-hidden border border-emerald-200">
+                        {(['percent', 'fixed'] as const).map(mode => {
+                          const active = (pendingSettings.agentDepositFeeMode ?? settings?.agentDepositFeeMode ?? 'percent') === mode;
+                          return (
+                            <button key={mode}
+                              onClick={() => setPendingSettings(prev => ({ ...prev, agentDepositFeeMode: mode }))}
+                              className={`flex-1 py-1.5 text-[10px] font-black transition-all ${active ? 'bg-emerald-600 text-white' : 'bg-white text-gray-400 hover:text-gray-600'}`}
+                            >
+                              {mode === 'percent' ? '% Pourcentage' : '$ Montant fixe (USD)'}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500">Frais Retrait Agent (%)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="20"
-                          step="0.1"
-                          placeholder="0"
-                          value={pendingSettings?.agentWithdrawPercent ?? settings?.agentWithdrawPercent ?? ''}
-                          onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawPercent: parseFloat(e.target.value) || 0 }))}
-                          className="rounded-xl border-gray-100 font-bold text-center"
-                        />
-                        <p className="text-[10px] text-gray-400">Frais total déduit du retrait client</p>
+                      {(pendingSettings.agentDepositFeeMode ?? settings?.agentDepositFeeMode ?? 'percent') === 'percent' ? (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-gray-500">% du montant de la transaction</Label>
+                          <div className="relative">
+                            <Input type="number" min="0" max="20" step="0.1" placeholder="0"
+                              value={pendingSettings?.agentDepositCommissionPercent ?? settings?.agentDepositCommissionPercent ?? ''}
+                              onChange={(e) => setPendingSettings(prev => ({ ...prev, agentDepositCommissionPercent: parseFloat(e.target.value) || 0 }))}
+                              className="rounded-xl border-gray-100 font-bold text-center pr-7"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-bold">%</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400">Ex: 2 = l'agent gagne 2% du montant déposé</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-gray-500">Montant fixe par dépôt (USD)</Label>
+                          <div className="relative">
+                            <Input type="number" min="0" step="0.01" placeholder="0.00"
+                              value={pendingSettings?.agentDepositCommissionFixed ?? settings?.agentDepositCommissionFixed ?? ''}
+                              onChange={(e) => setPendingSettings(prev => ({ ...prev, agentDepositCommissionFixed: parseFloat(e.target.value) || 0 }))}
+                              className="rounded-xl border-gray-100 font-bold text-center pl-7"
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-bold">$</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400">Ex: 0.50 = l'agent gagne $0.50 par dépôt, quel que soit le montant</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Withdrawal fee ── */}
+                    <div className="space-y-2 p-3 bg-rose-50/50 border border-rose-100 rounded-2xl">
+                      <p className="text-[11px] font-black text-rose-700 uppercase tracking-wide">🏧 Frais sur Retrait</p>
+                      <div className="flex rounded-xl overflow-hidden border border-rose-200">
+                        {(['percent', 'fixed'] as const).map(mode => {
+                          const active = (pendingSettings.agentWithdrawFeeMode ?? settings?.agentWithdrawFeeMode ?? 'percent') === mode;
+                          return (
+                            <button key={mode}
+                              onClick={() => setPendingSettings(prev => ({ ...prev, agentWithdrawFeeMode: mode }))}
+                              className={`flex-1 py-1.5 text-[10px] font-black transition-all ${active ? 'bg-rose-600 text-white' : 'bg-white text-gray-400 hover:text-gray-600'}`}
+                            >
+                              {mode === 'percent' ? '% Pourcentage' : '$ Montant fixe (USD)'}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500">Part Agent des frais retrait (%)</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          placeholder="100"
-                          value={pendingSettings?.agentWithdrawAgentSharePercent ?? settings?.agentWithdrawAgentSharePercent ?? ''}
-                          onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawAgentSharePercent: parseFloat(e.target.value) || 0 }))}
-                          className="rounded-xl border-gray-100 font-bold text-center"
-                        />
-                        <p className="text-[10px] text-gray-400">% des frais retrait reversé à l'agent</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-500">Part Admin des frais retrait (%)</Label>
-                        <Input
-                          type="number"
-                          readOnly
-                          value={100 - (pendingSettings?.agentWithdrawAgentSharePercent ?? settings?.agentWithdrawAgentSharePercent ?? 100)}
-                          className="rounded-xl border-gray-100 font-bold text-center bg-gray-50 text-gray-500"
-                        />
-                        <p className="text-[10px] text-gray-400">Calculé automatiquement (100% - part agent)</p>
+                      {(pendingSettings.agentWithdrawFeeMode ?? settings?.agentWithdrawFeeMode ?? 'percent') === 'percent' ? (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-gray-500">% du montant du retrait</Label>
+                          <div className="relative">
+                            <Input type="number" min="0" max="20" step="0.1" placeholder="0"
+                              value={pendingSettings?.agentWithdrawPercent ?? settings?.agentWithdrawPercent ?? ''}
+                              onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawPercent: parseFloat(e.target.value) || 0 }))}
+                              className="rounded-xl border-gray-100 font-bold text-center pr-7"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-bold">%</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400">Frais total prélevé sur le retrait du client</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-gray-500">Montant fixe par retrait (USD)</Label>
+                          <div className="relative">
+                            <Input type="number" min="0" step="0.01" placeholder="0.00"
+                              value={pendingSettings?.agentWithdrawFixed ?? settings?.agentWithdrawFixed ?? ''}
+                              onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawFixed: parseFloat(e.target.value) || 0 }))}
+                              className="rounded-xl border-gray-100 font-bold text-center pl-7"
+                            />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 font-bold">$</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400">Ex: 1.00 = $1 prélevé sur chaque retrait</p>
+                        </div>
+                      )}
+                      {/* Agent / Admin share — always shown */}
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-gray-500">Part Agent (%)</Label>
+                          <div className="relative">
+                            <Input type="number" min="0" max="100" step="1" placeholder="100"
+                              value={pendingSettings?.agentWithdrawAgentSharePercent ?? settings?.agentWithdrawAgentSharePercent ?? ''}
+                              onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawAgentSharePercent: parseFloat(e.target.value) || 0 }))}
+                              className="rounded-xl border-gray-100 font-bold text-center pr-7"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">%</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400">% des frais retrait → agent</p>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-gray-500">Part Admin (%)</Label>
+                          <Input type="number" readOnly
+                            value={100 - (pendingSettings?.agentWithdrawAgentSharePercent ?? settings?.agentWithdrawAgentSharePercent ?? 100)}
+                            className="rounded-xl border-gray-100 font-bold text-center bg-gray-50 text-gray-500"
+                          />
+                          <p className="text-[10px] text-gray-400">Calculé automatiquement</p>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   <Button
                     onClick={async () => {
+                      const depositMode  = pendingSettings.agentDepositFeeMode  ?? settings?.agentDepositFeeMode  ?? 'percent';
+                      const withdrawMode = pendingSettings.agentWithdrawFeeMode ?? settings?.agentWithdrawFeeMode ?? 'percent';
                       await updateSettings({
                         depositFeePercent: pendingSettings.depositFeePercent !== undefined ? pendingSettings.depositFeePercent : (settings?.depositFeePercent || 0),
                         withdrawalFeePercent: pendingSettings.withdrawalFeePercent !== undefined ? pendingSettings.withdrawalFeePercent : (settings?.withdrawalFeePercent || 0),
                         transferFeePercent: pendingSettings.transferFeePercent !== undefined ? pendingSettings.transferFeePercent : (settings?.transferFeePercent || 0),
                         affiliateDepositFeeSharePercent: pendingSettings.affiliateDepositFeeSharePercent !== undefined ? pendingSettings.affiliateDepositFeeSharePercent : (settings?.affiliateDepositFeeSharePercent || 0),
                         affiliateWithdrawalFeeSharePercent: pendingSettings.affiliateWithdrawalFeeSharePercent !== undefined ? pendingSettings.affiliateWithdrawalFeeSharePercent : (settings?.affiliateWithdrawalFeeSharePercent || 0),
+                        agentDepositFeeMode: depositMode,
                         agentDepositCommissionPercent: pendingSettings.agentDepositCommissionPercent !== undefined ? pendingSettings.agentDepositCommissionPercent : (settings?.agentDepositCommissionPercent || 0),
+                        agentDepositCommissionFixed: pendingSettings.agentDepositCommissionFixed !== undefined ? pendingSettings.agentDepositCommissionFixed : (settings?.agentDepositCommissionFixed || 0),
+                        agentWithdrawFeeMode: withdrawMode,
                         agentWithdrawPercent: pendingSettings.agentWithdrawPercent !== undefined ? pendingSettings.agentWithdrawPercent : (settings?.agentWithdrawPercent || 0),
+                        agentWithdrawFixed: pendingSettings.agentWithdrawFixed !== undefined ? pendingSettings.agentWithdrawFixed : (settings?.agentWithdrawFixed || 0),
                         agentWithdrawAgentSharePercent: pendingSettings.agentWithdrawAgentSharePercent !== undefined ? pendingSettings.agentWithdrawAgentSharePercent : (settings?.agentWithdrawAgentSharePercent ?? 100),
                       });
                       toast.success("Frais mis à jour !");

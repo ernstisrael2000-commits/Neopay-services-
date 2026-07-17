@@ -697,65 +697,93 @@ export const resetMonthlyStats = async () => {
 };
 
 export const recordPurchase = async (
-  affiliateId: string, 
+  affiliateId: string,
   type: 'purchase' | 'subscription' | 'virtual_card',
-  itemName?: string
+  itemName?: string,
+  transactionAmountUSD?: number   // used when commissionMode === 'percentage'
 ) => {
   try {
     const affiliateRef = doc(db, 'affiliates', affiliateId);
     const affiliateSnap = await getDoc(affiliateRef);
-    
+
     if (!affiliateSnap.exists()) throw new Error("Affilié non trouvé");
-    
+
     const affiliateData = affiliateSnap.data() as Affiliate;
-    
+
     const settingsRef = doc(db, 'settings', 'global');
     const settingsSnap = await getDoc(settingsRef);
     const settings = settingsSnap.exists() ? settingsSnap.data() : { exchangeRate: 146 };
     const exchangeRate = settings.exchangeRate || 146;
+    const commissionMode = settings.commissionMode || 'fixed';
 
-    // Commission mapping as requested by user (Values in HTG/Gourdes)
-    let directCommissionHTG = 2; // Default for 'purchase'
-    let parentCommissionHTG = 0.5;
-    let grandparentCommissionHTG = 0.5;
-    let pointsEarned = 1;
-    
     const isStreamingSub = itemName && (
-      itemName.toLowerCase().includes('netflix') || 
-      itemName.toLowerCase().includes('prime') || 
-      itemName.toLowerCase().includes('paramount') || 
-      itemName.toLowerCase().includes('disney') || 
-      itemName.toLowerCase().includes('hbo') || 
+      itemName.toLowerCase().includes('netflix') ||
+      itemName.toLowerCase().includes('prime') ||
+      itemName.toLowerCase().includes('paramount') ||
+      itemName.toLowerCase().includes('disney') ||
+      itemName.toLowerCase().includes('hbo') ||
       itemName.toLowerCase().includes('iptv') ||
       itemName.toLowerCase().includes('spotify') ||
       itemName.toLowerCase().includes('video') ||
       itemName.toLowerCase().includes('streaming')
     );
 
-    if (type === 'subscription') {
-      if (isStreamingSub) {
-        directCommissionHTG = 75;
-        parentCommissionHTG = 15;
-        grandparentCommissionHTG = 10;
-        pointsEarned = 5;
-      } else {
-        // Other subscriptions
-        directCommissionHTG = 75;
-        parentCommissionHTG = 15;
-        grandparentCommissionHTG = 10;
-        pointsEarned = 10;
-      }
-    } else if (type === 'virtual_card') {
-      directCommissionHTG = 350;
-      parentCommissionHTG = 40;
-      grandparentCommissionHTG = 10;
-      pointsEarned = 25;
-    }
+    let directCommissionHTG: number;
+    let parentCommissionHTG: number;
+    let grandparentCommissionHTG: number;
+    let directCommissionUSD: number;
+    let parentCommissionUSD: number;
+    let grandparentCommissionUSD: number;
+    let pointsEarned = 1;
 
-    // Convert to USD for balance (Keep HTG for logs/transparency if needed, but balance is USD)
-    const directCommissionUSD = directCommissionHTG / exchangeRate;
-    const parentCommissionUSD = parentCommissionHTG / exchangeRate;
-    const grandparentCommissionUSD = grandparentCommissionHTG / exchangeRate;
+    if (commissionMode === 'percentage' && transactionAmountUSD && transactionAmountUSD > 0) {
+      // ── Percentage of transaction amount ──
+      let dPct: number, pPct: number, gpPct: number;
+      if (type === 'virtual_card') {
+        dPct  = settings.commissionVirtualCardPct       || 0;
+        pPct  = settings.commissionVirtualCardParentPct || 0;
+        gpPct = settings.commissionVirtualCardGpPct     || 0;
+        pointsEarned = 25;
+      } else if (type === 'subscription') {
+        dPct  = settings.commissionSubscriptionPct       || 0;
+        pPct  = settings.commissionSubscriptionParentPct || 0;
+        gpPct = settings.commissionSubscriptionGpPct     || 0;
+        pointsEarned = isStreamingSub ? 5 : 10;
+      } else {
+        dPct  = settings.commissionPurchasePct       || 0;
+        pPct  = settings.commissionPurchaseParentPct || 0;
+        gpPct = settings.commissionPurchaseGpPct     || 0;
+        pointsEarned = 1;
+      }
+      directCommissionUSD      = parseFloat((transactionAmountUSD * dPct  / 100).toFixed(4));
+      parentCommissionUSD      = parseFloat((transactionAmountUSD * pPct  / 100).toFixed(4));
+      grandparentCommissionUSD = parseFloat((transactionAmountUSD * gpPct / 100).toFixed(4));
+      // HTG equivalents for display/logs
+      directCommissionHTG      = parseFloat((directCommissionUSD      * exchangeRate).toFixed(2));
+      parentCommissionHTG      = parseFloat((parentCommissionUSD      * exchangeRate).toFixed(2));
+      grandparentCommissionHTG = parseFloat((grandparentCommissionUSD * exchangeRate).toFixed(2));
+    } else {
+      // ── Fixed HTG amounts (default) ──
+      if (type === 'subscription') {
+        directCommissionHTG      = settings.commissionSubscriptionHTG       || 75;
+        parentCommissionHTG      = settings.commissionSubscriptionParentHTG || 15;
+        grandparentCommissionHTG = settings.commissionSubscriptionGpHTG     || 10;
+        pointsEarned = isStreamingSub ? 5 : 10;
+      } else if (type === 'virtual_card') {
+        directCommissionHTG      = settings.commissionVirtualCardHTG       || 350;
+        parentCommissionHTG      = settings.commissionVirtualCardParentHTG || 40;
+        grandparentCommissionHTG = settings.commissionVirtualCardGpHTG     || 10;
+        pointsEarned = 25;
+      } else {
+        directCommissionHTG      = settings.commissionPurchaseHTG       || 2;
+        parentCommissionHTG      = settings.commissionPurchaseParentHTG || 0.5;
+        grandparentCommissionHTG = settings.commissionPurchaseGpHTG     || 0.5;
+        pointsEarned = 1;
+      }
+      directCommissionUSD      = directCommissionHTG      / exchangeRate;
+      parentCommissionUSD      = parentCommissionHTG      / exchangeRate;
+      grandparentCommissionUSD = grandparentCommissionHTG / exchangeRate;
+    }
     
     const batch = writeBatch(db);
     
