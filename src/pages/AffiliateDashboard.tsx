@@ -156,6 +156,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [scannedTxInfo, setScannedTxInfo] = useState<{ clientName: string; type: string; amount: number } | null>(null);
   const [scanConfirmLoading, setScanConfirmLoading] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState<'unknown' | 'granted' | 'denied' | 'unavailable'>('unknown');
 
   // Phone search (shared for deposit/withdrawal direct)
   const [phoneInput, setPhoneInput] = useState('');
@@ -283,6 +284,44 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   useEffect(() => {
     if (activeTab === 'commandes') fetchRequests();
   }, [activeTab]);
+
+  // Demander la permission caméra au chargement — une seule fois, de façon transparente.
+  // On acquiert le flux puis on l'arrête immédiatement : le navigateur retient l'autorisation
+  // pour la durée de la session, donc plus de prompt surprise au moment du scan.
+  useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraPermission('unavailable');
+      return;
+    }
+    // Vérifier d'abord si on a déjà une réponse (évite un prompt inutile si déjà accordé/refusé)
+    navigator.permissions?.query({ name: 'camera' as PermissionName })
+      .then(status => {
+        if (status.state === 'granted') {
+          setCameraPermission('granted');
+          return;
+        }
+        if (status.state === 'denied') {
+          setCameraPermission('denied');
+          return;
+        }
+        // 'prompt' : demander maintenant pour que ça arrive au bon moment
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then(stream => {
+            stream.getTracks().forEach(t => t.stop()); // on libère immédiatement
+            setCameraPermission('granted');
+          })
+          .catch(() => setCameraPermission('denied'));
+      })
+      .catch(() => {
+        // Permissions API non dispo (rare) — demander directement
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then(stream => {
+            stream.getTracks().forEach(t => t.stop());
+            setCameraPermission('granted');
+          })
+          .catch(() => setCameraPermission('denied'));
+      });
+  }, []);
 
   // Direct transaction (deposit or withdrawal)
   const handleDirectTx = async (type: 'deposit' | 'withdrawal') => {
@@ -1575,10 +1614,24 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <div className="rounded-2xl overflow-hidden bg-black min-h-[260px] flex items-center justify-center relative">
                       {scanning ? (
                         <div id="qr-scanner-affiliate" className="w-full" />
-                      ) : (
+                      ) : cameraPermission === 'denied' ? (
+                        <div className="flex flex-col items-center gap-3 text-white p-8">
+                          <Camera className="h-12 w-12 text-red-400/70" />
+                          <p className="text-sm text-red-300 font-bold">Accès caméra refusé</p>
+                          <p className="text-[11px] text-white/50 text-center">Allez dans les paramètres de votre navigateur et autorisez la caméra pour ce site, puis rechargez la page.</p>
+                        </div>
+                      ) : cameraPermission === 'unavailable' ? (
                         <div className="flex flex-col items-center gap-3 text-white p-8">
                           <Camera className="h-12 w-12 text-white/40" />
-                          <p className="text-sm text-white/60 font-bold">Caméra inactive</p>
+                          <p className="text-sm text-white/60 font-bold">Aucune caméra détectée</p>
+                          <p className="text-[11px] text-white/40 text-center">Cet appareil ne dispose pas de caméra accessible.</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-3 text-white p-8">
+                          <Camera className={`h-12 w-12 ${cameraPermission === 'granted' ? 'text-green-400/70' : 'text-white/40'}`} />
+                          <p className="text-sm text-white/60 font-bold">
+                            {cameraPermission === 'granted' ? 'Caméra prête' : 'Caméra inactive'}
+                          </p>
                           <p className="text-[11px] text-white/40 text-center">Appuyez sur "Démarrer le scan" pour activer la caméra</p>
                         </div>
                       )}
@@ -1586,11 +1639,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
                     <Button
                       onClick={startQrScanner}
-                      disabled={scanning}
-                      className="w-full h-12 bg-violet-600 hover:bg-violet-700 text-white font-black rounded-2xl border-0 shadow-lg shadow-violet-200"
+                      disabled={scanning || cameraPermission === 'denied' || cameraPermission === 'unavailable'}
+                      className="w-full h-12 bg-violet-600 hover:bg-violet-700 text-white font-black rounded-2xl border-0 shadow-lg shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {scanning ? (
                         <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Scan en cours...</span>
+                      ) : cameraPermission === 'unknown' ? (
+                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Vérification caméra...</span>
                       ) : (
                         <span className="flex items-center gap-2"><ScanLine className="h-4 w-4" />Démarrer le Scan</span>
                       )}
