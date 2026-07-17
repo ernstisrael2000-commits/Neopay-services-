@@ -393,58 +393,52 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setScanResult(null);
     setScannedTxInfo(null);
 
-    // Request camera permission — prefer back camera but accept any camera
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-      }).catch(() =>
-        // Fallback: any camera (front-facing on laptops/desktops)
-        navigator.mediaDevices.getUserMedia({ video: true })
-      );
-      stream.getTracks().forEach(t => t.stop());
-    } catch {
-      toast.error('Permission caméra refusée. Autorisez l\'accès caméra dans les paramètres du navigateur.');
-      return;
-    }
-
-    // Set scanning=true so React renders the #qr-scanner-affiliate div
+    // Render the scanner div first — no preflight getUserMedia needed.
+    // The double camera acquisition (preflight + Html5Qrcode) caused failures on many devices.
+    // Html5Qrcode handles the permission request itself.
     setScanning(true);
 
     // Wait for React to commit the render before Html5Qrcode looks for the div
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 200));
 
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
       const scanner = new Html5Qrcode('qr-scanner-affiliate');
 
-      // Try back camera first, fall back to any camera
-      const startWithFallback = () =>
-        scanner.start(
+      const onSuccess = (decodedText: string) => {
+        scanner.stop().catch(() => {});
+        setScanning(false);
+        handleScannedCode(decodedText);
+      };
+      const onError = (_err: any) => { /* ignore per-frame scan errors */ };
+
+      // Try back camera first, fall back to front camera
+      try {
+        await scanner.start(
           { facingMode: { ideal: 'environment' } },
           { fps: 10, qrbox: { width: 240, height: 240 } },
-          (decodedText: string) => {
-            scanner.stop().catch(() => {});
-            setScanning(false);
-            handleScannedCode(decodedText);
-          },
-          (_err: any) => { /* ignore per-frame scan errors */ }
-        ).catch(() =>
-          scanner.start(
-            { facingMode: 'user' },
-            { fps: 10, qrbox: { width: 240, height: 240 } },
-            (decodedText: string) => {
-              scanner.stop().catch(() => {});
-              setScanning(false);
-              handleScannedCode(decodedText);
-            },
-            (_err: any) => { /* ignore per-frame scan errors */ }
-          )
+          onSuccess, onError
         );
-
-      await startWithFallback();
+      } catch {
+        await scanner.start(
+          { facingMode: 'user' },
+          { fps: 10, qrbox: { width: 240, height: 240 } },
+          onSuccess, onError
+        );
+      }
     } catch (e: any) {
       setScanning(false);
-      toast.error('Impossible d\'accéder à la caméra. Vérifiez que votre navigateur autorise l\'accès.');
+      const name = (e?.name || '').toLowerCase();
+      const msg  = (e?.message || '').toLowerCase();
+      if (name.includes('notallowed') || name.includes('permission') || msg.includes('denied') || msg.includes('permission')) {
+        toast.error('Permission caméra refusée. Allez dans les paramètres du navigateur et autorisez l\'accès caméra pour ce site.');
+      } else if (name.includes('notfound') || msg.includes('not found') || msg.includes('no camera')) {
+        toast.error('Aucune caméra détectée sur cet appareil.');
+      } else if (name.includes('notreadable') || msg.includes('in use')) {
+        toast.error('La caméra est déjà utilisée par une autre application. Fermez-la et réessayez.');
+      } else {
+        toast.error('Erreur d\'accès caméra. Vérifiez les autorisations dans les paramètres du navigateur.');
+      }
     }
   };
 

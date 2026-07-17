@@ -8463,7 +8463,127 @@ function EmailLogsPanel() {
                     >
                       Enregistrer les paramètres
                     </Button>
+                  </div>
+                </div>
 
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-primary" />
+                    Annonce Globale
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/30 border border-indigo-100">
+                      <div>
+                        <p className="text-sm font-bold text-dark">Message de bienvenue / Annonce</p>
+                        <p className="text-xs text-gray-500">Afficher un message à tous les visiteurs.</p>
+                      </div>
+                      <Checkbox 
+                        checked={pendingSettings?.showGlobalAnnouncement ?? settings?.showGlobalAnnouncement} 
+                        onCheckedChange={(checked) => setPendingSettings(prev => ({ ...prev, showGlobalAnnouncement: !!checked }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-xs font-bold text-gray-500">Contenu du message</Label>
+                       <Textarea 
+                          placeholder="Entrez le message à afficher sur tout le site..."
+                          value={pendingSettings?.globalAnnouncement ?? settings?.globalAnnouncement ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, globalAnnouncement: e.target.value }))}
+                          className="rounded-2xl border-gray-100 min-h-[80px]"
+                       />
+                       <p className="text-xs text-gray-400">Ce message apparaîtra en haut de chaque page.</p>
+                    </div>
+                    <Button 
+                      onClick={async () => {
+                        const dataToUpdate = {
+                          showGlobalAnnouncement: pendingSettings.showGlobalAnnouncement !== undefined ? pendingSettings.showGlobalAnnouncement : settings?.showGlobalAnnouncement,
+                          globalAnnouncement: pendingSettings.globalAnnouncement !== undefined ? pendingSettings.globalAnnouncement : settings?.globalAnnouncement
+                        };
+                        await updateSettings(dataToUpdate);
+                        toast.success("Annonce enregistrée !");
+                      }}
+                      className="w-full bg-primary hover:bg-[#1D4ED8] text-white font-bold rounded-xl"
+                    >
+                      Enregistrer l'annonce
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark">Sécurité & Retraits</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Card className={`border shadow-sm transition-colors ${settings?.withdrawalsEnabled ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'}`}>
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-dark">Demandes de Retrait</p>
+                          <p className="text-xs text-gray-500">{settings?.withdrawalsEnabled ? 'Activées' : 'Désactivées temporairement'}</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant={settings?.withdrawalsEnabled ? "destructive" : "default"}
+                          className={settings?.withdrawalsEnabled ? "bg-red-600" : "bg-emerald-600 hover:bg-emerald-700 border-0"}
+                          onClick={() => setIsWithdrawalToggleConfirmOpen(true)}
+                        >
+                          {settings?.withdrawalsEnabled ? 'Désactiver' : 'Activer'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card className={`border shadow-sm transition-colors ${settings?.lockAffiliateEdits ? 'border-red-200 bg-red-50/30' : 'border-emerald-200 bg-emerald-50/30'}`}>
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-dark">Verrouillage des Infos</p>
+                          <p className="text-xs text-gray-500">{settings?.lockAffiliateEdits ? 'Modifications verrouillées' : 'Modifications libres'}</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant={settings?.lockAffiliateEdits ? "default" : "destructive"}
+                          className={settings?.lockAffiliateEdits ? "bg-emerald-600 hover:bg-emerald-700 border-0" : "bg-red-600"}
+                          onClick={() => settings?.lockAffiliateEdits ? setIsUnlockDialogOpen(true) : handleToggleLockEdits()}
+                        >
+                          {settings?.lockAffiliateEdits ? 'Déverrouiller' : 'Verrouiller'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                    <span className="text-base">💰</span>
+                    Gestion des Frais
+                  </h3>
+
+                  {/* Fees balance display */}
+                  <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Solde Admin — Parts de frais accumulées</p>
+                      <p className="text-3xl font-black text-emerald-700">
+                        ${((settings?.feesBalance || 0)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-emerald-600/70 font-medium mt-0.5">
+                        ≈ {((settings?.feesBalance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                      </p>
+                    </div>
+                    <Button
+                      disabled={!settings?.feesBalance || settings.feesBalance <= 0 || isSaving}
+                      onClick={async () => {
+                        if (!settings?.feesBalance || settings.feesBalance <= 0) return;
+                        setIsSaving(true);
+                        try {
+                          await fetch('/api/admin/fees/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: settings.feesBalance }) });
+                          await updateSettings({ feesBalance: 0 });
+                          toast.success(`${settings.feesBalance.toFixed(2)}$ de frais retirés !`);
+                        } catch { toast.error("Erreur lors du retrait des frais."); }
+                        finally { setIsSaving(false); }
+                      }}
+                      className="rounded-2xl h-12 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest border-0 shadow-lg shadow-emerald-500/20 shrink-0 disabled:opacity-40"
+                    >
+                      Retirer
+                    </Button>
+                  </div>
+
+                  {/* ── Affiliate commissions (moved from logo section) ── */}
+                  <div className="space-y-3 pt-2 pb-4 border-b border-dashed border-gray-200">
                     {/* Commission Rates */}
                     <div className="space-y-3 pt-4 border-t border-dashed">
                       <h4 className="text-xs font-black text-dark uppercase tracking-wide flex items-center gap-2">
@@ -8572,123 +8692,7 @@ function EmailLogsPanel() {
                         Enregistrer les commissions
                       </Button>
                     </div>
-                  </div>
-                </div>
 
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-primary" />
-                    Annonce Globale
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/30 border border-indigo-100">
-                      <div>
-                        <p className="text-sm font-bold text-dark">Message de bienvenue / Annonce</p>
-                        <p className="text-xs text-gray-500">Afficher un message à tous les visiteurs.</p>
-                      </div>
-                      <Checkbox 
-                        checked={pendingSettings?.showGlobalAnnouncement ?? settings?.showGlobalAnnouncement} 
-                        onCheckedChange={(checked) => setPendingSettings(prev => ({ ...prev, showGlobalAnnouncement: !!checked }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                       <Label className="text-xs font-bold text-gray-500">Contenu du message</Label>
-                       <Textarea 
-                          placeholder="Entrez le message à afficher sur tout le site..."
-                          value={pendingSettings?.globalAnnouncement ?? settings?.globalAnnouncement ?? ''}
-                          onChange={(e) => setPendingSettings(prev => ({ ...prev, globalAnnouncement: e.target.value }))}
-                          className="rounded-2xl border-gray-100 min-h-[80px]"
-                       />
-                       <p className="text-xs text-gray-400">Ce message apparaîtra en haut de chaque page.</p>
-                    </div>
-                    <Button 
-                      onClick={async () => {
-                        const dataToUpdate = {
-                          showGlobalAnnouncement: pendingSettings.showGlobalAnnouncement !== undefined ? pendingSettings.showGlobalAnnouncement : settings?.showGlobalAnnouncement,
-                          globalAnnouncement: pendingSettings.globalAnnouncement !== undefined ? pendingSettings.globalAnnouncement : settings?.globalAnnouncement
-                        };
-                        await updateSettings(dataToUpdate);
-                        toast.success("Annonce enregistrée !");
-                      }}
-                      className="w-full bg-primary hover:bg-[#1D4ED8] text-white font-bold rounded-xl"
-                    >
-                      Enregistrer l'annonce
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-bold text-dark">Sécurité & Retraits</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Card className={`border shadow-sm transition-colors ${settings?.withdrawalsEnabled ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'}`}>
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-bold text-dark">Demandes de Retrait</p>
-                          <p className="text-xs text-gray-500">{settings?.withdrawalsEnabled ? 'Activées' : 'Désactivées temporairement'}</p>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant={settings?.withdrawalsEnabled ? "destructive" : "default"}
-                          className={settings?.withdrawalsEnabled ? "bg-red-600" : "bg-emerald-600 hover:bg-emerald-700 border-0"}
-                          onClick={() => setIsWithdrawalToggleConfirmOpen(true)}
-                        >
-                          {settings?.withdrawalsEnabled ? 'Désactiver' : 'Activer'}
-                        </Button>
-                      </CardContent>
-                    </Card>
-
-                    <Card className={`border shadow-sm transition-colors ${settings?.lockAffiliateEdits ? 'border-red-200 bg-red-50/30' : 'border-emerald-200 bg-emerald-50/30'}`}>
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-bold text-dark">Verrouillage des Infos</p>
-                          <p className="text-xs text-gray-500">{settings?.lockAffiliateEdits ? 'Modifications verrouillées' : 'Modifications libres'}</p>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant={settings?.lockAffiliateEdits ? "default" : "destructive"}
-                          className={settings?.lockAffiliateEdits ? "bg-emerald-600 hover:bg-emerald-700 border-0" : "bg-red-600"}
-                          onClick={() => settings?.lockAffiliateEdits ? setIsUnlockDialogOpen(true) : handleToggleLockEdits()}
-                        >
-                          {settings?.lockAffiliateEdits ? 'Déverrouiller' : 'Verrouiller'}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
-                    <span className="text-base">💰</span>
-                    Gestion des Frais
-                  </h3>
-
-                  {/* Fees balance display */}
-                  <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-5 flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Solde Frais Accumulés</p>
-                      <p className="text-3xl font-black text-emerald-700">
-                        ${((settings?.feesBalance || 0)).toFixed(2)}
-                      </p>
-                      <p className="text-xs text-emerald-600/70 font-medium mt-0.5">
-                        ≈ {((settings?.feesBalance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
-                      </p>
-                    </div>
-                    <Button
-                      disabled={!settings?.feesBalance || settings.feesBalance <= 0 || isSaving}
-                      onClick={async () => {
-                        if (!settings?.feesBalance || settings.feesBalance <= 0) return;
-                        setIsSaving(true);
-                        try {
-                          await fetch('/api/admin/fees/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: settings.feesBalance }) });
-                          await updateSettings({ feesBalance: 0 });
-                          toast.success(`${settings.feesBalance.toFixed(2)}$ de frais retirés !`);
-                        } catch { toast.error("Erreur lors du retrait des frais."); }
-                        finally { setIsSaving(false); }
-                      }}
-                      className="rounded-2xl h-12 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest border-0 shadow-lg shadow-emerald-500/20 shrink-0 disabled:opacity-40"
-                    >
-                      Retirer
-                    </Button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
