@@ -223,7 +223,13 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [lookupLoading,     setLookupLoading]     = useState(false);
 
   // Agent QR mode state
-  const [depositMode,    setDepositMode]    = useState<'standard' | 'agent-qr'>('standard');
+  const [depositMode,    setDepositMode]    = useState<'standard' | 'agent-qr' | 'agent-request'>('standard');
+  // Agent deposit request state (client requests deposit confirmation from agent)
+  const [agentReqCode,   setAgentReqCode]   = useState('');
+  const [agentReqAmount, setAgentReqAmount] = useState('');
+  const [agentReqInfo,   setAgentReqInfo]   = useState<{ name: string } | null>(null);
+  const [agentReqSearchLoading, setAgentReqSearchLoading] = useState(false);
+  const [agentReqSubmitting, setAgentReqSubmitting] = useState(false);
   const [withdrawMode,         setWithdrawMode]         = useState<'standard' | 'agent-qr' | 'agent-code'>('standard');
   const [agentQrAmount,        setAgentQrAmount]        = useState('');
   const [txCode,               setTxCode]               = useState<{ codeData: string; expiresAt: number; type: 'deposit' | 'withdrawal' } | null>(null);
@@ -312,7 +318,40 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setDepositCaptchaToken(null); depositCaptchaRef.current?.reset();
     setDepositMode('standard'); setAgentQrAmount(''); setTxCode(null);
     setDepositProofFile(null); setDepositProofPreview(null);
+    setAgentReqCode(''); setAgentReqAmount(''); setAgentReqInfo(null);
     if (depositProofRef.current) depositProofRef.current.value = '';
+  };
+
+  // Agent deposit request handlers
+  const handleAgentReqLookup = async () => {
+    const code = agentReqCode.trim();
+    if (!code) { toast.error('Entrez le code agent.'); return; }
+    setAgentReqSearchLoading(true);
+    setAgentReqInfo(null);
+    try {
+      const data = await apiFetch(`/api/agent/lookup?code=${encodeURIComponent(code)}`);
+      if (data.available === false) { toast.error('Agent indisponible.'); return; }
+      setAgentReqInfo({ name: data.name || code });
+    } catch (e: any) { toast.error(e.message || 'Agent introuvable.'); }
+    finally { setAgentReqSearchLoading(false); }
+  };
+
+  const handleAgentReqSubmit = async () => {
+    const htg = parseFloat(agentReqAmount);
+    if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
+    const usd = htg / rate;
+    if (!agentReqInfo) { toast.error("Recherchez un agent d'abord."); return; }
+    setAgentReqSubmitting(true);
+    try {
+      const res = await apiFetch('/api/client/agent-deposit-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agentReqCode.trim(), clientId, clientName: client?.name || '', amount: usd }),
+      });
+      toast.success(`Demande envoyée à ${agentReqInfo.name}. Attendez la confirmation de l'agent.`);
+      setAgentReqCode(''); setAgentReqAmount(''); setAgentReqInfo(null);
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
+    finally { setAgentReqSubmitting(false); }
   };
 
   const handleDepositProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -978,14 +1017,18 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           <form onSubmit={depositMode === 'agent-qr' ? (e: React.FormEvent) => e.preventDefault() : handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
 
             {/* ── Mode selector ── */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-gray-100 rounded-2xl">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-2xl">
               <button type="button" onClick={() => { setDepositMode('standard'); setTxCode(null); setAgentQrAmount(''); }}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all ${depositMode === 'standard' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
-                <Smartphone className="h-3.5 w-3.5" />Standard
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black transition-all ${depositMode === 'standard' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <Smartphone className="h-3 w-3" />Standard
               </button>
               <button type="button" onClick={() => { setDepositMode('agent-qr'); setDepositMethod(null); }}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all ${depositMode === 'agent-qr' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
-                <QrCode className="h-3.5 w-3.5" />Via Agent
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black transition-all ${depositMode === 'agent-qr' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <QrCode className="h-3 w-3" />QR Agent
+              </button>
+              <button type="button" onClick={() => { setDepositMode('agent-request'); setDepositMethod(null); setTxCode(null); }}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black transition-all ${depositMode === 'agent-request' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <Send className="h-3 w-3" />Via Code
               </button>
             </div>
 
@@ -1059,6 +1102,61 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                     <Button type="button" onClick={() => { setTxCode(null); setAgentQrAmount(''); }}
                       variant="outline" className="w-full h-11 rounded-xl border-gray-200 text-gray-500 text-sm font-bold">
                       Annuler / Régénérer
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Mode Via Code Agent ── */}
+            {depositMode === 'agent-request' && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">
+                  <Send className="h-6 w-6 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-black text-blue-800 text-sm">Demande de dépôt via agent</p>
+                    <p className="text-[11px] text-blue-600 mt-1 leading-relaxed">Entrez le code de votre agent. Il recevra la demande et devra l'approuver depuis son tableau de bord.</p>
+                  </div>
+                </div>
+
+                {/* Agent code lookup */}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code de l'agent</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={agentReqCode}
+                      onChange={e => { setAgentReqCode(e.target.value); setAgentReqInfo(null); }}
+                      placeholder="Ex: 12345678"
+                      className="flex-1 h-12 rounded-xl text-base font-mono"
+                    />
+                    <Button type="button" onClick={handleAgentReqLookup} disabled={agentReqSearchLoading || !agentReqCode.trim()}
+                      className="h-12 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black border-0">
+                      {agentReqSearchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                {agentReqInfo && (
+                  <>
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <p className="font-black text-emerald-800">Agent : {agentReqInfo.name}</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant (HTG)</Label>
+                      <Input type="number" placeholder="Ex: 2 700" value={agentReqAmount}
+                        onChange={e => setAgentReqAmount(e.target.value)}
+                        className="h-12 rounded-xl text-lg font-black" min="1" step="1" />
+                      {parseFloat(agentReqAmount) > 0 && (
+                        <p className="text-xs text-gray-400 font-medium pl-1">≈ ${(parseFloat(agentReqAmount) / rate).toFixed(2)} USD</p>
+                      )}
+                    </div>
+
+                    <Button type="button" onClick={handleAgentReqSubmit}
+                      disabled={agentReqSubmitting || !agentReqAmount || parseFloat(agentReqAmount) <= 0}
+                      className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl border-0">
+                      {agentReqSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="h-4 w-4 mr-2" />Envoyer la demande</>}
                     </Button>
                   </>
                 )}

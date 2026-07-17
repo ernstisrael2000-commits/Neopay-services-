@@ -185,10 +185,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [pMessage, setPMessage] = useState('');
   const [pSubmitting, setPSubmitting] = useState(false);
 
+  // Client deposit requests (client submits via agent code, agent confirms)
+  const [clientDepositReqs, setClientDepositReqs] = useState<any[]>([]);
+  const [clientDepReqLoading, setClientDepReqLoading] = useState(false);
+  const [clientDepReqActionLoading, setClientDepReqActionLoading] = useState<string | null>(null);
+
   const rate = settings?.exchangeRate || 146;
   const pendingAffiliateRequests = agentHistory.filter(t => t.status === 'pending_agent');
 
-  const totalPendingCount = pendingAffiliateRequests.length + withdrawRequests.length;
+  const totalPendingCount = pendingAffiliateRequests.length + withdrawRequests.length + clientDepositReqs.length;
 
   // Load client withdrawal requests
   const loadWithdrawRequests = useCallback(async () => {
@@ -250,16 +255,29 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     finally { setLoadingPersonalTxs(false); }
   }, [agent?.id]);
 
+  // Load client deposit requests
+  const loadClientDepositReqs = useCallback(async () => {
+    if (!agent?.id) return;
+    setClientDepReqLoading(true);
+    try {
+      const res = await fetch(`/api/agent/client-deposit-requests/${encodeURIComponent(agent.id)}`);
+      const data = await res.json();
+      if (res.ok) setClientDepositReqs(data.requests || []);
+    } catch {}
+    finally { setClientDepReqLoading(false); }
+  }, [agent?.id]);
+
   useEffect(() => {
     if (!agent) return;
     loadWithdrawRequests();
+    loadClientDepositReqs();
     loadStats();
-  }, [agent?.agentCode]);
+  }, [agent?.agentCode, agent?.id]);
 
   useEffect(() => {
     if (activeSection === 'commissions') loadFeeRecords();
     if (activeSection === 'clients' || activeSection === 'overview') loadTransactions();
-    if (activeSection === 'requests') loadWithdrawRequests();
+    if (activeSection === 'requests') { loadWithdrawRequests(); loadClientDepositReqs(); }
     if (activeSection === 'finances') loadPersonalTxs();
   }, [activeSection, agent?.agentCode, agent?.id]);
 
@@ -283,6 +301,27 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       toast.success('Dépôt affilié rejeté.');
     } catch { toast.error('Erreur lors du rejet.'); }
     finally { setIsProcessing(false); }
+  };
+
+  // Client deposit requests: approve / reject
+  const handleApproveClientDeposit = async (req: any) => {
+    setClientDepReqActionLoading(req.id);
+    try {
+      const res = await apiFetch(`/api/agent/client-deposit/${req.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      toast.success(`Dépôt de ${req.clientName} approuvé !`);
+      setClientDepositReqs(prev => prev.filter(r => r.id !== req.id));
+    } catch (e: any) { toast.error(e.message || 'Solde agent insuffisant ou erreur.'); }
+    finally { setClientDepReqActionLoading(null); }
+  };
+
+  const handleRejectClientDeposit = async (req: any) => {
+    setClientDepReqActionLoading(req.id);
+    try {
+      await apiFetch(`/api/agent/client-deposit/${req.id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      toast.success('Demande refusée.');
+      setClientDepositReqs(prev => prev.filter(r => r.id !== req.id));
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setClientDepReqActionLoading(null); }
   };
 
   // Confirm client withdrawal request
@@ -393,7 +432,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (!agent?.agentCode) return;
     setSelfDepositSubmitting(true);
     try {
-      await apiFetch('/api/agent/self-deposit-request', {
+      await apiFetch('/api/agent/personal-deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: selfDepositMethod }),
@@ -880,6 +919,78 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                               {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Valider'}
                             </Button>
                           </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Client deposit requests */}
+            <div>
+              <div className="flex items-center justify-between px-1 mb-3">
+                <h3 className="text-base font-black text-dark flex items-center gap-2">
+                  <ArrowDownLeft className="h-5 w-5 text-emerald-500" />
+                  Dépôts clients (via code agent)
+                  {clientDepositReqs.length > 0 && (
+                    <span className="bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">{clientDepositReqs.length}</span>
+                  )}
+                </h3>
+                <button onClick={loadClientDepositReqs} disabled={clientDepReqLoading} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <RefreshCw className={`h-4 w-4 ${clientDepReqLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              {clientDepReqLoading && clientDepositReqs.length === 0 ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : clientDepositReqs.length === 0 ? (
+                <div className="bg-gray-50 rounded-[2rem] p-10 text-center border-2 border-dashed border-gray-200">
+                  <CheckCircle2 className="h-10 w-10 text-gray-200 mx-auto mb-3" />
+                  <p className="text-gray-400 font-black uppercase tracking-widest text-xs">Aucune demande de dépôt client</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {clientDepositReqs.map(req => (
+                    <Card key={req.id} className="rounded-3xl border-0 shadow-md overflow-hidden border-l-4 border-l-emerald-400">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-black text-base shrink-0">
+                              {(req.clientName || '?').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-black text-dark">{req.clientName || 'Client'}</p>
+                              <p className="text-[10px] text-gray-400">{fmtDate(req.createdAt)}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-black text-emerald-600">${(req.amount || 0).toFixed(2)}</p>
+                            <p className="text-[10px] text-gray-400">≈ {Math.round((req.amount || 0) * rate).toLocaleString()} HTG</p>
+                          </div>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-2.5 text-[11px] text-amber-700 font-medium">
+                          ⚠️ Approuver déduira <strong>${(req.amount || 0).toFixed(2)}</strong> de votre wallet agent et créditera le client.
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => handleRejectClientDeposit(req)}
+                            disabled={clientDepReqActionLoading === req.id}
+                            variant="ghost"
+                            className="flex-1 rounded-xl h-10 text-red-500 hover:bg-red-50 font-black text-xs uppercase tracking-widest"
+                          >
+                            <XCircle className="h-4 w-4 mr-1.5" />
+                            Refuser
+                          </Button>
+                          <Button
+                            onClick={() => handleApproveClientDeposit(req)}
+                            disabled={clientDepReqActionLoading === req.id}
+                            className="flex-1 rounded-xl h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-widest border-0 shadow-lg shadow-emerald-500/20"
+                          >
+                            {clientDepReqActionLoading === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                              <><CheckCircle2 className="h-4 w-4 mr-1.5" />Approuver</>
+                            )}
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>

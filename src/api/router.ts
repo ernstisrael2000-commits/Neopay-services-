@@ -5996,6 +5996,119 @@ router.post('/api/admin/ai-chat', async (req, res) => {
   }
 });
 
+// ── Client: request deposit via agent code (agent confirms) ──────────────────
+router.post('/api/client/agent-deposit-request', requireDb, async (req, res) => {
+  try {
+    const { agentCode, clientId, clientName, amount } = req.body;
+    if (!agentCode || !clientId || !amount) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', String(agentCode).trim()).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable avec ce code.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+    if (agentData.status === 'inactive') return res.status(400).json({ error: 'Agent inactif.' });
+
+    // Anti-double
+    const existing = await adminDb.collection('client_agent_deposit_requests')
+      .where('clientId', '==', clientId).where('status', '==', 'pending').limit(1).get();
+    if (!existing.empty) return res.status(400).json({ error: 'Une demande de dépôt est déjà en attente pour ce client.' });
+
+    const reqRef = adminDb.collection('client_agent_deposit_requests').doc();
+    await reqRef.set({
+      agentId: agentDoc.id,
+      agentCode: agentData.agentCode,
+      agentName: agentData.name || '',
+      clientId,
+      clientName: clientName || '',
+      amount: usd,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, agentName: agentData.name || '', requestId: reqRef.id });
+  } catch (e: any) {
+    console.error('[client/agent-deposit-request]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: fetch pending client deposit requests ───────────────────────────────
+router.get('/api/agent/client-deposit-requests/:agentId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('client_agent_deposit_requests')
+      .where('agentId', '==', req.params.agentId)
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc').get();
+    res.json({ requests: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: approve client deposit request ─────────────────────────────────────
+router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, res) => {
+  try {
+    const reqRef = adminDb.collection('client_agent_deposit_requests').doc(req.params.reqId);
+    const reqSnap = await reqRef.get();
+    if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    const reqData = reqSnap.data()!;
+    if (reqData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+
+    const agentRef = adminDb.collection('agents').doc(reqData.agentId);
+    const clientRef = adminDb.collection('clients').doc(reqData.clientId);
+
+    await adminDb.runTransaction(async (txn) => {
+      const agentSnap = await txn.get(agentRef);
+      if (!agentSnap.exists()) throw new Error('Agent introuvable.');
+      const agentData = agentSnap.data()!;
+      if ((agentData.balance || 0) < reqData.amount) throw new Error('Solde agent insuffisant pour ce dépôt.');
+
+      txn.update(agentRef, { balance: FieldValue.increment(-reqData.amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(clientRef, { balance: FieldValue.increment(reqData.amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(reqRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+
+      // Log in client_transactions
+      txn.set(adminDb.collection('client_transactions').doc(), {
+        clientId: reqData.clientId,
+        clientName: reqData.clientName || '',
+        agentId: reqData.agentId,
+        agentCode: reqData.agentCode,
+        agentName: reqData.agentName || '',
+        type: 'deposit',
+        amount: reqData.amount,
+        status: 'approved',
+        method: 'Agent',
+        source: 'client_agent_deposit',
+        description: `Dépôt approuvé par Agent ${reqData.agentName}`,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: reject client deposit request ──────────────────────────────────────
+router.post('/api/agent/client-deposit/:reqId/reject', requireDb, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const reqRef = adminDb.collection('client_agent_deposit_requests').doc(req.params.reqId);
+    const reqSnap = await reqRef.get();
+    if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    if (reqSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+    await reqRef.update({ status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Admin: list all agent personal transactions ───────────────────────────────
 router.get('/api/admin/agent-personal-transactions', requireDb, async (_req, res) => {
   try {
