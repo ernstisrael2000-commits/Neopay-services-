@@ -19,6 +19,8 @@ const PaymentSuccessView = lazy(() => import('./pages/PaymentSuccessView'));
 const PaymentSuccessPage = lazy(() => import('./pages/PaymentSuccessPage'));
 const AdminLogin = lazy(() => import('./components/AdminLogin'));
 const AffiliateLogin = lazy(() => import('./components/AffiliateLogin'));
+const AgentLogin = lazy(() => import('./components/AgentLogin'));
+const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const TeacherLogin = lazy(() => import('./components/TeacherLogin'));
 const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 import { Toaster } from './components/ui/sonner';
@@ -30,7 +32,7 @@ import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Affiliate, AdminAccount, Client, Teacher } from './types';
+import { Affiliate, AdminAccount, Client, Teacher, Agent } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -40,7 +42,7 @@ export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
-  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | null>(null);
+  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'agent' | 'admin' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -153,6 +155,21 @@ export default function App() {
   const handleAffiliateLogout = () => {
     setLoggedAffiliate(null);
     localStorage.removeItem('rena_affiliate');
+  };
+
+  const [loggedAgent, setLoggedAgent] = useState<Agent | null>(() => {
+    const saved = localStorage.getItem('rena_agent');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleAgentLogin = (agent: Agent) => {
+    setLoggedAgent(agent);
+    localStorage.setItem('rena_agent', JSON.stringify(agent));
+  };
+
+  const handleAgentLogout = () => {
+    setLoggedAgent(null);
+    localStorage.removeItem('rena_agent');
   };
 
   const [loggedTeacher, setLoggedTeacher] = useState<Teacher | null>(() => {
@@ -410,10 +427,17 @@ export default function App() {
                 affiliateId={loggedAffiliate.id!} 
                 onLogout={handleAffiliateLogout} 
               />
+            ) : loggedAgent ? (
+              <AgentDashboard
+                agentUid={loggedAgent.uid!}
+                onLogout={handleAgentLogout}
+              />
             ) : loggedAdmin ? (
               <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
             ) : accessChoice === 'affiliate' ? (
               <AffiliateLogin onLogin={handleAffiliateLogin} />
+            ) : accessChoice === 'agent' ? (
+              <AgentLogin onLogin={handleAgentLogin} />
             ) : accessChoice === 'admin' ? (
               <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
             ) : (

@@ -23,6 +23,7 @@ import {
   Phone, RefreshCw, TrendingUp, BarChart3, Users, Settings,
   Home, AlertCircle, BadgeDollarSign, ChevronRight, Star,
   ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck, PlusCircle, AlertTriangle, X,
+  ScanLine, Camera,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -157,6 +158,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
   // Reject reason state
   const [rejectReasonMap, setRejectReasonMap] = useState<Record<string, string>>({});
+
+  // QR scan state (deposit section)
+  const [agentScanning, setAgentScanning] = useState(false);
 
   // Self-deposit (agent recharges own balance)
   const [isSelfDepositOpen, setIsSelfDepositOpen] = useState(false);
@@ -398,6 +402,78 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       setSelfDepositMethod('MonCash');
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setSelfDepositSubmitting(false); }
+  };
+
+  // QR scan — explicitly requests camera permission at click time, then starts scanner
+  const startAgentScan = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Aucune caméra disponible sur cet appareil.');
+      return;
+    }
+    // Explicit permission prompt at the moment the agent clicks the button
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(t => t.stop()); // Release immediately after permission granted
+    } catch (err: any) {
+      const name = (err?.name || '').toLowerCase();
+      const msg  = (err?.message || '').toLowerCase();
+      if (name.includes('notallowed') || msg.includes('denied') || msg.includes('permission')) {
+        toast.error('Permission caméra refusée. Activez-la dans les paramètres du navigateur.');
+      } else if (name.includes('notfound') || msg.includes('not found') || msg.includes('no camera')) {
+        toast.error('Aucune caméra détectée sur cet appareil.');
+      } else {
+        toast.error('Impossible d\'accéder à la caméra.');
+      }
+      return;
+    }
+
+    // Permission granted — mount the scanner div then initialise Html5Qrcode
+    setAgentScanning(true);
+    await new Promise(r => setTimeout(r, 200));
+
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const scanner = new Html5Qrcode('qr-scanner-agent');
+
+      const onSuccess = async (decodedText: string) => {
+        scanner.stop().catch(() => {});
+        setAgentScanning(false);
+        try {
+          const parsed = JSON.parse(decodedText);
+          // QR payload: { cn: clientName, wid?: walletId, phone?: phone, ty: type, a: amount }
+          const searchTerm = parsed.wid || parsed.phone || parsed.cn || decodedText;
+          if (parsed.a && rate > 0) {
+            const htg = Math.round(Math.abs(parseFloat(parsed.a)) * rate);
+            if (htg > 0) setTxAmount(String(htg));
+          }
+          setClientSearch(searchTerm);
+          // Trigger search directly to avoid React state timing issue
+          if (agent?.agentCode && searchTerm) {
+            setSearching(true);
+            try {
+              const data = await apiFetch(`/api/agent/client-search?q=${encodeURIComponent(searchTerm)}&agentCode=${encodeURIComponent(agent.agentCode)}`);
+              if (data.results?.length > 1) setSearchResults(data.results);
+              else setFoundClient(data.client || data.results?.[0] || null);
+            } catch (e: any) { toast.error(e.message || 'Erreur recherche client.'); }
+            finally { setSearching(false); }
+          }
+          toast.success('QR scanné avec succès !');
+        } catch {
+          // Raw text (not JSON) — use as search term
+          setClientSearch(decodedText);
+          toast.success('QR scanné ! Appuyez sur 🔍 pour rechercher le client.');
+        }
+      };
+
+      try {
+        await scanner.start({ facingMode: { ideal: 'environment' } }, { fps: 10, qrbox: { width: 240, height: 240 } }, onSuccess, () => {});
+      } catch {
+        await scanner.start({ facingMode: 'user' }, { fps: 10, qrbox: { width: 240, height: 240 } }, onSuccess, () => {});
+      }
+    } catch (e: any) {
+      setAgentScanning(false);
+      toast.error('Erreur lors du démarrage du scanner. Vérifiez les permissions caméra.');
+    }
   };
 
   // Submit direct deposit (instant, no confirmation needed)
@@ -883,6 +959,38 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                 Le montant sera <strong>déduit de votre solde agent</strong> et crédité instantanément au client.
               </p>
             </div>
+
+            {/* QR Scan — camera access requested explicitly at click time */}
+            {!foundClient && (
+              <div className="space-y-3">
+                {agentScanning ? (
+                  <div className="rounded-[2rem] overflow-hidden bg-black relative">
+                    <div id="qr-scanner-agent" className="w-full" style={{ minHeight: 260 }} />
+                    <button
+                      onClick={() => setAgentScanning(false)}
+                      className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors z-10"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-4 py-3">
+                      <p className="text-white text-xs font-black text-center tracking-widest uppercase">
+                        Pointez vers le code QR du client
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={startAgentScan}
+                    className="w-full h-14 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-3 text-emerald-700 font-black text-sm group"
+                  >
+                    <div className="h-8 w-8 rounded-xl bg-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-emerald-500/30">
+                      <ScanLine className="h-4 w-4 text-white" />
+                    </div>
+                    Démarrer le scan
+                  </button>
+                )}
+              </div>
+            )}
 
             <DirectTxForm
               type="deposit"
