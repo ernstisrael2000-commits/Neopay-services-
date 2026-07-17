@@ -18,6 +18,7 @@ import {
 import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
 import { useUniversalFCM } from '../hooks/useUniversalFCM';
 import NotificationBell from '../components/NotificationBell';
+import PhotoUrlEditor from '../components/PhotoUrlEditor';
 import { getAgentByCode, submitAgentDepositRequest } from '../services/agentService';
 import { Affiliate, WithdrawalRequest, WalletTransaction, TransactionStatus } from '../types';
 import { Progress } from '../components/ui/progress';
@@ -1616,8 +1617,18 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
             {/* Profile Card */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                <span className="text-3xl font-black text-primary">{affiliate.name.charAt(0)}</span>
+              <div className="relative shrink-0">
+                {affiliate.photoUrl ? (
+                  <img
+                    src={affiliate.photoUrl}
+                    alt={affiliate.name}
+                    className="h-16 w-16 rounded-2xl object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                  />
+                ) : null}
+                <div className={`h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center ${affiliate.photoUrl ? 'hidden' : ''}`}>
+                  <span className="text-3xl font-black text-primary">{affiliate.name.charAt(0)}</span>
+                </div>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-black text-dark text-lg truncate">{affiliate.name}</p>
@@ -1633,6 +1644,18 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </div>
               </div>
             </div>
+
+            {/* Photo update */}
+            <PhotoUrlEditor
+              currentUrl={affiliate.photoUrl}
+              onSave={async (url) => {
+                await fetch(`/api/affiliate/${affiliateId}/photo`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ photoUrl: url }),
+                });
+              }}
+            />
 
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3">

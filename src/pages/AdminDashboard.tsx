@@ -3379,6 +3379,38 @@ function EmailLogsPanel() {
 
   const { rankings: officialRankings, loading: officialRankingsLoading } = useMonthlyRankings();
   const { agents: allAgents, loading: agentsLoading } = useAllAgents();
+  const [agentPersonalDeposits, setAgentPersonalDeposits] = React.useState<any[]>([]);
+  const [agentDepositActionLoading, setAgentDepositActionLoading] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const fetchAgentDeposits = async () => {
+      try {
+        const res = await fetch('/api/admin/agent-personal-transactions');
+        if (res.ok) {
+          const data = await res.json();
+          setAgentPersonalDeposits((data.transactions || []).filter((t: any) => t.type === 'deposit' && t.status === 'pending'));
+        }
+      } catch {}
+    };
+    fetchAgentDeposits();
+    const interval = setInterval(fetchAgentDeposits, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleAgentDepositAction = async (txId: string, action: 'approve' | 'reject') => {
+    setAgentDepositActionLoading(txId);
+    try {
+      const res = await fetch(`/api/admin/agent-personal-deposit/${txId}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+      toast.success(action === 'approve' ? 'Dépôt agent approuvé !' : 'Dépôt agent refusé.');
+      setAgentPersonalDeposits(prev => prev.filter(t => t.id !== txId));
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
+    } finally {
+      setAgentDepositActionLoading(null);
+    }
+  };
 
   const [agentSearch, setAgentSearch] = useState('');
   const deferredAgentSearch = useDeferredValue(agentSearch);
@@ -4597,6 +4629,66 @@ function EmailLogsPanel() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Pending agent personal deposits */}
+      {agentPersonalDeposits.length > 0 && (
+        <Card className="rounded-[2.5rem] border-0 shadow-xl overflow-hidden bg-white">
+          <CardHeader className="border-b border-gray-100 p-6 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center">
+                <ArrowDown className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-black">Dépôts agents en attente</CardTitle>
+                <p className="text-sm text-gray-400">Demandes de recharge de balance agent — à approuver ou rejeter</p>
+              </div>
+              <Badge className="ml-auto bg-amber-100 text-amber-700 border-0 font-black">{agentPersonalDeposits.length}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-gray-50/50">
+                <TableRow className="border-0">
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 px-6 text-gray-500">Agent</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-gray-500">Montant</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-gray-500">Méthode</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right px-6 text-gray-500">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {agentPersonalDeposits.map(tx => (
+                  <TableRow key={tx.id} className="border-gray-100">
+                    <TableCell className="px-6 py-4 font-black text-dark">{tx.agentName || tx.agentCode}</TableCell>
+                    <TableCell className="font-black text-emerald-600 text-lg">${tx.amount}</TableCell>
+                    <TableCell className="text-sm text-gray-500">{tx.method}</TableCell>
+                    <TableCell className="text-right px-6">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 h-9 text-[10px] font-black uppercase px-4 rounded-xl border-0"
+                          disabled={agentDepositActionLoading === tx.id}
+                          onClick={() => handleAgentDepositAction(tx.id, 'approve')}
+                        >
+                          {agentDepositActionLoading === tx.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Approuver'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-9 text-[10px] font-black uppercase px-4 rounded-xl"
+                          disabled={agentDepositActionLoading === tx.id}
+                          onClick={() => handleAgentDepositAction(tx.id, 'reject')}
+                        >
+                          Refuser
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add Agent Dialog */}
       <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>

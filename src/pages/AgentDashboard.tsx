@@ -10,6 +10,7 @@ import { useWalletTransactions } from '../services/affiliateService';
 import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
 import { useUniversalFCM } from '../hooks/useUniversalFCM';
 import NotificationBell from '../components/NotificationBell';
+import PhotoUrlEditor from '../components/PhotoUrlEditor';
 import { Agent, WalletTransaction } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -1191,6 +1192,38 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               <Settings className="h-5 w-5 text-gray-500" />
               Paramètres Agent
             </h3>
+
+            {/* Profile photo */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+              <div className="relative shrink-0">
+                {agent.photoUrl ? (
+                  <img
+                    src={agent.photoUrl}
+                    alt={agent.name}
+                    className="h-16 w-16 rounded-2xl object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
+                  />
+                ) : null}
+                <div className={`h-16 w-16 rounded-2xl bg-[#0A3D91]/10 flex items-center justify-center ${agent.photoUrl ? 'hidden' : ''}`}>
+                  <span className="text-3xl font-black text-[#0A3D91]">{agent.name.charAt(0)}</span>
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-dark text-lg truncate">{agent.name}</p>
+                <p className="text-xs text-gray-400 font-mono">#{agent.agentCode}</p>
+                <PhotoUrlEditor
+                  currentUrl={agent.photoUrl}
+                  onSave={async (url) => {
+                    await fetch(`/api/agent/${agent.id}/photo`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ photoUrl: url }),
+                    });
+                  }}
+                  className="mt-2"
+                />
+              </div>
+            </div>
 
             <Card className="rounded-[2rem] border-0 shadow-sm border border-gray-100">
               <CardContent className="p-5 space-y-4">

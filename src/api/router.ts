@@ -2802,6 +2802,11 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    // Deduct balance immediately on submission
+    batch.update(adminDb.collection('affiliates').doc(affiliateId), {
+      [walletField]: FieldValue.increment(-usd),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
     await batch.commit();
 
     pushAllAdminsEvent('new_notification', {
@@ -3210,10 +3215,9 @@ router.post('/api/admin/withdrawal/:id/approve', requireDb, async (req, res) => 
       batch.update(snapTx.docs[0].ref, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
     }
 
-    // Debit affiliate balance atomically
+    // Track total withdrawn (balance already deducted on submission)
     const affiliateRef = adminDb.collection('affiliates').doc(requestData.affiliateId);
     batch.update(affiliateRef, {
-      balance: FieldValue.increment(-requestData.amount),
       totalWithdrawn: FieldValue.increment(requestData.amount),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -3283,10 +3287,18 @@ router.post('/api/admin/withdrawal/:id/reject', requireDb, async (req, res) => {
       batch.update(snapTx.docs[0].ref, { status: 'rejected', updatedAt: FieldValue.serverTimestamp() });
     }
 
+    // Refund affiliate balance (was deducted on submission)
+    const walletRefField = requestData.walletType === 'commissions' ? 'totalEarnings' : 'balance';
+    const affiliateRefReject = adminDb.collection('affiliates').doc(requestData.affiliateId);
+    batch.update(affiliateRefReject, {
+      [walletRefField]: FieldValue.increment(requestData.amount),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
     const rejectNotifData = {
       affiliateId: requestData.affiliateId,
       title: '❌ Retrait refusé',
-      message: `Votre demande de retrait de $${requestData.amount} a été refusée.${reason ? ` Raison : ${reason}` : ''}`,
+      message: `Votre demande de retrait de ${requestData.amount} a été refusée.${reason ? ` Raison : ${reason}` : ''}`,
       type: 'withdrawal_rejected',
       read: false,
       createdAt: FieldValue.serverTimestamp(),
@@ -5163,7 +5175,7 @@ router.post('/api/teacher/verify-google', requireDb, async (req, res) => {
     if (data.status === 'inactive') return res.status(403).json({ error: 'Compte désactivé. Contactez l\'administrateur.' });
     const updates: any = { updatedAt: FieldValue.serverTimestamp() };
     if (uid) updates.uid = uid;
-    if (googlePhotoUrl && !data.photoUrl) updates.photoUrl = googlePhotoUrl;
+    if (googlePhotoUrl) updates.photoUrl = googlePhotoUrl; // always sync Google photo
     await docSnap.ref.update(updates);
     res.json({ success: true, teacher: { id: docSnap.id, ...data, ...updates, password: undefined } });
   } catch (e: any) {
@@ -5276,7 +5288,9 @@ router.post('/api/teacher/withdrawal', requireDb, async (req, res) => {
       .where('teacherId', '==', teacherId).where('status', '==', 'pending').limit(1).get();
     if (!pendingSnap.empty) return res.status(400).json({ error: 'Vous avez déjà un retrait en attente.' });
 
-    await adminDb.collection('teacher_transactions').add({
+    const twBatch = adminDb.batch();
+    const twTxRef = adminDb.collection('teacher_transactions').doc();
+    twBatch.set(twTxRef, {
       teacherId,
       teacherName: teacherData.name || '',
       type: 'withdrawal',
@@ -5292,9 +5306,13 @@ router.post('/api/teacher/withdrawal', requireDb, async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-
+    // Deduct balance immediately on submission
+    twBatch.update(teacherRef, {
+      balance: FieldValue.increment(-amountUSD),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
     // Notify admin
-    await adminDb.collection('admin_notifications').add({
+    twBatch.set(adminDb.collection('admin_notifications').doc(), {
       type: 'teacher_withdrawal',
       teacherId,
       teacherName: teacherData.name || '',
@@ -5307,6 +5325,7 @@ router.post('/api/teacher/withdrawal', requireDb, async (req, res) => {
       read: false,
       createdAt: FieldValue.serverTimestamp(),
     });
+    await twBatch.commit();
 
     res.json({ success: true });
   } catch (e: any) {
@@ -5399,11 +5418,8 @@ router.post('/api/admin/teacher-transactions/:id/approve', requireDb, async (req
     if (!teacherSnap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
     const teacherData = teacherSnap.data()!;
 
-    const newBalance = Math.max(0, (teacherData.balance || 0) - (tx.amount || 0));
-    const batch = adminDb.batch();
-    batch.update(txRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
-    batch.update(teacherRef, { balance: newBalance, updatedAt: FieldValue.serverTimestamp() });
-    await batch.commit();
+    // Balance already deducted on submission — just mark approved
+    await txRef.update({ status: 'approved', updatedAt: FieldValue.serverTimestamp() });
 
     res.json({ success: true });
   } catch (e: any) {
@@ -5417,11 +5433,13 @@ router.post('/api/admin/teacher-transactions/:id/reject', requireDb, async (req,
     const txRef = adminDb.collection('teacher_transactions').doc(req.params.id);
     const txSnap = await txRef.get();
     if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
-    if (txSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
-    await txRef.update({
-      status: 'rejected',
-      rejectionReason: reason || '',
-      updatedAt: FieldValue.serverTimestamp(),
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+    // Refund teacher balance (was deducted on submission)
+    const teacherRefReject = adminDb.collection('teachers').doc(txData.teacherId);
+    await adminDb.runTransaction(async (t) => {
+      t.update(txRef, { status: 'rejected', rejectionReason: reason || '', updatedAt: FieldValue.serverTimestamp() });
+      t.update(teacherRefReject, { balance: FieldValue.increment(txData.amount || 0), updatedAt: FieldValue.serverTimestamp() });
     });
     res.json({ success: true });
   } catch (e: any) {
@@ -5975,6 +5993,40 @@ router.post('/api/admin/ai-chat', async (req, res) => {
     res.json({ reply });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Erreur serveur IA.' });
+  }
+});
+
+// ── Admin: list all agent personal transactions ───────────────────────────────
+router.get('/api/admin/agent-personal-transactions', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('agent_personal_transactions')
+      .orderBy('createdAt', 'desc').limit(200).get();
+    res.json({ transactions: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── PATCH photo URL (affiliate / agent) ──────────────────────────────────────
+router.patch('/api/affiliate/:id/photo', requireDb, async (req, res) => {
+  try {
+    const { photoUrl } = req.body;
+    if (typeof photoUrl !== 'string') return res.status(400).json({ error: 'photoUrl requis.' });
+    await adminDb.collection('affiliates').doc(req.params.id).update({ photoUrl, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch('/api/agent/:id/photo', requireDb, async (req, res) => {
+  try {
+    const { photoUrl } = req.body;
+    if (typeof photoUrl !== 'string') return res.status(400).json({ error: 'photoUrl requis.' });
+    await adminDb.collection('agents').doc(req.params.id).update({ photoUrl, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

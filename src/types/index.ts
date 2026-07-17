@@ -101,6 +101,7 @@ export interface Affiliate {
   commissionBalance?: number;
   walletId?: string;
   commissionWalletId?: string;
+  photoUrl?: string;
   info?: any;
   createdAt: any;
   updatedAt: any;
@@ -135,6 +136,7 @@ export interface Agent {
   walletLocked?: boolean;
   status: 'active' | 'inactive';
   walletId: string;
+  photoUrl?: string;
   createdAt: any;
   updatedAt: any;
 }
