@@ -1,57 +1,57 @@
 # Rena — Logistics & Fintech Platform
 
-## Overview
-Multi-role web application for logistics (parcels), fintech (wallets, payments), and online training (formations). Supports four roles: Client, Affiliate, Agent, and Admin.
+Application web multi-rôles (clients, affiliés, agents, admins) pour la gestion de colis, paiements, portefeuilles et formations en ligne.
 
 ## Stack
-- **Frontend**: React 19 + Vite 6 + Tailwind CSS 4 + Framer Motion + Radix UI (Shadcn/UI)
-- **Backend**: Express (TypeScript via tsx) — serves as API gateway + Vite proxy in dev
-- **Database/Auth**: Firebase (Firestore, Auth, Storage, Messaging)
-- **Email**: Nodemailer (SMTP) or Resend
-- **Push Notifications**: web-push (VAPID)
-- **AI**: Google Generative AI (Gemini)
 
-## How to Run
-```
-npm run dev
-```
-The Express server starts on port 5000 and spawns the Vite dev server on port 5173 (proxied through 5000).
-
-## Required Secrets
-| Secret | Description |
+| Couche | Technologie |
 |--------|-------------|
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase service account JSON (from Firebase Console → Project Settings → Service Accounts → Generate New Private Key) |
+| Frontend | React 19, Vite 6, Tailwind CSS 4, shadcn/ui |
+| Backend | Express 4, Node 20 (tsx) |
+| Base de données | Cloud Firestore (named DB: `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`) |
+| Auth | Firebase Auth (clients) + credentials Firestore (admin/affiliate/agent) |
+| Email | Resend / Nodemailer (optionnel) |
+| Push | Web Push / FCM (optionnel) |
 
-## Optional Environment Variables
-| Variable | Description |
-|----------|-------------|
-| `RESEND_API_KEY` | Clé API Resend pour l'envoi d'emails |
-| `RESEND_FROM_EMAIL` | Adresse expéditeur vérifiée dans Resend (ex: `noreply@rena.ht`) |
-| `ADMIN_EMAIL` | Email administrateur pour les notifications entrantes |
-| `RECAPTCHA_SECRET_KEY` | Google reCAPTCHA v2 secret key |
-| `RECAPTCHA_SITE_KEY` | Google reCAPTCHA v2 site key (exposed to frontend) |
-| `VAPID_PUBLIC_KEY` | Web Push VAPID public key (generate with `npx web-push generate-vapid-keys`) |
-| `VAPID_PRIVATE_KEY` | Web Push VAPID private key |
-| `FIRESTORE_DB_ID` | Firestore database ID (defaults to `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`) |
-| `PORT` | Server port (defaults to 5000) |
+## How to run
 
-## Firebase Config
-Frontend Firebase config is in `firebase-applet-config.json` (project: `gen-lang-client-0739219145`, named database: `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`).
-
-## Project Structure
-```
-server.ts              # Express entry point
-src/
-  main.tsx             # React entry point
-  App.tsx              # Routing + providers
-  api/router.ts        # All backend API routes
-  lib/firebase.ts      # Firebase client initialization
-  lib/email.ts         # Email templates
-firebase-applet-config.json  # Firebase project config
-database/              # Firestore + Storage security rules
-docs/                  # Detailed documentation
+```bash
+npm install
+npm run dev      # → http://localhost:5000
+npm run build    # Production build
+npm run start    # Production server
+npm run lint     # TypeScript check
 ```
 
-## Notes
-- `@tailwindcss/oxide-linux-x64-gnu` must be installed for the native Tailwind binding on Linux x64 (already in node_modules).
-- The Firestore database ID can be overridden via the `FIRESTORE_DB_ID` environment variable.
+The workflow **Start application** runs `npm run dev` and serves on port 5000.
+
+## Required secrets / env vars
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `FIREBASE_SERVICE_ACCOUNT` | ✅ | Full JSON of Firebase service account key |
+| `SESSION_SECRET` | ✅ | Express session secret |
+| `SMTP_USER` / `SMTP_PASS` | ❌ | Gmail SMTP for email notifications |
+| `RESEND_API_KEY` | ❌ | Resend email service |
+| `RECAPTCHA_SECRET_KEY` | ❌ | reCAPTCHA v2 secret |
+| `VAPID_PRIVATE_KEY` | ❌ | Web Push private key |
+| `MONCASH_SECRET_KEY` | ❌ | MonCash payment integration |
+
+## Project structure
+
+```
+src/pages/        — Full views and dashboards
+src/layouts/      — Navbar, BottomNav, FormationsNavbar
+src/components/   — Reusable UI components (ui/, modals, forms)
+src/hooks/        — Custom React hooks
+src/services/     — Client-side Firestore logic
+src/lib/          — Firebase, email, utilities
+src/types/        — TypeScript types
+database/         — Firestore & Storage rules
+docs/             — Full documentation
+server.ts         — Express backend entry point
+```
+
+## User preferences
+
+_Add any preferences here as you work with the agent._
