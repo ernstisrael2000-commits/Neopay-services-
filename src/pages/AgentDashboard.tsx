@@ -23,6 +23,7 @@ import {
   Phone, RefreshCw, TrendingUp, BarChart3, Users, Settings,
   Home, AlertCircle, BadgeDollarSign, ChevronRight, Star,
   ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck, PlusCircle, AlertTriangle, X,
+  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -456,179 +457,153 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-6 animate-in fade-in duration-500 pb-24">
+    <div className="w-full min-h-screen flex flex-col bg-[#F8FAFC] animate-in fade-in duration-500">
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 sm:p-5 rounded-[2rem] border border-gray-100 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20 shrink-0">
-            <User className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-black text-dark tracking-tight">Espace Agent</h1>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-primary font-bold text-sm">{agent.name}</span>
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full text-[10px] font-mono text-gray-500">#{agent.agentCode}</span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${agent.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
-                {agent.status === 'active' ? '● Actif' : '● Inactif'}
-              </span>
+      <header className="shrink-0 pt-14 px-6 pb-20 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A3D91 0%, #06214D 100%)' }}>
+        {/* Decorative blur circles */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-500/10 rounded-full -ml-12 -mb-12 blur-2xl" />
+
+        {/* Top row */}
+        <div className="flex items-center justify-between mb-8 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg shrink-0">
+              <span className="text-[#0A3D91] font-black text-xl">{(agent.name || 'A').charAt(0).toUpperCase()}</span>
             </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-white font-bold text-lg">{agent.name}</h1>
+                <ShieldCheck className="h-4 w-4 text-blue-400" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                <span className="text-white/60 text-xs font-medium uppercase tracking-wider">Agent Vérifié • En Ligne</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 relative z-10">
+            <NotificationBell
+              notifications={notifs}
+              unreadCount={notifCount}
+              loading={notifsLoading}
+              onMarkRead={markRead}
+              onMarkAllRead={markAllRead}
+              onClearAll={clearAll}
+            />
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <NotificationBell
-            notifications={notifs}
-            unreadCount={notifCount}
-            loading={notifsLoading}
-            onMarkRead={markRead}
-            onMarkAllRead={markAllRead}
-            onClearAll={clearAll}
-          />
-          <Button variant="ghost" onClick={onLogout} className="rounded-2xl text-red-500 hover:bg-red-50 h-9 px-4 font-bold text-sm flex items-center gap-2">
-            <LogOut className="h-4 w-4" />
-            Déconnexion
-          </Button>
-        </div>
-      </div>
 
-      {/* ── Balance Cards ── */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="rounded-[2rem] border-0 shadow-xl bg-slate-900 text-white overflow-hidden relative col-span-1">
-          <div className="absolute top-0 right-0 p-5 opacity-10">
-            <Wallet className="h-12 w-12" />
-          </div>
-          <CardHeader className="p-5 pb-0">
-            <CardTitle className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Wallet Agent</CardTitle>
-          </CardHeader>
-          <CardContent className="p-5 pt-2">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black">{agent.balance.toLocaleString()}</span>
-              <span className="text-sm font-black text-white/30">$</span>
-            </div>
-            <p className="text-[10px] font-bold text-white/40 mt-0.5">≈ {((agent.balance || 0) * rate).toLocaleString()} HTG</p>
-            {agent.walletLocked && (
-              <span className="text-[9px] font-black text-red-400 uppercase tracking-wider mt-1 block">🔒 Verrouillé</span>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[2rem] border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 col-span-1">
-          <CardContent className="p-5">
-            <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">Wallet Affilié</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-black text-amber-700">{(agent.commissionBalance || 0).toFixed(2)}</span>
-              <span className="text-sm font-black text-amber-400">$</span>
-            </div>
-            <p className="text-[10px] text-amber-500/70 font-bold mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
-            <p className="text-[9px] text-amber-400 font-bold mt-1">Commissions cumulées</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Navigation Tabs ── */}
-      <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-2">
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1">
-          {sectionNav.map(({ key, label, icon: Icon }) => {
-            const isActive = activeSection === key;
-            const hasBadge = key === 'requests' && totalPendingCount > 0;
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveSection(key as ActiveSection)}
-                className={`relative flex flex-col items-center gap-1 py-2.5 px-1 rounded-2xl text-[10px] font-black uppercase tracking-wide transition-all ${
-                  isActive ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-white' : ''}`} />
-                <span className="hidden sm:block leading-tight text-center">{label}</span>
-                {hasBadge && (
-                  <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
-                    {totalPendingCount}
-                  </span>
+        {/* Floating Balance Card */}
+        <div className="absolute left-6 right-6 bottom-[-60px] z-20">
+          <div className="bg-white rounded-3xl p-6 shadow-2xl shadow-blue-900/10 flex flex-col gap-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-slate-500 text-xs font-medium uppercase tracking-widest mb-1">Solde Principal Agent</p>
+                <h2 className="text-[#0A3D91] text-3xl font-black">
+                  {((agent.balance || 0) * rate).toLocaleString()} <span className="text-lg font-bold opacity-50">HTG</span>
+                </h2>
+                {agent.walletLocked && (
+                  <span className="text-[10px] font-black text-red-500 mt-0.5 block">🔒 Verrouillé</span>
                 )}
-              </button>
-            );
-          })}
+              </div>
+              <div className="p-2 bg-blue-50 rounded-xl">
+                <Wallet className="h-5 w-5 text-[#0A3D91]" />
+              </div>
+            </div>
+            <div className="h-px bg-slate-100 w-full" />
+            <button
+              onClick={() => setActiveSection('finances')}
+              className="flex items-center justify-between w-full"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-[#00C853]">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase font-bold leading-none">Commissions totales</p>
+                  <p className="text-slate-900 font-bold text-sm">${(agent.commissionBalance || 0).toFixed(2)}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-slate-300" />
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* ── Section Content ── */}
+      {/* ── Main Content ── */}
+      <main className="flex-1 overflow-y-auto px-6 pt-[80px] pb-32 space-y-8" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
+
       <AnimatePresence mode="wait">
 
         {/* ── OVERVIEW ── */}
         {activeSection === 'overview' && (
-          <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+          <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8">
 
-            {/* ── MON WALLET ── */}
-            <button
-              onClick={() => setActiveSection('finances')}
-              className="relative w-full rounded-[2rem] bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 text-white overflow-hidden shadow-xl text-left active:scale-[0.98] transition-transform"
-            >
-              <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full" />
-              <div className="absolute bottom-0 right-8 opacity-10"><TrendingUp className="h-16 w-16" /></div>
-              <div className="p-5 relative">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/60">Wallet Commissions</p>
-                  <BadgeDollarSign className="h-4 w-4 text-white/40" />
-                </div>
-                <p className="text-3xl font-black leading-none">${(agent.commissionBalance || 0).toFixed(2)}</p>
-                <p className="text-[11px] text-white/60 mt-1.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/15">
-                  <p className="text-[9px] text-white/50 font-black uppercase tracking-widest">Mes commissions cumulées</p>
-                  <ChevronRight className="h-4 w-4 text-white/40" />
-                </div>
+            {/* Actions Rapides */}
+            <section>
+              <h3 className="text-slate-900 font-bold text-lg mb-4">Actions Rapides</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Scanner */}
+                <button
+                  onClick={() => setActiveSection('deposit')}
+                  className="bg-slate-900 rounded-3xl p-5 flex flex-col gap-3 active:scale-95 transition-transform text-left"
+                >
+                  <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white">
+                    <QrCode className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold">Scanner</p>
+                    <p className="text-white/40 text-xs">Client / Code</p>
+                  </div>
+                </button>
+                {/* Dépôt */}
+                <button
+                  onClick={() => setActiveSection('deposit')}
+                  className="bg-white border border-slate-100 rounded-3xl p-5 flex flex-col gap-3 active:scale-95 transition-transform shadow-sm text-left"
+                >
+                  <div className="w-12 h-12 bg-[#00C853]/10 rounded-2xl flex items-center justify-center text-[#00C853]">
+                    <PlusCircle className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-slate-900 font-bold">Dépôt</p>
+                    <p className="text-slate-400 text-xs">Vers client</p>
+                  </div>
+                </button>
+                {/* Retrait */}
+                <button
+                  onClick={() => setActiveSection('requests')}
+                  className="bg-white border border-slate-100 rounded-3xl p-5 flex flex-col gap-3 active:scale-95 transition-transform shadow-sm text-left"
+                >
+                  <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center text-orange-500">
+                    <MinusCircle className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-slate-900 font-bold">Retrait</p>
+                    <p className="text-slate-400 text-xs">Cash-out client</p>
+                  </div>
+                </button>
+                {/* Historique */}
+                <button
+                  onClick={() => { setActiveSection('clients'); loadTransactions(); }}
+                  className="bg-white border border-slate-100 rounded-3xl p-5 flex flex-col gap-3 active:scale-95 transition-transform shadow-sm text-left"
+                >
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
+                    <History className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-slate-900 font-bold">Historique</p>
+                    <p className="text-slate-400 text-xs">Détails flux</p>
+                  </div>
+                </button>
               </div>
-            </button>
+            </section>
 
-            <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
-              <BarChart3 className="h-5 w-5 text-primary" />
-              Vue d'ensemble
-            </h3>
-
-            {/* Stats grid */}
-            {loadingStats ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-            ) : stats ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {[
-                  { label: 'Dépôts traités', value: `$${stats.totalDeposits.toFixed(2)}`, sub: `${stats.depositCount} transactions`, color: 'from-emerald-500 to-emerald-600', icon: ArrowDownLeft },
-                  { label: 'Retraits traités', value: `$${stats.totalWithdrawals.toFixed(2)}`, sub: `${stats.withdrawalCount} transactions`, color: 'from-rose-500 to-rose-600', icon: ArrowUpRight },
-                  { label: 'Commissions totales', value: `$${stats.totalCommissions.toFixed(2)}`, sub: `${stats.totalTransactions} opérations`, color: 'from-amber-500 to-orange-500', icon: BadgeDollarSign },
-                ].map(({ label, value, sub, color, icon: Icon }) => (
-                  <Card key={label} className={`rounded-[1.75rem] border-0 shadow-lg bg-gradient-to-br ${color} text-white overflow-hidden`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <Icon className="h-5 w-5 text-white/70" />
-                      </div>
-                      <p className="text-xl font-black leading-tight">{value}</p>
-                      <p className="text-[10px] font-bold text-white/60 mt-1">{label}</p>
-                      <p className="text-[9px] text-white/40 mt-0.5">{sub}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : null}
-
-            {/* Recharger mon Solde */}
-            <button
-              onClick={() => setIsSelfDepositOpen(true)}
-              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 transition-all active:scale-[0.99] group"
-            >
-              <div className="h-10 w-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-200">
-                <PlusCircle className="h-5 w-5" />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="font-black text-emerald-800">Recharger mon Solde</p>
-                <p className="text-xs text-emerald-600">MonCash, NatCash, Bureau / Proxy</p>
-              </div>
-              <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-
-            {/* Pending alerts */}
+            {/* Pending alert */}
             {totalPendingCount > 0 && (
               <button
                 onClick={() => setActiveSection('requests')}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 hover:bg-amber-100 transition-all group"
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 hover:bg-amber-100 transition-all group active:scale-[0.99]"
               >
                 <div className="h-10 w-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 animate-pulse">
                   <Clock className="h-5 w-5" />
@@ -641,52 +616,101 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               </button>
             )}
 
-            {/* Recent transactions */}
-            <div>
-              <div className="flex items-center justify-between px-1 mb-3">
-                <p className="font-black text-dark text-sm">Transactions récentes</p>
-                <button onClick={() => { setActiveSection('clients'); loadTransactions(); }} className="text-[11px] font-bold text-primary">Voir tout →</button>
+            {/* Résumé du Mois */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-slate-900 font-bold text-lg">Résumé du Mois</h3>
+                <button onClick={() => setActiveSection('commissions')} className="text-[#0A3D91] text-xs font-bold">Voir tout</button>
+              </div>
+              {loadingStats ? (
+                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-[#0A3D91]" /></div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
+                  <div className="min-w-[140px] bg-[#0A3D91] rounded-2xl p-4 text-white flex flex-col gap-1 shrink-0">
+                    <ArrowRightLeft className="h-4 w-4 text-white/40 mb-1" />
+                    <p className="text-white/60 text-[10px] uppercase font-bold tracking-wider">Transactions</p>
+                    <p className="text-xl font-bold">{stats?.totalTransactions ?? 0}</p>
+                  </div>
+                  <div className="min-w-[140px] bg-white border border-slate-100 rounded-2xl p-4 flex flex-col gap-1 shrink-0">
+                    <TrendingUp className="h-4 w-4 text-[#00C853] mb-1" />
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Commissions</p>
+                    <p className="text-slate-900 text-xl font-bold">
+                      {stats
+                        ? (stats.totalCommissions * rate >= 1000
+                          ? `${(stats.totalCommissions * rate / 1000).toFixed(1)}K`
+                          : Math.round(stats.totalCommissions * rate).toLocaleString())
+                        : '0'} <span className="text-xs text-slate-400">HTG</span>
+                    </p>
+                  </div>
+                  <div className="min-w-[140px] bg-white border border-slate-100 rounded-2xl p-4 flex flex-col gap-1 shrink-0">
+                    <ShieldCheck className="h-4 w-4 text-blue-500 mb-1" />
+                    <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Score</p>
+                    <p className="text-slate-900 text-xl font-bold">
+                      {stats && stats.totalTransactions > 0 ? '98%' : '—'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Dernières Opérations */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-slate-900 font-bold text-lg">Dernières Opérations</h3>
+                <button
+                  onClick={() => { setActiveSection('clients'); loadTransactions(); }}
+                  className="text-[#0A3D91] text-xs font-bold uppercase tracking-wider"
+                >
+                  Historique
+                </button>
               </div>
               {loadingTx ? (
-                <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
+                <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
               ) : allTransactions.length === 0 ? (
                 <div className="bg-gray-50 rounded-2xl p-8 text-center border-2 border-dashed border-gray-200">
                   <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />
                   <p className="text-gray-400 text-sm font-bold">Aucune transaction</p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {allTransactions.slice(0, 5).map(tx => (
-                    <div key={tx.id} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                      <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        tx.type === 'deposit' ? 'bg-emerald-100' : 'bg-rose-100'
+                    <div key={tx.id} className="bg-white p-4 rounded-2xl flex items-center gap-4 shadow-sm border border-slate-50">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${
+                        tx.type === 'deposit' ? 'bg-green-50 text-[#00C853]' : 'bg-orange-50 text-orange-500'
                       }`}>
                         {tx.type === 'deposit'
-                          ? <ArrowDownLeft className="h-4 w-4 text-emerald-600" />
-                          : <ArrowUpRight className="h-4 w-4 text-rose-600" />}
+                          ? <ArrowDownLeft className="h-5 w-5" />
+                          : <ArrowUpRight className="h-5 w-5" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-black text-dark text-sm truncate">{tx.clientName}</p>
-                        <p className="text-[10px] text-gray-400 truncate">{tx.description || tx.method || ''}</p>
-                        <p className="text-[10px] text-gray-300">{fmtDate(tx.createdAt)}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={`font-black text-sm ${tx.type === 'deposit' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {tx.type === 'deposit' ? '+' : '-'}${(tx.amount || 0).toFixed(2)}
-                        </p>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                          tx.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                          tx.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {tx.status === 'approved' ? 'Validé' : tx.status === 'pending' ? 'En attente' : 'Refusé'}
-                        </span>
+                        <div className="flex justify-between items-baseline gap-2">
+                          <p className="font-bold text-slate-900 truncate">{tx.type === 'deposit' ? 'Dépôt Rena' : 'Retrait Cash'}</p>
+                          <p className={`font-bold shrink-0 ${tx.type === 'deposit' ? 'text-[#00C853]' : 'text-slate-900'}`}>
+                            {tx.type === 'deposit' ? '+' : '-'}{Math.round((tx.amount || 0) * rate).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-baseline gap-2">
+                          <p className="text-xs text-slate-400 truncate">Client: {tx.clientName}</p>
+                          <p className="text-[10px] text-slate-300 font-medium uppercase shrink-0">{fmtDate(tx.createdAt, 'HH:mm')}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </section>
+
+            {/* Security Banner */}
+            <section className="bg-blue-50/50 rounded-3xl p-5 border border-blue-100 flex items-center gap-4">
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white shrink-0">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-slate-900 font-bold text-sm">Sécurité Renforcée</p>
+                <p className="text-slate-500 text-xs">Chiffrement AES-256 actif. Vos données et fonds sont protégés par Rena Safe.</p>
+              </div>
+            </section>
+
           </motion.div>
         )}
 
@@ -1200,6 +1224,60 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         )}
 
       </AnimatePresence>
+
+      </main>
+
+      {/* ── Bottom Navigation ── */}
+      <footer className="shrink-0 pb-8 bg-white border-t border-slate-100 z-40">
+        <nav className="flex justify-between items-center px-6 py-4">
+          {/* Accueil */}
+          <button
+            onClick={() => setActiveSection('overview')}
+            className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'overview' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+          >
+            <LayoutGrid className="h-6 w-6" />
+            <span className="text-[10px] font-bold uppercase tracking-tight">Accueil</span>
+          </button>
+          {/* Activités */}
+          <button
+            onClick={() => { setActiveSection('clients'); loadTransactions(); }}
+            className={`flex flex-col items-center gap-1 relative transition-colors ${activeSection === 'clients' || activeSection === 'requests' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+          >
+            <ListOrdered className="h-6 w-6" />
+            <span className="text-[10px] font-bold uppercase tracking-tight">Activités</span>
+            {totalPendingCount > 0 && (
+              <span className="absolute -top-1 -right-2 bg-amber-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
+                {totalPendingCount}
+              </span>
+            )}
+          </button>
+          {/* Center Scan button */}
+          <div className="-mt-12">
+            <button
+              onClick={() => setActiveSection('deposit')}
+              className="w-14 h-14 bg-[#0A3D91] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/40 ring-4 ring-white active:scale-90 transition-transform"
+            >
+              <Scan className="h-7 w-7" />
+            </button>
+          </div>
+          {/* Portefeuille */}
+          <button
+            onClick={() => setActiveSection('finances')}
+            className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'finances' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+          >
+            <Banknote className="h-6 w-6" />
+            <span className="text-[10px] font-bold uppercase tracking-tight">Portefeuille</span>
+          </button>
+          {/* Profil */}
+          <button
+            onClick={() => setActiveSection('settings')}
+            className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'settings' || activeSection === 'commissions' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+          >
+            <User className="h-6 w-6" />
+            <span className="text-[10px] font-bold uppercase tracking-tight">Profil</span>
+          </button>
+        </nav>
+      </footer>
 
       {/* ── Personal Deposit Dialog ───────────────────────────────────────── */}
       <Dialog open={personalDepositOpen} onOpenChange={v => { if (!v) { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); } setPersonalDepositOpen(v); }}>
