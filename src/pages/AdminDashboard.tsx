@@ -4514,182 +4514,183 @@ function EmailLogsPanel() {
   };
 
   const renderAgents = () => (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
+    <div className="space-y-8 animate-in fade-in duration-500">
+
+      {/* ── Header ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-dark tracking-tight">Gestion des Agents</h2>
-          <p className="text-gray-500 text-sm">Gérez les agents de dépôt physique et leurs soldes.</p>
+          <h2 className="text-3xl font-black text-dark tracking-tight">Agents</h2>
+          <p className="text-gray-400 text-sm mt-1">Gérez les agents de dépôt physique, leurs wallets et leurs demandes.</p>
         </div>
-        <Button 
+        <Button
           onClick={() => setIsAgentDialogOpen(true)}
           className="rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white shadow-lg shadow-primary/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
         >
-          <PlusCircle className="h-5 w-5 mr-2" />
+          <PlusCircle className="h-4 w-4 mr-2" />
           Nouvel Agent
         </Button>
       </div>
 
-      <Card className="rounded-[2.5rem] border-0 shadow-xl overflow-hidden bg-white">
-        <CardHeader className="border-b border-gray-100 p-8 pb-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <Input 
-              placeholder="Rechercher par nom ou code agent..." 
-              value={agentSearch}
-              onChange={(e) => setAgentSearch(e.target.value)}
-              className="pl-12 h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-lg font-medium"
-            />
+      {/* ── Dépôts en attente ── */}
+      {agentPersonalDeposits.length > 0 && (
+        <div className="rounded-3xl border-2 border-amber-200 bg-amber-50/60 overflow-hidden">
+          <div className="flex items-center gap-3 px-6 py-5 border-b border-amber-200">
+            <div className="h-10 w-10 rounded-2xl bg-amber-400 flex items-center justify-center shadow-md shadow-amber-200">
+              <ArrowDown className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="font-black text-amber-900 text-base">Dépôts en attente d'approbation</p>
+              <p className="text-xs text-amber-600 mt-0.5">Ces agents ont soumis une demande de recharge — approuvez ou refusez.</p>
+            </div>
+            <span className="h-7 min-w-[28px] px-2 flex items-center justify-center rounded-full bg-amber-400 text-white text-xs font-black shadow">
+              {agentPersonalDeposits.length}
+            </span>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-gray-50/50">
-              <TableRow className="border-0">
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 px-8 text-gray-500">ID / Agent</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Téléphone</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Wallet Agent</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Wallet Affilié</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Statut</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right px-8 text-gray-500">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAgentsList.map((agent) => (
-                <TableRow key={agent.id} className="group border-gray-100 hover:bg-gray-50/50 transition-colors">
-                  <TableCell className="px-8 py-5">
-                    <div className="flex flex-col">
-                      <span className="font-black text-dark text-lg">{agent.name}</span>
-                      <span className="text-xs font-mono text-gray-400 tracking-tighter">CODE: {agent.agentCode}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center font-medium text-gray-600">
-                    {agent.phone}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex flex-col items-end">
-                      <span className="text-lg font-black text-primary">{agent.balance.toLocaleString()} $</span>
-                      {agent.walletLocked && <span className="text-[9px] font-black text-red-500 uppercase tracking-wide">🔒 Verrouillé</span>}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="text-lg font-black text-amber-600">{(agent.commissionBalance || 0).toFixed(2)} $</span>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge className={`rounded-xl px-3 py-1 text-[10px] font-black uppercase ${
-                      agent.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+          <div className="divide-y divide-amber-200">
+            {agentPersonalDeposits.map(tx => (
+              <div key={tx.id} className="flex items-center gap-4 px-6 py-4">
+                <div className="h-10 w-10 rounded-2xl bg-white border-2 border-amber-200 flex items-center justify-center shrink-0">
+                  <UserCheck className="h-5 w-5 text-amber-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-dark truncate">{tx.agentName || tx.agentCode}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{tx.method}{tx.accountNumber ? ` · ${tx.accountNumber}` : ''}</p>
+                </div>
+                <p className="text-xl font-black text-emerald-600 shrink-0">${tx.amount}</p>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-500 hover:bg-emerald-600 h-9 text-[10px] font-black uppercase px-4 rounded-xl border-0 shadow-sm"
+                    disabled={agentDepositActionLoading === tx.id}
+                    onClick={() => handleAgentDepositAction(tx.id, 'approve')}
+                  >
+                    {agentDepositActionLoading === tx.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '✓ Approuver'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-9 text-[10px] font-black uppercase px-4 rounded-xl"
+                    disabled={agentDepositActionLoading === tx.id}
+                    onClick={() => handleAgentDepositAction(tx.id, 'reject')}
+                  >
+                    ✕ Refuser
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Barre de recherche ── */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <Input
+          placeholder="Rechercher par nom ou code agent..."
+          value={agentSearch}
+          onChange={(e) => setAgentSearch(e.target.value)}
+          className="pl-12 h-13 rounded-2xl bg-white border-2 border-gray-100 focus:border-primary/30 focus:ring-0 text-base font-medium shadow-sm"
+        />
+      </div>
+
+      {/* ── Liste des agents ── */}
+      {agentsLoading ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-300">
+          <Loader2 className="h-12 w-12 animate-spin" />
+          <p className="text-sm font-bold uppercase tracking-widest">Chargement…</p>
+        </div>
+      ) : filteredAgentsList.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-200">
+          <UserCheck className="h-16 w-16" />
+          <p className="text-sm font-black uppercase tracking-widest text-gray-400">Aucun agent trouvé</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {filteredAgentsList.map((agent) => (
+            <div
+              key={agent.id}
+              className="bg-white rounded-3xl border-2 border-gray-100 hover:border-primary/20 hover:shadow-lg transition-all duration-200 p-5"
+            >
+              <div className="flex items-start gap-4">
+                {/* Avatar */}
+                <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                  {agent.photoUrl
+                    ? <img src={agent.photoUrl} className="h-14 w-14 rounded-2xl object-cover" alt={agent.name} />
+                    : <span className="text-xl font-black text-primary">{(agent.name || '?')[0].toUpperCase()}</span>
+                  }
+                </div>
+
+                {/* Infos principales */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-black text-dark text-lg leading-tight">{agent.name}</p>
+                    <Badge className={`rounded-lg px-2 py-0.5 text-[10px] font-black uppercase border-0 ${
+                      agent.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'
                     }`}>
                       {agent.status === 'active' ? 'Actif' : 'Inactif'}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right px-8">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedAgentForBalance(agent);
-                          setAgentWalletType('balance');
-                          setBalanceAdjustment('');
-                          setAgentWalletNote('');
-                          setIsAgentBalanceDialogOpen(true);
-                        }}
-                        className="rounded-xl border-2 border-gray-100 hover:border-primary hover:text-primary transition-all h-10 px-3"
-                      >
-                        <Wallet className="h-4 w-4 mr-2" />
-                        Wallets
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleToggleAgentLock(agent)}
-                        disabled={isSaving}
-                        className={`rounded-xl border-2 h-10 px-3 transition-all ${agent.walletLocked ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-gray-100 text-gray-500 hover:border-gray-300'}`}
-                        title={agent.walletLocked ? 'Déverrouiller Wallet Agent' : 'Verrouiller Wallet Agent'}
-                      >
-                        {agent.walletLocked ? '🔒' : '🔓'}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredAgentsList.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-64 text-center">
-                    {agentsLoading ? (
-                      <Loader2 className="h-10 w-10 animate-spin mx-auto text-gray-200" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 opacity-30">
-                        <UserCheck className="h-20 w-20" />
-                        <span className="font-black uppercase tracking-widest text-sm">Aucun agent trouvé</span>
-                      </div>
+                    {agent.walletLocked && (
+                      <Badge className="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase border-0 bg-red-100 text-red-600">
+                        🔒 Verrouillé
+                      </Badge>
                     )}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </div>
+                  <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                    <span className="text-xs font-mono text-gray-400">CODE: {agent.agentCode}</span>
+                    {agent.phone && <span className="text-xs text-gray-400">{agent.phone}</span>}
+                    {agent.email && <span className="text-xs text-gray-400">{agent.email}</span>}
+                  </div>
+                </div>
 
-      {/* Pending agent personal deposits */}
-      {agentPersonalDeposits.length > 0 && (
-        <Card className="rounded-[2.5rem] border-0 shadow-xl overflow-hidden bg-white">
-          <CardHeader className="border-b border-gray-100 p-6 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center">
-                <ArrowDown className="h-5 w-5 text-amber-600" />
+                {/* Actions */}
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedAgentForBalance(agent);
+                      setAgentWalletType('balance');
+                      setBalanceAdjustment('');
+                      setAgentWalletNote('');
+                      setIsAgentBalanceDialogOpen(true);
+                    }}
+                    className="rounded-xl border-2 border-gray-100 hover:border-primary hover:text-primary transition-all h-9 px-3 text-xs font-black"
+                  >
+                    <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                    Wallets
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleToggleAgentLock(agent)}
+                    disabled={isSaving}
+                    className={`rounded-xl border-2 h-9 w-9 p-0 transition-all ${agent.walletLocked ? 'border-red-200 text-red-500 hover:bg-red-50' : 'border-gray-100 text-gray-400 hover:border-gray-300'}`}
+                    title={agent.walletLocked ? 'Déverrouiller' : 'Verrouiller'}
+                  >
+                    {agent.walletLocked ? '🔒' : '🔓'}
+                  </Button>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg font-black">Dépôts agents en attente</CardTitle>
-                <p className="text-sm text-gray-400">Demandes de recharge de balance agent — à approuver ou rejeter</p>
+
+              {/* Wallets */}
+              <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
+                <div className="rounded-2xl bg-blue-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-1">Wallet Agent</p>
+                  <p className="text-2xl font-black text-blue-700">${(agent.balance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-blue-400 mt-0.5">Caisse opérationnelle</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-500 mb-1">Commissions</p>
+                  <p className="text-2xl font-black text-amber-600">${(agent.commissionBalance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-amber-400 mt-0.5">Gains accumulés</p>
+                </div>
               </div>
-              <Badge className="ml-auto bg-amber-100 text-amber-700 border-0 font-black">{agentPersonalDeposits.length}</Badge>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader className="bg-gray-50/50">
-                <TableRow className="border-0">
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 px-6 text-gray-500">Agent</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-gray-500">Montant</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-gray-500">Méthode</TableHead>
-                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-12 text-right px-6 text-gray-500">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {agentPersonalDeposits.map(tx => (
-                  <TableRow key={tx.id} className="border-gray-100">
-                    <TableCell className="px-6 py-4 font-black text-dark">{tx.agentName || tx.agentCode}</TableCell>
-                    <TableCell className="font-black text-emerald-600 text-lg">${tx.amount}</TableCell>
-                    <TableCell className="text-sm text-gray-500">{tx.method}</TableCell>
-                    <TableCell className="text-right px-6">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 hover:bg-emerald-700 h-9 text-[10px] font-black uppercase px-4 rounded-xl border-0"
-                          disabled={agentDepositActionLoading === tx.id}
-                          onClick={() => handleAgentDepositAction(tx.id, 'approve')}
-                        >
-                          {agentDepositActionLoading === tx.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Approuver'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-9 text-[10px] font-black uppercase px-4 rounded-xl"
-                          disabled={agentDepositActionLoading === tx.id}
-                          onClick={() => handleAgentDepositAction(tx.id, 'reject')}
-                        >
-                          Refuser
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
+    </div>
+  );
 
       {/* Add Agent Dialog */}
       <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>

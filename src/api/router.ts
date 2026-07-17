@@ -1946,7 +1946,7 @@ router.post('/api/admin/agent-personal-deposit/:txId/approve', requireDb, async 
     const agentRef = adminDb.collection('agents').doc(txData.agentId);
     await adminDb.runTransaction(async (txn) => {
       const agentSnap = await txn.get(agentRef);
-      if (!agentSnap.exists()) throw new Error('Agent introuvable.');
+      if (!agentSnap.exists) throw new Error('Agent introuvable.');
       txn.update(agentRef, {
         balance: FieldValue.increment(txData.amount),
         updatedAt: FieldValue.serverTimestamp(),
@@ -6096,7 +6096,7 @@ router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, r
 
     await adminDb.runTransaction(async (txn) => {
       const agentSnap = await txn.get(agentRef);
-      if (!agentSnap.exists()) throw new Error('Agent introuvable.');
+      if (!agentSnap.exists) throw new Error('Agent introuvable.');
       const agentData = agentSnap.data()!;
       if ((agentData.balance || 0) < reqData.amount) throw new Error('Solde agent insuffisant pour ce dépôt.');
 
