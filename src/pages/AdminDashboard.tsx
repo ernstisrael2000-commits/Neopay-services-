@@ -4689,8 +4689,6 @@ function EmailLogsPanel() {
           ))}
         </div>
       )}
-    </div>
-  );
 
       {/* Add Agent Dialog */}
       <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
@@ -4758,7 +4756,6 @@ function EmailLogsPanel() {
             </DialogDescription>
           </DialogHeader>
           <div className="pt-4 space-y-5">
-            {/* Wallet balances summary */}
             <div className="grid grid-cols-2 gap-3">
               <div className="text-center bg-slate-900 text-white p-4 rounded-2xl">
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Wallet Agent</span>
@@ -4770,8 +4767,6 @@ function EmailLogsPanel() {
                 <span className="text-2xl font-black text-amber-700">{(selectedAgentForBalance?.commissionBalance || 0).toFixed(2)} $</span>
               </div>
             </div>
-
-            {/* Wallet selector */}
             <div className="space-y-2">
               <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Wallet à ajuster</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -4789,7 +4784,6 @@ function EmailLogsPanel() {
                 </button>
               </div>
             </div>
-
             <div className="space-y-2">
               <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Montant ($)</Label>
               <Input 
@@ -4802,7 +4796,6 @@ function EmailLogsPanel() {
                 className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-center text-2xl font-black"
               />
             </div>
-
             <div className="space-y-2">
               <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Note (optionnel)</Label>
               <Input
@@ -4813,7 +4806,6 @@ function EmailLogsPanel() {
                 maxLength={200}
               />
             </div>
-
             <div className="flex gap-3">
               <Button 
                 onClick={() => handleUpdateAgentBalanceAction('credit')}
