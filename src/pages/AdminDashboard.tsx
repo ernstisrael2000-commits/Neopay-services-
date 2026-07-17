@@ -2959,6 +2959,7 @@ function EmailLogsPanel() {
     {
       title: "Administration & Paramètres",
       items: [
+        { value: 'agents', label: 'Agents', icon: UserCheck, permission: 'settings' },
         { value: 'profits', label: 'Profits', icon: LucideIcons.TrendingUp, permission: 'settings' },
         { value: 'ai-analyzer', label: 'Analyse IA', icon: LucideIcons.BrainCircuit, permission: 'settings' },
         { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
@@ -5105,6 +5106,11 @@ function EmailLogsPanel() {
                           {item.value === 'notifications' && totalPending > 0 && (
                             <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white">
                               {totalPending}
+                            </span>
+                          )}
+                          {item.value === 'agents' && agentPersonalDeposits.length > 0 && (
+                            <span className="flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-amber-500 text-[10px] font-black text-white">
+                              {agentPersonalDeposits.length}
                             </span>
                           )}
                         </button>
@@ -9643,6 +9649,11 @@ function EmailLogsPanel() {
               })}
             </div>
           )}
+        </TabsContent>
+
+        {/* ── AGENTS TAB ───────────────────────────────────────────────────── */}
+        <TabsContent value="agents" className="space-y-6 pt-6 px-6 pb-20">
+          {renderAgents()}
         </TabsContent>
 
         {/* ── PROFITS TAB ──────────────────────────────────────────────────── */}
