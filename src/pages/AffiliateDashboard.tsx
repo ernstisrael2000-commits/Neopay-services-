@@ -98,7 +98,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettings } from '../services/parcelService';
 
-type Tab = 'accueil' | 'reseau' | 'gains' | 'commandes' | 'profil';
+type Tab = 'accueil' | 'reseau' | 'gains' | 'historique' | 'profil';
 
 interface AffiliateDashboardProps {
   affiliateId: string;
@@ -282,46 +282,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   };
 
   useEffect(() => {
-    if (activeTab === 'commandes') fetchRequests();
+    // fetchRequests removed — affiliates no longer have a Point de Service tab
   }, [activeTab]);
 
-  // Demander la permission caméra au chargement — une seule fois, de façon transparente.
-  // On acquiert le flux puis on l'arrête immédiatement : le navigateur retient l'autorisation
-  // pour la durée de la session, donc plus de prompt surprise au moment du scan.
-  useEffect(() => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraPermission('unavailable');
-      return;
-    }
-    // Vérifier d'abord si on a déjà une réponse (évite un prompt inutile si déjà accordé/refusé)
-    navigator.permissions?.query({ name: 'camera' as PermissionName })
-      .then(status => {
-        if (status.state === 'granted') {
-          setCameraPermission('granted');
-          return;
-        }
-        if (status.state === 'denied') {
-          setCameraPermission('denied');
-          return;
-        }
-        // 'prompt' : demander maintenant pour que ça arrive au bon moment
-        navigator.mediaDevices.getUserMedia({ video: true })
-          .then(stream => {
-            stream.getTracks().forEach(t => t.stop()); // on libère immédiatement
-            setCameraPermission('granted');
-          })
-          .catch(() => setCameraPermission('denied'));
-      })
-      .catch(() => {
-        // Permissions API non dispo (rare) — demander directement
-        navigator.mediaDevices.getUserMedia({ video: true })
-          .then(stream => {
-            stream.getTracks().forEach(t => t.stop());
-            setCameraPermission('granted');
-          })
-          .catch(() => setCameraPermission('denied'));
-      });
-  }, []);
+  // (Camera permission is no longer requested on mount — affiliates have no QR scan feature)
 
   // Direct transaction (deposit or withdrawal)
   const handleDirectTx = async (type: 'deposit' | 'withdrawal') => {
@@ -681,7 +645,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     { id: 'accueil', label: 'Accueil', icon: Home },
     { id: 'reseau', label: 'Réseau', icon: Users },
     { id: 'gains', label: 'Gains', icon: TrendingUp },
-    { id: 'commandes', label: 'Commandes', icon: ShoppingBag },
+    { id: 'historique', label: 'Historique', icon: History },
     { id: 'profil', label: 'Profil', icon: User },
   ];
 
@@ -1464,389 +1428,81 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         )}
 
         {/* ═══ COMMANDES / POINT DE SERVICE ═══ */}
-        {activeTab === 'commandes' && (
+        {activeTab === 'historique' && (
           <div className="p-4 space-y-4">
 
             {/* Header */}
-            <div className="bg-gradient-to-br from-orange-500 to-rose-600 rounded-3xl p-5 text-white shadow-lg shadow-orange-200">
+            <div className="bg-gradient-to-br from-primary to-indigo-700 rounded-3xl p-5 text-white shadow-lg shadow-primary/20">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                    <PackageSearch className="h-5 w-5" />
+                    <History className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black">Point de Service</h2>
-                    <p className="text-xs text-white/70">Dépôts & retraits pour vos clients</p>
+                    <h2 className="text-lg font-black">Historique</h2>
+                    <p className="text-xs text-white/70">Toutes vos transactions</p>
                   </div>
                 </div>
-                <button onClick={fetchRequests} className="h-8 w-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 transition-colors">
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </button>
               </div>
-              <div className="grid grid-cols-2 gap-2 mt-3">
+              <div className="grid grid-cols-2 gap-2 mt-1">
                 <div className="bg-white/10 rounded-2xl p-3">
-                  <p className="text-[10px] text-white/60 font-black uppercase">Solde Disponible</p>
+                  <p className="text-[10px] text-white/60 font-black uppercase">Wallet Principal</p>
                   <p className="text-xl font-black">${(affiliate.balance || 0).toFixed(2)}</p>
                 </div>
                 <div className="bg-white/10 rounded-2xl p-3">
-                  <p className="text-[10px] text-white/60 font-black uppercase">Demandes Pendantes</p>
-                  <p className="text-xl font-black">{withdrawalRequests.length + depositRequests.length}</p>
+                  <p className="text-[10px] text-white/60 font-black uppercase">Commissions</p>
+                  <p className="text-xl font-black">${(affiliate.commissionBalance || 0).toFixed(2)}</p>
                 </div>
               </div>
             </div>
 
-            {/* Sub-tabs */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-1.5 flex gap-1">
-              {[
-                { id: 'deposit', label: 'Dépôt Direct', icon: ArrowDownToLine },
-                { id: 'scan', label: 'Scanner QR', icon: QrCode },
-                { id: 'requests', label: `Demandes${withdrawalRequests.length + depositRequests.length > 0 ? ` (${withdrawalRequests.length + depositRequests.length})` : ''}`, icon: Bell },
-              ].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => { setPointTab(t.id as PointTab); setPhoneClient(null); setPhoneInput(''); setDirectAmount(''); setDirectNote(''); }}
-                  className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                    pointTab === t.id ? 'bg-orange-500 text-white shadow' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  <t.icon className="h-3.5 w-3.5" />
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* ── Dépôt Direct ── */}
-            {pointTab === 'deposit' && (
-              <div className="space-y-4">
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center">
-                      <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-black text-dark text-sm">Dépôt Direct Client</h3>
-                      <p className="text-[10px] text-gray-400">Votre solde sera débité, le client crédité</p>
-                    </div>
-                  </div>
-
-                  {/* Multi-field client search */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone, nom ou ID Wallet</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Ex: +509..., Jean Dupont, W-..."
-                          value={phoneInput}
-                          onChange={e => { setPhoneInput(e.target.value); setPhoneClient(null); }}
-                          onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
-                          className="h-11 rounded-xl pl-10 font-mono"
-                        />
-                      </div>
-                      <Button onClick={handlePhoneSearch} disabled={phoneLoading || !phoneInput.trim()} className="h-11 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 border-0 text-white">
-                        {phoneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    {phoneClient && (
-                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl space-y-1">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                          <span className="text-sm font-black text-emerald-700">{phoneClient.name}</span>
-                        </div>
-                        <p className="text-[10px] text-emerald-600 pl-6">Solde actuel: <strong>${(phoneClient.balance || 0).toFixed(2)}</strong></p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Amount */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
-                    <div className="relative">
-                      <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
-                      <Input type="number" placeholder="0.00" value={directAmount} onChange={e => setDirectAmount(e.target.value)} className="h-11 rounded-xl pl-10 font-black text-lg" min="0.01" />
-                    </div>
-                    {directAmount && affiliate && parseFloat(directAmount) > affiliate.balance && (
-                      <p className="text-[10px] text-red-500 font-bold">Solde insuffisant (vous avez ${affiliate.balance.toFixed(2)})</p>
-                    )}
-                  </div>
-
-                  {/* Note */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Note (optionnel)</Label>
-                    <Input placeholder="Ex: Espèces reçues en bureau" value={directNote} onChange={e => setDirectNote(e.target.value)} className="h-11 rounded-xl" maxLength={100} />
-                  </div>
-
-                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-start gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-emerald-800 font-bold leading-relaxed">
-                      Transaction immédiate. Votre solde sera débité et le client crédité instantanément.
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={() => handleDirectTx('deposit')}
-                    disabled={directSubmitting || !phoneClient || !directAmount || parseFloat(directAmount) > (affiliate?.balance || 0)}
-                    className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 disabled:opacity-50"
-                  >
-                    {directSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                      <span className="flex items-center gap-2"><ArrowDownToLine className="h-4 w-4" /> Effectuer le Dépôt</span>
-                    )}
-                  </Button>
-                </div>
+            {/* Transaction list */}
+            {transactionsLoading ? (
+              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            ) : transactions.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
+                <History className="h-12 w-12 mx-auto mb-3 text-gray-200" />
+                <p className="text-sm font-black text-gray-400">Aucune transaction</p>
+                <p className="text-[10px] text-gray-300 mt-1">Vos dépôts et retraits apparaîtront ici</p>
               </div>
-            )}
-
-            {/* ── Scanner QR ── */}
-            {pointTab === 'scan' && (
-              <div className="space-y-4">
-                {!scanResult ? (
-                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-xl bg-violet-100 flex items-center justify-center">
-                        <QrCode className="h-4 w-4 text-violet-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-dark text-sm">Scanner Code QR Client</h3>
-                        <p className="text-[10px] text-gray-400">Scannez le code généré par le client</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl overflow-hidden bg-black min-h-[260px] flex items-center justify-center relative">
-                      {scanning ? (
-                        <div id="qr-scanner-affiliate" className="w-full" />
-                      ) : cameraPermission === 'denied' ? (
-                        <div className="flex flex-col items-center gap-3 text-white p-8">
-                          <Camera className="h-12 w-12 text-red-400/70" />
-                          <p className="text-sm text-red-300 font-bold">Accès caméra refusé</p>
-                          <p className="text-[11px] text-white/50 text-center">Allez dans les paramètres de votre navigateur et autorisez la caméra pour ce site, puis rechargez la page.</p>
+            ) : (
+              <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="divide-y divide-gray-50">
+                  {transactions.map((tx: WalletTransaction) => {
+                    const isCredit = tx.type === 'deposit' || tx.type === 'commission' || tx.type === 'transfer_in';
+                    const date = tx.createdAt
+                      ? format(new Date((tx.createdAt as any)._seconds ? (tx.createdAt as any)._seconds * 1000 : tx.createdAt), 'dd MMM yyyy • HH:mm', { locale: fr })
+                      : '';
+                    const label = tx.type === 'deposit' ? 'Dépôt'
+                      : tx.type === 'withdrawal' ? 'Retrait'
+                      : tx.type === 'commission' ? 'Commission'
+                      : tx.type === 'transfer_in' ? 'Transfert reçu'
+                      : tx.type === 'transfer_out' ? 'Transfert envoyé'
+                      : tx.type || 'Transaction';
+                    return (
+                      <div key={tx.id} className="p-4 flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                          isCredit ? 'bg-emerald-50' : 'bg-rose-50'
+                        }`}>
+                          {isCredit
+                            ? <ArrowDownToLine className="h-4 w-4 text-emerald-500" />
+                            : <ArrowUpFromLine className="h-4 w-4 text-rose-500" />}
                         </div>
-                      ) : cameraPermission === 'unavailable' ? (
-                        <div className="flex flex-col items-center gap-3 text-white p-8">
-                          <Camera className="h-12 w-12 text-white/40" />
-                          <p className="text-sm text-white/60 font-bold">Aucune caméra détectée</p>
-                          <p className="text-[11px] text-white/40 text-center">Cet appareil ne dispose pas de caméra accessible.</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-dark text-sm truncate">{label}</p>
+                          {tx.description && <p className="text-[10px] text-gray-400 truncate">{tx.description}</p>}
+                          <p className="text-[10px] text-gray-300">{date}</p>
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-3 text-white p-8">
-                          <Camera className={`h-12 w-12 ${cameraPermission === 'granted' ? 'text-green-400/70' : 'text-white/40'}`} />
-                          <p className="text-sm text-white/60 font-bold">
-                            {cameraPermission === 'granted' ? 'Caméra prête' : 'Caméra inactive'}
+                        <div className="text-right shrink-0">
+                          <p className={`font-black text-sm ${isCredit ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {isCredit ? '+' : '-'}${Math.abs(tx.amount || 0).toFixed(2)}
                           </p>
-                          <p className="text-[11px] text-white/40 text-center">Appuyez sur "Démarrer le scan" pour activer la caméra</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <Button
-                      onClick={startQrScanner}
-                      disabled={scanning || cameraPermission === 'denied' || cameraPermission === 'unavailable'}
-                      className="w-full h-12 bg-violet-600 hover:bg-violet-700 text-white font-black rounded-2xl border-0 shadow-lg shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {scanning ? (
-                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Scan en cours...</span>
-                      ) : cameraPermission === 'unknown' ? (
-                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Vérification caméra...</span>
-                      ) : (
-                        <span className="flex items-center gap-2"><ScanLine className="h-4 w-4" />Démarrer le Scan</span>
-                      )}
-                    </Button>
-
-                    <div className="bg-gray-50 rounded-2xl border border-gray-100 p-3 space-y-2">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Comment utiliser</p>
-                      {[
-                        { n: '1', t: 'Le client génère un QR', s: 'Dépôt ou Retrait → Via Agent dans son wallet' },
-                        { n: '2', t: 'Scannez le code', s: 'Appuyez sur "Démarrer" et pointez la caméra' },
-                        { n: '3', t: 'Confirmez', s: 'Vérifiez les infos et appuyez sur Confirmer' },
-                      ].map(s => (
-                        <div key={s.n} className="flex items-start gap-2">
-                          <div className="h-5 w-5 rounded-full bg-violet-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">{s.n}</div>
-                          <div>
-                            <p className="text-[11px] font-black text-gray-700">{s.t}</p>
-                            <p className="text-[10px] text-gray-400">{s.s}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-black text-dark text-sm">Code scanné</h3>
-                        <p className="text-[10px] text-gray-400">Vérifiez les détails avant de confirmer</p>
-                      </div>
-                    </div>
-
-                    {scannedTxInfo ? (
-                      <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Client</span>
-                          <span className="font-black text-dark text-sm">{scannedTxInfo.clientName}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</span>
-                          <span className={`font-black text-sm px-2 py-0.5 rounded-lg ${scannedTxInfo.type === 'deposit' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                            {scannedTxInfo.type === 'deposit' ? 'Dépôt' : 'Retrait'}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant</span>
-                          <span className="font-black text-xl text-dark">${scannedTxInfo.amount.toFixed(2)}</span>
-                        </div>
-                        {scannedTxInfo.type === 'deposit' && (
-                          <div className="bg-amber-50 border border-amber-100 p-2.5 rounded-xl">
-                            <p className="text-[10px] text-amber-700 font-bold">Votre solde sera débité de ${scannedTxInfo.amount.toFixed(2)} et le client crédité.</p>
-                          </div>
-                        )}
-                        {scannedTxInfo.type === 'withdrawal' && (
-                          <div className="bg-blue-50 border border-blue-100 p-2.5 rounded-xl">
-                            <p className="text-[10px] text-blue-700 font-bold">Le client sera débité de ${scannedTxInfo.amount.toFixed(2)} et votre solde augmentera. Remettez le cash.</p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
-                        <p className="text-xs text-amber-700 font-bold">Code QR scanné. Confirmez pour valider côté serveur.</p>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={handleConfirmScan}
-                        disabled={scanConfirmLoading}
-                        className="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl border-0"
-                      >
-                        {scanConfirmLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4 mr-2" />Confirmer</>}
-                      </Button>
-                      <Button
-                        onClick={() => { setScanResult(null); setScannedTxInfo(null); setScanning(false); }}
-                        disabled={scanConfirmLoading}
-                        variant="outline"
-                        className="flex-1 h-12 border-gray-200 text-gray-500 rounded-2xl"
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />Annuler
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Demandes Pendantes ── */}
-            {pointTab === 'requests' && (
-              <div className="space-y-4">
-                {requestsLoading ? (
-                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-orange-500" /></div>
-                ) : (withdrawalRequests.length === 0 && depositRequests.length === 0) ? (
-                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
-                    <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-gray-200" />
-                    <p className="text-sm font-black text-gray-400">Aucune demande pendante</p>
-                    <p className="text-[10px] text-gray-300 mt-1">Les demandes de vos clients apparaîtront ici</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Withdrawal requests */}
-                    {withdrawalRequests.length > 0 && (
-                      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-50 flex items-center gap-2">
-                          <ArrowUpFromLine className="h-4 w-4 text-rose-500" />
-                          <h3 className="font-black text-dark text-sm">Retraits à confirmer</h3>
-                          <span className="ml-auto bg-rose-100 text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full">{withdrawalRequests.length}</span>
-                        </div>
-                        <div className="divide-y divide-gray-50">
-                          {withdrawalRequests.map(req => (
-                            <div key={req.id} className="p-4 space-y-3">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <p className="font-black text-dark text-sm">{req.clientName}</p>
-                                  <p className="text-[10px] text-gray-400">{req.description || `Retrait de $${req.amount}`}</p>
-                                  <p className="text-[10px] text-gray-300 mt-0.5">
-                                    {req.createdAt ? format(new Date(req.createdAt._seconds ? req.createdAt._seconds * 1000 : req.createdAt), 'dd MMM • HH:mm', { locale: fr }) : ''}
-                                  </p>
-                                </div>
-                                <span className="text-lg font-black text-rose-600">${req.amount?.toFixed(2)}</span>
-                              </div>
-                              {parseFloat(req.amount) > (affiliate?.balance || 0) && (
-                                <div className="bg-amber-50 border border-amber-100 p-2 rounded-xl">
-                                  <p className="text-[10px] text-amber-700 font-bold">Solde affilié insuffisant pour effectuer ce retrait.</p>
-                                </div>
-                              )}
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={() => handleConfirmWithdrawal(req.id)}
-                                  disabled={!!processingRequestId || parseFloat(req.amount) > (affiliate?.balance || 0)}
-                                  className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl border-0"
-                                >
-                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Confirmer</>}
-                                </Button>
-                                <Button
-                                  onClick={() => handleRejectWithdrawal(req.id)}
-                                  disabled={!!processingRequestId}
-                                  variant="outline"
-                                  className="flex-1 h-9 border-red-200 text-red-600 text-xs font-black rounded-xl hover:bg-red-50"
-                                >
-                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><XCircle className="h-3.5 w-3.5 mr-1" />Rejeter</>}
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                          {getTransactionStatusBadge(tx.status as TransactionStatus)}
                         </div>
                       </div>
-                    )}
-
-                    {/* Deposit requests from clients */}
-                    {depositRequests.length > 0 && (
-                      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="p-4 border-b border-gray-50 flex items-center gap-2">
-                          <ArrowDownToLine className="h-4 w-4 text-emerald-500" />
-                          <h3 className="font-black text-dark text-sm">Dépôts à confirmer</h3>
-                          <span className="ml-auto bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full">{depositRequests.length}</span>
-                        </div>
-                        <div className="divide-y divide-gray-50">
-                          {depositRequests.map(req => (
-                            <div key={req.id} className="p-4 space-y-3">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <p className="font-black text-dark text-sm">{req.clientName}</p>
-                                  <p className="text-[10px] text-gray-400">{req.description || `Dépôt de $${req.amount}`}</p>
-                                  <p className="text-[10px] text-gray-300 mt-0.5">
-                                    {req.createdAt ? format(new Date(req.createdAt._seconds ? req.createdAt._seconds * 1000 : req.createdAt), 'dd MMM • HH:mm', { locale: fr }) : ''}
-                                  </p>
-                                </div>
-                                <span className="text-lg font-black text-emerald-600">${req.amount?.toFixed(2)}</span>
-                              </div>
-                              {parseFloat(req.amount) > (affiliate?.balance || 0) && (
-                                <div className="bg-amber-50 border border-amber-100 p-2 rounded-xl">
-                                  <p className="text-[10px] text-amber-700 font-bold">Solde insuffisant pour confirmer ce dépôt.</p>
-                                </div>
-                              )}
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={() => handleConfirmDeposit(req.id)}
-                                  disabled={!!processingRequestId || parseFloat(req.amount) > (affiliate?.balance || 0)}
-                                  className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl border-0"
-                                >
-                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Confirmer</>}
-                                </Button>
-                                <Button
-                                  onClick={() => handleRejectDeposit(req.id)}
-                                  disabled={!!processingRequestId}
-                                  variant="outline"
-                                  className="flex-1 h-9 border-red-200 text-red-600 text-xs font-black rounded-xl hover:bg-red-50"
-                                >
-                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><XCircle className="h-3.5 w-3.5 mr-1" />Rejeter</>}
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -1946,9 +1602,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               )}
               <tab.icon className="h-5 w-5" />
               <span className="text-[9px] font-black uppercase tracking-wider">{tab.label}</span>
-              {tab.id === 'commandes' && (
-                <span className="absolute top-1.5 right-3 h-2 w-2 bg-orange-500 rounded-full" />
-              )}
+              {/* no badge for historique tab */}
             </button>
           ))}
         </div>
