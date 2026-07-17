@@ -186,6 +186,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [pMessage, setPMessage] = useState('');
   const [pSubmitting, setPSubmitting] = useState(false);
 
+  // Payment method for client transactions
+  const [txPaymentMethod, setTxPaymentMethod] = useState('MonCash');
+
   // Client deposit requests (client submits via agent code, agent confirms)
   const [clientDepositReqs, setClientDepositReqs] = useState<any[]>([]);
   const [clientDepReqLoading, setClientDepReqLoading] = useState(false);
@@ -461,10 +464,10 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       await apiFetch('/api/agent/client-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined }),
+        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined, paymentMethod: txPaymentMethod }),
       });
       setAgentSuccessModal({ type: 'deposit', clientName: foundClient.name, htg, usd });
-      setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote('');
+      setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote(''); setTxPaymentMethod('MonCash');
       await loadStats();
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setSubmitting(false); }
@@ -1032,6 +1035,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               setTxAmount={setTxAmount}
               txNote={txNote}
               setTxNote={setTxNote}
+              txPaymentMethod={txPaymentMethod}
+              setTxPaymentMethod={setTxPaymentMethod}
               submitting={submitting}
               onSearch={handleSearchClient}
               onSubmit={handleSubmitDeposit}
@@ -1595,6 +1600,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                       NatCash (Natcom)
                     </div>
                   </SelectItem>
+                  <SelectItem value="Lajan Cash" className="font-bold">Lajan Cash</SelectItem>
+                  <SelectItem value="Sogebank" className="font-bold">Sogebank</SelectItem>
+                  <SelectItem value="BNC" className="font-bold">BNC (Banque Nationale de Crédit)</SelectItem>
+                  <SelectItem value="Unibank" className="font-bold">Unibank</SelectItem>
+                  <SelectItem value="BH" className="font-bold">BH (Banque de l'Habitat)</SelectItem>
+                  <SelectItem value="BUH" className="font-bold">BUH (Banque de l'Union Haïtienne)</SelectItem>
+                  <SelectItem value="Capital Bank" className="font-bold">Capital Bank</SelectItem>
+                  <SelectItem value="PSB" className="font-bold">PSB (Point Services Bancaires)</SelectItem>
+                  <SelectItem value="Virement" className="font-bold">Virement bancaire</SelectItem>
                   <SelectItem value="Physical" className="font-bold">Bureau / Proxy (En personne)</SelectItem>
                 </SelectContent>
               </Select>
@@ -1872,6 +1886,8 @@ interface DirectTxFormProps {
   setTxAmount: (v: string) => void;
   txNote: string;
   setTxNote: (v: string) => void;
+  txPaymentMethod: string;
+  setTxPaymentMethod: (v: string) => void;
   submitting: boolean;
   onSearch: () => void;
   onSubmit: () => void;
@@ -1880,6 +1896,21 @@ interface DirectTxFormProps {
   agentWithdrawAgentSharePercent?: number;
 }
 
+const PAYMENT_METHODS = [
+  { value: 'MonCash',   label: 'MonCash',   sub: 'Digicel',  color: '#e53e3e' },
+  { value: 'NatCash',   label: 'NatCash',   sub: 'Natcom',   color: '#2b6cb0' },
+  { value: 'Lajan Cash',label: 'Lajan Cash',sub: '',         color: '#276749' },
+  { value: 'Sogebank',  label: 'Sogebank',  sub: 'Banque',   color: '#1a365d' },
+  { value: 'BNC',       label: 'BNC',       sub: 'Banque',   color: '#c05621' },
+  { value: 'Unibank',   label: 'Unibank',   sub: 'Banque',   color: '#553c9a' },
+  { value: 'BH',        label: 'BH',        sub: 'Banque',   color: '#97266d' },
+  { value: 'BUH',       label: 'BUH',       sub: 'Banque',   color: '#2c7a7b' },
+  { value: 'Capital Bank',label:'Capital',  sub: 'Bank',     color: '#285e61' },
+  { value: 'PSB',       label: 'PSB',       sub: 'Services', color: '#744210' },
+  { value: 'Virement',  label: 'Virement',  sub: 'Bancaire', color: '#4a5568' },
+  { value: 'Bureau',    label: 'Bureau',    sub: 'En personne',color:'#2d3748'},
+];
+
 function DirectTxForm({
   type, agent, rate,
   clientSearch, setClientSearch, searching,
@@ -1887,6 +1918,7 @@ function DirectTxForm({
   foundClient, setFoundClient,
   txAmount, setTxAmount,
   txNote, setTxNote,
+  txPaymentMethod, setTxPaymentMethod,
   submitting, onSearch, onSubmit,
   agentDepositCommissionPercent = 0,
   agentWithdrawPercent = 0,
@@ -1971,6 +2003,34 @@ function DirectTxForm({
                 <button onClick={() => setFoundClient(null)} className="text-gray-300 hover:text-gray-500 ml-1">
                   <XCircle className="h-5 w-5" />
                 </button>
+              </div>
+
+              {/* Payment method */}
+              <div>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">
+                  Méthode de paiement
+                </Label>
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+                  {PAYMENT_METHODS.map(m => {
+                    const active = txPaymentMethod === m.value;
+                    return (
+                      <button
+                        key={m.value}
+                        type="button"
+                        onClick={() => setTxPaymentMethod(m.value)}
+                        className={`flex-shrink-0 flex flex-col items-center justify-center rounded-2xl px-3 py-2 min-w-[64px] border-2 transition-all ${
+                          active
+                            ? 'border-transparent text-white shadow-lg scale-105'
+                            : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200'
+                        }`}
+                        style={active ? { background: m.color, borderColor: m.color } : {}}
+                      >
+                        <span className={`text-[11px] font-black leading-tight ${active ? 'text-white' : 'text-gray-700'}`}>{m.label}</span>
+                        {m.sub && <span className={`text-[8px] font-medium leading-tight mt-0.5 ${active ? 'text-white/70' : 'text-gray-400'}`}>{m.sub}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Amount */}

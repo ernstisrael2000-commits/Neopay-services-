@@ -5514,44 +5514,56 @@ function EmailLogsPanel() {
 
             <div className="flex-1 overflow-y-auto pt-6 custom-scrollbar">
               <TabsContent value="list" className="space-y-6 mt-0 px-6 pb-20">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <Card className="bg-accent-light/30 border-accent-light">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-primary uppercase">Total Affiliés</p>
-                    <p className="text-3xl font-bold text-dark">{affiliates.length}</p>
-                  </div>
-                  <Users className="h-8 w-8 text-primary/30" />
+                {/* ── Stats ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                  <Card className="border-0 shadow-sm overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="flex items-center gap-4 p-5">
+                        <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0">
+                          <Users className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Total Affiliés</p>
+                          <p className="text-3xl font-black text-gray-900 leading-none">{affiliates.length}</p>
+                        </div>
+                      </div>
+                      <div className="h-1 w-full bg-gradient-to-r from-blue-400 to-blue-600" />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="flex items-center gap-4 p-5">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center shrink-0">
+                          <Wallet className="h-6 w-6 text-emerald-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Total à Payer</p>
+                          <p className="text-3xl font-black text-gray-900 leading-none">{totalAffiliateBalance} <span className="text-base font-bold text-gray-400">USD</span></p>
+                          <p className="text-[11px] text-gray-400 font-medium mt-1">≈ {(totalAffiliateBalance * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                        </div>
+                      </div>
+                      <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-emerald-600" />
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="flex items-center gap-4 p-5">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center shrink-0">
+                          <Trophy className="h-6 w-6 text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Points Totaux</p>
+                          <p className="text-3xl font-black text-gray-900 leading-none">
+                            {affiliates.reduce((sum, a) => sum + (a.points || 0), 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-1 w-full bg-gradient-to-r from-amber-400 to-amber-600" />
+                    </CardContent>
+                  </Card>
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-accent-light/30 border-primary/20">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-primary uppercase">Total à Payer</p>
-                    <p className="text-3xl font-bold text-dark">{totalAffiliateBalance} USD</p>
-                    <p className="text-xs font-bold text-gray-400 mt-1">≈ {(totalAffiliateBalance * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
-                  </div>
-                  <Wallet className="h-8 w-8 text-primary/40" />
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-accent-light/30 border-primary/20">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-primary uppercase">Points Totaux</p>
-                    <p className="text-3xl font-bold text-dark">
-                      {affiliates.reduce((sum, a) => sum + (a.points || 0), 0)}
-                    </p>
-                  </div>
-                  <Trophy className="h-8 w-8 text-primary/40" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
@@ -5722,251 +5734,220 @@ function EmailLogsPanel() {
               </Card>
             </div>
 
-            <div className="space-y-6">
-              <Card className="shadow-sm border-primary/20 bg-accent-light/20">
-                <CardHeader className="border-b border-primary/10 bg-accent-light/50">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-primary" />
-                    File d'attente des Prix
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 space-y-4">
-                  <p className="text-[10px] text-gray-500 italic mb-2">
-                    Ces affiliés sont les candidats actuels basés sur les points. Cliquez sur le bouton ci-dessous pour les officialiser dans le classement public.
-                  </p>
-                  {winnersQueue.length > 0 ? (
-                    <div className="space-y-3">
-                      {winnersQueue.map((w, idx) => (
-                        <div key={w.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-white border border-primary/10 shadow-sm gap-2">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                              idx === 0 ? 'bg-primary text-white' : 
-                              idx === 1 ? 'bg-gray-400 text-white' : 
-                              'bg-primary/80 text-white'
+                <div className="space-y-5">
+
+                  {/* File d'attente des Prix */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 pt-5 px-5 border-b border-gray-100">
+                      <CardTitle className="text-[13px] font-black uppercase tracking-widest text-gray-700 flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
+                          <Trophy className="h-3.5 w-3.5 text-amber-600" />
+                        </div>
+                        File d'attente — Prix
+                      </CardTitle>
+                      <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+                        Candidats actuels par points. Officialisez-les dans le classement public.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-3">
+                      {winnersQueue.length > 0 ? (
+                        <>
+                          {winnersQueue.map((w, idx) => (
+                            <div key={w.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                                idx === 0 ? 'bg-amber-400 text-white' :
+                                idx === 1 ? 'bg-gray-300 text-gray-700' :
+                                'bg-orange-200 text-orange-700'
+                              }`}>
+                                {idx + 1}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-900 truncate">{w.name}</p>
+                                <p className="text-[10px] text-gray-400 font-medium">{w.points} pts</p>
+                              </div>
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                idx === 0 ? 'bg-amber-100 text-amber-700' :
+                                idx === 1 ? 'bg-gray-100 text-gray-600' :
+                                'bg-orange-100 text-orange-600'
+                              }`}>
+                                {idx === 0 ? '500 G' : idx === 1 ? '250 G' : '150 G'}
+                              </span>
+                            </div>
+                          ))}
+                          <Button
+                            className="w-full h-10 bg-primary hover:bg-blue-700 text-white font-bold rounded-xl border-0 text-[12px] mt-1"
+                            onClick={handleAwardPrizes}
+                            disabled={isAwarding}
+                          >
+                            {isAwarding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                            Décerner les prix
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="text-center py-5 text-gray-400">
+                          <Trophy className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-xs">Aucun affilié avec des points ce mois-ci.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Classement officiel */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 pt-5 px-5 border-b border-gray-100">
+                      <CardTitle className="text-[13px] font-black uppercase tracking-widest text-gray-700 flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+                          <Trophy className="h-3.5 w-3.5 text-blue-600" />
+                        </div>
+                        Classement Officiel
+                      </CardTitle>
+                      <p className="text-[11px] text-gray-400 mt-1.5">Ce que les affiliés voient actuellement.</p>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-2">
+                      {officialRankingsLoading ? (
+                        <div className="flex justify-center py-5">
+                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        </div>
+                      ) : officialRankings.length > 0 ? (
+                        officialRankings.map((w, idx) => (
+                          <div key={w.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${
+                              idx === 0 ? 'bg-primary text-white' :
+                              idx === 1 ? 'bg-gray-400 text-white' :
+                              'bg-blue-300 text-white'
                             }`}>
                               {idx + 1}
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold truncate">{w.name}</p>
-                              <p className="text-[10px] text-gray-500">{w.points} points</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate">{w.name}</p>
+                              <p className="text-[10px] text-gray-400 font-medium">{w.points} pts</p>
                             </div>
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 uppercase tracking-wide">Officiel</span>
                           </div>
-                          <Badge variant="outline" className="text-[10px] w-fit">
-                            {idx === 0 ? '500 G' : idx === 1 ? '250 G' : '150 G'}
-                          </Badge>
+                        ))
+                      ) : (
+                        <div className="text-center py-5 text-gray-400 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                          <p className="text-xs">Aucun classement publié.</p>
                         </div>
-                      ))}
-                      <Button 
-                        className="w-full bg-primary hover:bg-[#1D4ED8] text-white mt-2"
-                        onClick={handleAwardPrizes}
-                        disabled={isAwarding}
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Actions mensuelles */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 pt-5 px-5 border-b border-gray-100">
+                      <CardTitle className="text-[13px] font-black uppercase tracking-widest text-gray-700">Actions Mensuelles</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-2.5">
+                      <Button
+                        variant="outline"
+                        className="w-full h-10 border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-bold text-[12px]"
+                        onClick={handleClearWinners}
+                        disabled={isClearingWinners}
                       >
-                        {isAwarding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                        Approuver & Décerner les prix
+                        {isClearingWinners ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                        Vider le classement
                       </Button>
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-gray-400">
-                      <p className="text-xs italic">Aucun affilié n'a de points ce mois-ci.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                      <Button
+                        variant="outline"
+                        className="w-full h-10 border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl font-bold text-[12px]"
+                        onClick={async () => { await resetMonthlyStats(); toast.success("Statistiques réinitialisées !"); }}
+                      >
+                        <Trophy className="h-4 w-4 mr-2" />
+                        Réinitialiser le mois
+                      </Button>
+                      <p className="text-[10px] text-gray-400 text-center pt-1">Décernez les prix avant de réinitialiser.</p>
+                    </CardContent>
+                  </Card>
 
-              <Card className="shadow-sm border-primary/20 bg-accent-light/30">
-                <CardHeader className="border-b border-accent-light bg-accent-light/30">
-                  <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-primary" />
-                    Classement Officiel Actuel
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 space-y-4">
-                  <p className="text-[10px] text-subtext italic mb-2">
-                    Voici ce que les affiliés voient actuellement comme classement officiel.
-                  </p>
-                  {officialRankingsLoading ? (
-                    <div className="flex justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    </div>
-                  ) : officialRankings.length > 0 ? (
-                    <div className="space-y-3">
-                      {officialRankings.map((w, idx) => (
-                        <div key={w.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-accent-light shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                              idx === 0 ? 'bg-primary text-white' : 
-                              idx === 1 ? 'bg-gray-400 text-white' : 
-                              'bg-primary text-white'
-                            }`}>
-                              {idx + 1}
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-dark">{w.name}</p>
-                              <p className="text-[10px] text-subtext">{w.points} points</p>
-                            </div>
-                          </div>
-                          <Badge variant="outline" className="text-[10px] bg-accent-light text-primary border-primary/20">
-                            Officiel
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-subtext border border-dashed border-accent-light rounded-lg bg-white/50">
-                      <p className="text-xs italic">Aucun classement officiel publié.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm border-gray-200">
-                <CardHeader className="border-b bg-gray-50/50">
-                  <CardTitle className="text-lg font-semibold">Actions Mensuelles</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 space-y-3">
-                  <Button 
-                    variant="outline" 
-                    className="w-full border-red-200 text-red-700 hover:bg-red-50"
-                    onClick={handleClearWinners}
-                    disabled={isClearingWinners}
-                  >
-                    {isClearingWinners ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                    Vider le classement
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full border-primary/20 text-primary hover:bg-accent-light/50"
-                    onClick={async () => {
-                      await resetMonthlyStats();
-                      toast.success("Statistiques mensuelles réinitialisées !");
-                    }}
-                  >
-                    <Trophy className="h-4 w-4 mr-2" />
-                    Réinitialiser le mois
-                  </Button>
-                  <p className="text-[10px] text-gray-400 mt-2 text-center">
-                    Décernés les prix avant de réinitialiser le mois.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm border-gray-200">
-                <CardHeader className="border-b bg-gray-50/50 flex flex-row items-center justify-between py-3 px-4">
-                  <CardTitle className="text-lg font-semibold">Demandes d'Inscription</CardTitle>
-                  {pendingRegistrations.length > 0 && (
-                    <Badge className="bg-red-500 text-white border-0">{pendingRegistrations.length}</Badge>
-                  )}
-                </CardHeader>
-                <CardContent className="p-4 space-y-4">
-                  {affiliateRequestsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                  ) : affiliateRequests.filter(r => r.status === 'pending').length > 0 ? (
-                    affiliateRequests.filter(r => r.status === 'pending').map((r) => (
-                      <div key={r.id} className="p-4 rounded-xl border bg-accent-light/30 border-accent-light space-y-3">
-                        <div className="flex flex-col xs:flex-row justify-between items-start gap-2">
-                          <div className="min-w-0">
-                            <p className="font-bold text-dark truncate">{r.name}</p>
-                            <p className="text-xs text-subtext truncate">{r.email}</p>
-                            <p className="text-xs text-subtext">{r.phone}</p>
-                          </div>
-                          <Badge variant="outline" className="bg-accent-light text-primary border-primary/20 shrink-0">Nouveau</Badge>
-                        </div>
-                        {r.message && (
-                          <p className="text-xs text-gray-600 bg-white p-2 rounded border italic">
-                            "{r.message}"
-                          </p>
+                  {/* Demandes d'inscription */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 pt-5 px-5 border-b border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-[13px] font-black uppercase tracking-widest text-gray-700">Inscriptions</CardTitle>
+                        {pendingRegistrations.length > 0 && (
+                          <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingRegistrations.length}</span>
                         )}
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm" 
-                            className="flex-1 bg-primary hover:bg-[#1D4ED8] h-8 border-0"
-                            onClick={() => handleAffiliateRequestAction(r, 'approved')}
-                          >
-                            Approuver
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="flex-1 h-8 border-red-200 text-red-600 hover:bg-red-50"
-                            onClick={() => handleAffiliateRequestAction(r, 'rejected')}
-                          >
-                            Rejeter
-                          </Button>
-                        </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      <p className="text-sm">Aucune demande d'inscription.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-sm border-gray-200">
-                <CardHeader className="border-b bg-gray-50/50 flex flex-row items-center justify-between py-3 px-4">
-                  <CardTitle className="text-lg font-semibold">Demandes de Retrait</CardTitle>
-                  {pendingWithdrawals.length > 0 && (
-                    <Badge className="bg-red-500 text-white border-0">{pendingWithdrawals.length}</Badge>
-                  )}
-                </CardHeader>
-                <CardContent className="p-4 space-y-4">
-                  {allWithdrawalsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                  ) : allWithdrawals.filter(w => w.status === 'pending').length > 0 ? (
-                    allWithdrawals.filter(w => w.status === 'pending').map((w) => (
-                      <div key={w.id} className="p-4 rounded-xl border bg-gray-50 space-y-3">
-                        <div className="flex flex-col xs:flex-row justify-between items-start gap-2">
-                          <div className="min-w-0">
-                            <p className="font-bold truncate">{w.affiliateName}</p>
-                            <p className="text-xs text-gray-500">Code: {w.affiliateCode}</p>
-                            <div className="mt-2 p-2 bg-accent-light rounded-lg border border-primary/20">
-                              <p className="text-[10px] uppercase font-bold text-primary/70">Compte de Paiement</p>
-                              <p className="text-sm font-bold text-dark break-all">
-                                {w.method}: {w.accountNumber}
-                              </p>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-3">
+                      {affiliateRequestsLoading ? (
+                        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                      ) : affiliateRequests.filter(r => r.status === 'pending').length > 0 ? (
+                        affiliateRequests.filter(r => r.status === 'pending').map((r) => (
+                          <div key={r.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-bold text-gray-900 truncate">{r.name}</p>
+                                <p className="text-[11px] text-gray-400 truncate">{r.email}</p>
+                                <p className="text-[11px] text-gray-400">{r.phone}</p>
+                              </div>
+                              <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full uppercase shrink-0">Nouveau</span>
+                            </div>
+                            {r.message && (
+                              <p className="text-[11px] text-gray-600 bg-white p-2.5 rounded-xl border border-gray-100 italic leading-relaxed">"{r.message}"</p>
+                            )}
+                            <div className="flex gap-2">
+                              <Button size="sm" className="flex-1 bg-primary hover:bg-blue-700 h-9 border-0 rounded-xl font-bold text-[11px]"
+                                onClick={() => handleAffiliateRequestAction(r, 'approved')}>Approuver</Button>
+                              <Button size="sm" variant="outline" className="flex-1 h-9 border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-bold text-[11px]"
+                                onClick={() => handleAffiliateRequestAction(r, 'rejected')}>Rejeter</Button>
                             </div>
                           </div>
-                          <Badge className="bg-accent-light text-primary shrink-0 border-primary/20">{w.amount} $</Badge>
+                        ))
+                      ) : (
+                        <div className="text-center py-6 text-gray-400">
+                          <p className="text-[11px]">Aucune demande en attente.</p>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <span className="text-[10px] font-bold text-gray-400">≈ {((w.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Wallet className="h-3 w-3" />
-                          <span>{w.method}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm" 
-                            className="flex-1 bg-primary hover:bg-[#1D4ED8] h-8 border-0"
-                            onClick={() => handleWithdrawalAction(w, 'approved')}
-                          >
-                            Approuver
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="destructive" 
-                            className="flex-1 h-8"
-                            onClick={() => handleWithdrawalAction(w, 'rejected')}
-                          >
-                            Rejeter
-                          </Button>
-                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Demandes de retrait */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 pt-5 px-5 border-b border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-[13px] font-black uppercase tracking-widest text-gray-700">Retraits Affiliés</CardTitle>
+                        {pendingWithdrawals.length > 0 && (
+                          <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingWithdrawals.length}</span>
+                        )}
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-gray-400">
-                      <p className="text-sm">Aucune demande en attente.</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-3">
+                      {allWithdrawalsLoading ? (
+                        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                      ) : allWithdrawals.filter(w => w.status === 'pending').length > 0 ? (
+                        allWithdrawals.filter(w => w.status === 'pending').map((w) => (
+                          <div key={w.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-bold text-gray-900 truncate">{w.affiliateName}</p>
+                                <p className="text-[11px] text-gray-400 font-mono">Code: {w.affiliateCode}</p>
+                                <div className="mt-2 p-2.5 bg-blue-50 rounded-xl border border-blue-100">
+                                  <p className="text-[9px] uppercase font-black text-blue-500 mb-0.5">Compte</p>
+                                  <p className="text-[12px] font-bold text-gray-800 break-all">{w.method}: {w.accountNumber}</p>
+                                </div>
+                              </div>
+                              <span className="font-black text-emerald-600 text-sm shrink-0">{w.amount} $</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400">≈ {((w.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                            <div className="flex gap-2">
+                              <Button size="sm" className="flex-1 bg-primary hover:bg-blue-700 h-9 border-0 rounded-xl font-bold text-[11px]"
+                                onClick={() => handleWithdrawalAction(w, 'approved')}>Approuver</Button>
+                              <Button size="sm" variant="destructive" className="flex-1 h-9 rounded-xl font-bold text-[11px]"
+                                onClick={() => handleWithdrawalAction(w, 'rejected')}>Rejeter</Button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-6 text-gray-400">
+                          <p className="text-[11px]">Aucun retrait en attente.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                </div>
           </div>
         </TabsContent>
 
