@@ -596,6 +596,121 @@ export async function emailAffiliateWithdrawalRejected(opts: {
   }
 }
 
+// 15. Nouvelle demande client → agent / affilié
+export async function emailAgentNewRequest(opts: {
+  agentName: string; agentEmail?: string;
+  clientName: string;
+  type: 'deposit' | 'withdrawal';
+  amount: number;
+}): Promise<void> {
+  const { agentName, agentEmail, clientName, type, amount } = opts;
+  if (!agentEmail) return;
+
+  const isDeposit = type === 'deposit';
+  const color   = isDeposit ? '#059669' : '#7c3aed';
+  const emoji   = isDeposit ? '💰' : '🏧';
+  const label   = isDeposit ? 'dépôt' : 'retrait';
+
+  const html = baseHtml(`${emoji} Nouvelle demande de ${label}`, color,
+    `<p style="margin:0 0 16px;font-size:15px;color:#444;">Bonjour <strong>${agentName}</strong>,</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#444;">
+      Un client vient de soumettre une <strong>demande de ${label}</strong> chez vous via l'application Rena.
+      Connectez-vous à votre tableau de bord pour la traiter.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Client', clientName, true)}
+      ${row('Type', isDeposit ? 'Dépôt' : 'Retrait', true)}
+      ${row('Montant', fmt(amount), true)}
+      ${row('Date', dateFr())}
+      ${row('Statut', statusBadge('pending'))}
+    </table>
+    <p style="margin:24px 0 0;padding:16px;background:${isDeposit ? '#f0fdf4' : '#faf5ff'};border-radius:10px;font-size:13px;color:${isDeposit ? '#065f46' : '#6d28d9'};border-left:4px solid ${color};">
+      ⚡ Ouvrez votre application Rena — section <strong>Demandes</strong> — pour approuver ou rejeter cette opération.
+    </p>`
+  );
+  await send(agentEmail, `${emoji} Demande de ${label} — ${clientName} (${fmt(amount)})`, html, `agent_new_${type}_request`);
+}
+
+// 16. Agent / affilié a traité une demande → admin + client
+export async function emailAgentProcessed(opts: {
+  agentName: string;
+  clientName: string; clientEmail?: string;
+  type: 'deposit' | 'withdrawal';
+  action: 'confirmed' | 'rejected';
+  amount: number;
+  reason?: string;
+}): Promise<void> {
+  const { agentName, clientName, clientEmail, type, action, amount, reason } = opts;
+
+  const isDeposit   = type === 'deposit';
+  const isConfirmed = action === 'confirmed';
+  const color  = isConfirmed ? '#059669' : '#dc2626';
+  const emoji  = isConfirmed ? '✅' : '❌';
+  const label  = isDeposit ? 'dépôt' : 'retrait';
+  const verb   = isConfirmed ? 'confirmé' : 'refusé';
+
+  // ── Admin notification ────────────────────────────────────────────────────
+  const adminHtml = baseHtml(`${emoji} ${isDeposit ? 'Dépôt' : 'Retrait'} ${verb} par agent`, color,
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">
+      L'agent / affilié <strong>${agentName}</strong> a <strong>${verb}</strong> une demande de ${label}.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Agent / Affilié', agentName, true)}
+      ${row('Client', clientName, true)}
+      ${row('Type', isDeposit ? 'Dépôt' : 'Retrait')}
+      ${row('Montant', fmt(amount), true)}
+      ${reason ? row('Raison du refus', reason) : ''}
+      ${row('Date', dateFr())}
+      ${row('Statut', statusBadge(isConfirmed ? 'approved' : 'rejected'))}
+    </table>`
+  );
+  await send(
+    ADMIN_EMAIL,
+    `${emoji} ${label.charAt(0).toUpperCase() + label.slice(1)} ${verb} — Agent: ${agentName} / Client: ${clientName}`,
+    adminHtml,
+    `agent_${type}_${action}_admin`,
+  );
+
+  // ── Client notification ───────────────────────────────────────────────────
+  if (clientEmail) {
+    const clientHtml = isConfirmed
+      ? baseHtml(`${emoji} Votre demande de ${label} a été traitée`, color,
+          `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>,</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#444;">
+            Votre demande de <strong>${label}</strong> a été <strong>traitée avec succès</strong> par l'agent <strong>${agentName}</strong>.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${row('Type', isDeposit ? 'Dépôt' : 'Retrait', true)}
+            ${row('Montant', fmt(amount), true)}
+            ${row('Agent', agentName)}
+            ${row('Date', dateFr())}
+            ${row('Statut', statusBadge('approved'))}
+          </table>
+          <p style="margin:24px 0 0;padding:16px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#065f46;border-left:4px solid #059669;">
+            🎉 Votre solde a été mis à jour. Consultez votre tableau de bord pour les détails.
+          </p>`
+        )
+      : baseHtml(`${emoji} Votre demande de ${label} a été refusée`, color,
+          `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>,</p>
+          <p style="margin:0 0 20px;font-size:15px;color:#444;">
+            Malheureusement, votre demande de <strong>${label}</strong> a été <strong>refusée</strong> par l'agent <strong>${agentName}</strong>.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${row('Type', isDeposit ? 'Dépôt' : 'Retrait', true)}
+            ${row('Montant', fmt(amount), true)}
+            ${row('Agent', agentName)}
+            ${reason ? row('Raison', reason) : ''}
+            ${row('Date', dateFr())}
+            ${row('Statut', statusBadge('rejected'))}
+          </table>
+          <p style="margin:24px 0 0;padding:16px;background:#fef2f2;border-radius:10px;font-size:13px;color:#991b1b;border-left:4px solid #dc2626;">
+            Si vous avez des questions, contactez le support Rena.
+          </p>`
+        );
+    await send(clientEmail, `${emoji} Demande de ${label} ${verb} — ${fmt(amount)}`, clientHtml, `agent_${type}_${action}_client`);
+  }
+}
+
 // 14. Achat formation → admin + client
 export async function emailFormationPurchase(opts: {
   clientName: string; clientEmail?: string;

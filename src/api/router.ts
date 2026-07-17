@@ -12,6 +12,7 @@ import {
   emailPurchase, emailAffiliateWithdrawalSubmitted,
   emailAffiliateWithdrawalApproved, emailAffiliateWithdrawalRejected,
   emailFormationPurchase,
+  emailAgentNewRequest, emailAgentProcessed,
   ADMIN_EMAIL,
 } from '../lib/email.ts';
 
@@ -1216,6 +1217,23 @@ router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
     });
 
     await batch.commit();
+
+    // Notify agent / affiliate of new client withdrawal request
+    fireEmail(
+      async () => {
+        let agentEmail: string | undefined;
+        if (resolvedAgentId) {
+          const aSnap = await adminDb.collection('agents').doc(resolvedAgentId).get();
+          agentEmail = aSnap.exists ? aSnap.data()?.email : undefined;
+        } else if (resolvedAffiliateId) {
+          const aSnap = await adminDb.collection('affiliates').doc(resolvedAffiliateId).get();
+          agentEmail = aSnap.exists ? aSnap.data()?.email : undefined;
+        }
+        await emailAgentNewRequest({ agentName: resolvedName, agentEmail, clientName, type: 'withdrawal', amount: usd });
+      },
+      { type: 'agent_new_withdrawal_request', to: resolvedName, amount: usd },
+    );
+
     res.json({ success: true, agentName: resolvedName, transactionId: txDocRef.id });
   } catch (e: any) {
     console.error('[client/agent-withdrawal]', e);
@@ -1552,6 +1570,12 @@ router.post('/api/client/agent-deposit', requireDb, async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Notify affiliate of new client deposit request
+    fireEmail(
+      () => emailAgentNewRequest({ agentName: affData.name || '', agentEmail: affData.email, clientName, type: 'deposit', amount: usd }),
+      { type: 'affiliate_new_deposit_request', to: affData.email || '', amount: usd },
+    );
+
     res.json({ success: true, affiliateName: affData.name || '', transactionId: txDocRef.id });
   } catch (e: any) {
     console.error('[client/agent-deposit]', e);
@@ -1679,9 +1703,18 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
     sendFcmToClient(
       txData.clientId,
       '✅ Retrait confirmé',
-      `Votre retrait a été confirmé par l'agent ${agentData.name}. Récupérez $${netForPush.toFixed(2)} USD en cash.`,
+      `Votre retrait a été confirmé par l'agent ${agentData.name}. Récupérez ${netForPush.toFixed(2)} USD en cash.`,
       { type: 'withdrawal_approved', txId }
     );
+
+    // Email to client + admin: agent confirmed withdrawal
+    adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentProcessed({ agentName: agentData.name || '', clientName: txData.clientName || '', clientEmail, type: 'withdrawal', action: 'confirmed', amount }),
+        { type: 'agent_withdrawal_confirmed_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: txData.clientId, amount },
+      );
+    }).catch(() => {});
 
     res.json({ success: true });
   } catch (e: any) {
@@ -1730,9 +1763,18 @@ router.post('/api/agent/withdrawal-request/:txId/reject', requireDb, async (req,
     sendFcmToClient(
       txData.clientId,
       '❌ Retrait refusé',
-      `Votre demande de retrait de $${amount.toFixed(2)} a été refusée par l'agent ${agentData.name}.`,
+      `Votre demande de retrait de ${amount.toFixed(2)} a été refusée par l'agent ${agentData.name}.`,
       { type: 'withdrawal_rejected', txId }
     );
+
+    // Email to client + admin: agent rejected withdrawal
+    adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentProcessed({ agentName: agentData.name || '', clientName: txData.clientName || '', clientEmail, type: 'withdrawal', action: 'rejected', amount, reason }),
+        { type: 'agent_withdrawal_rejected_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: txData.clientId, amount },
+      );
+    }).catch(() => {});
 
     res.json({ success: true });
   } catch (e: any) {
@@ -2456,6 +2498,16 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
     });
 
     await batch.commit();
+
+    // Email to client + admin: affiliate confirmed withdrawal
+    adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentProcessed({ agentName: affData.name || '', clientName: txData.clientName || '', clientEmail, type: 'withdrawal', action: 'confirmed', amount: txData.amount }),
+        { type: 'affiliate_withdrawal_confirmed_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: txData.clientId, amount: txData.amount },
+      );
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[affiliate/client-withdrawal/confirm]', e);
@@ -2477,8 +2529,21 @@ router.post('/api/affiliate/client-withdrawal/:txId/reject', requireDb, async (r
     if (txData.affiliateId !== affiliateId) return res.status(403).json({ error: 'Non autorisé.' });
     if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
 
+    const affSnapWdRej = await adminDb.collection('affiliates').doc(affiliateId).get();
+    const affNameWdRej = affSnapWdRej.exists ? (affSnapWdRej.data()?.name || '') : '';
     const now = FieldValue.serverTimestamp();
     await txRef.update({ status: 'rejected', updatedAt: now, rejectedAt: now, rejectionReason: reason || '' });
+
+    // Email to client + admin: affiliate rejected withdrawal
+    adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      const amount = Number(txData.amount || 0);
+      fireEmail(
+        () => emailAgentProcessed({ agentName: affNameWdRej, clientName: txData.clientName || '', clientEmail, type: 'withdrawal', action: 'rejected', amount, reason }),
+        { type: 'affiliate_withdrawal_rejected_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: txData.clientId, amount },
+      );
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -2559,6 +2624,16 @@ router.post('/api/affiliate/client-deposit/:txId/confirm', requireDb, async (req
     });
 
     await batch.commit();
+
+    // Email to client + admin: affiliate confirmed deposit
+    adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentProcessed({ agentName: affData.name || '', clientName: txData.clientName || '', clientEmail, type: 'deposit', action: 'confirmed', amount: txData.amount }),
+        { type: 'affiliate_deposit_confirmed_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: txData.clientId, amount: txData.amount },
+      );
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[affiliate/client-deposit/confirm]', e);
@@ -2580,8 +2655,21 @@ router.post('/api/affiliate/client-deposit/:txId/reject', requireDb, async (req,
     if (txData.affiliateId !== affiliateId) return res.status(403).json({ error: 'Non autorisé.' });
     if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
 
+    const affSnapDepRej = await adminDb.collection('affiliates').doc(affiliateId).get();
+    const affNameDepRej = affSnapDepRej.exists ? (affSnapDepRej.data()?.name || '') : '';
     const now = FieldValue.serverTimestamp();
     await txRef.update({ status: 'rejected', updatedAt: now, rejectionReason: reason || '' });
+
+    // Email to client + admin: affiliate rejected deposit
+    adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      const amount = Number(txData.amount || 0);
+      fireEmail(
+        () => emailAgentProcessed({ agentName: affNameDepRej, clientName: txData.clientName || '', clientEmail, type: 'deposit', action: 'rejected', amount, reason }),
+        { type: 'affiliate_deposit_rejected_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: txData.clientId, amount },
+      );
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

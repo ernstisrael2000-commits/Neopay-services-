@@ -282,7 +282,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   };
 
   useEffect(() => {
-    // fetchRequests removed — affiliates no longer have a Point de Service tab
+    if (activeTab === 'accueil') fetchRequests();
   }, [activeTab]);
 
   // (Camera permission is no longer requested on mount — affiliates have no QR scan feature)
@@ -1163,6 +1163,108 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </DialogContent>
               </Dialog>
             </div>
+
+            {/* ── Demandes Clients (dépôts + retraits en attente) ── */}
+            {(withdrawalRequests.length > 0 || depositRequests.length > 0) && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="font-black text-dark text-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block" />
+                    Demandes en attente
+                    <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+                      {withdrawalRequests.length + depositRequests.length}
+                    </span>
+                  </h3>
+                  <button onClick={fetchRequests} disabled={requestsLoading} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    {requestsLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <RefreshCw className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                {/* Dépôts */}
+                {depositRequests.map(req => (
+                  <div key={req.id} className="bg-white rounded-2xl border-l-4 border-l-emerald-400 border border-gray-100 shadow-sm p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 font-black text-sm shrink-0">
+                          {(req.clientName || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-black text-dark text-sm">{req.clientName}</p>
+                          <p className="text-[10px] text-gray-400">Dépôt</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-black text-emerald-600">${(req.amount || 0).toFixed(2)}</p>
+                        {req.message && <p className="text-[10px] text-gray-400 italic">"{req.message}"</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleRejectDeposit(req.id)}
+                        disabled={processingRequestId === req.id}
+                        variant="ghost"
+                        className="flex-1 rounded-xl h-10 text-red-500 hover:bg-red-50 font-black text-xs uppercase tracking-widest"
+                      >
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Rejeter
+                      </Button>
+                      <Button
+                        onClick={() => handleConfirmDeposit(req.id)}
+                        disabled={processingRequestId === req.id}
+                        className="flex-1 rounded-xl h-10 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-widest border-0 shadow shadow-emerald-200"
+                      >
+                        {processingRequestId === req.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <><CheckCircle2 className="h-4 w-4 mr-1" />Approuver</>}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Retraits */}
+                {withdrawalRequests.map(req => (
+                  <div key={req.id} className="bg-white rounded-2xl border-l-4 border-l-rose-400 border border-gray-100 shadow-sm p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-9 w-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-700 font-black text-sm shrink-0">
+                          {(req.clientName || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-black text-dark text-sm">{req.clientName}</p>
+                          <p className="text-[10px] text-gray-400">Retrait</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-black text-rose-600">${(req.amount || 0).toFixed(2)}</p>
+                        {req.message && <p className="text-[10px] text-gray-400 italic">"{req.message}"</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleRejectWithdrawal(req.id)}
+                        disabled={processingRequestId === req.id}
+                        variant="ghost"
+                        className="flex-1 rounded-xl h-10 text-red-500 hover:bg-red-50 font-black text-xs uppercase tracking-widest"
+                      >
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Rejeter
+                      </Button>
+                      <Button
+                        onClick={() => handleConfirmWithdrawal(req.id)}
+                        disabled={processingRequestId === req.id}
+                        className="flex-1 rounded-xl h-10 bg-rose-500 hover:bg-rose-600 text-white font-black text-xs uppercase tracking-widest border-0 shadow shadow-rose-200"
+                      >
+                        {processingRequestId === req.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <><CheckCircle2 className="h-4 w-4 mr-1" />Approuver</>}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Recent Transactions */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
