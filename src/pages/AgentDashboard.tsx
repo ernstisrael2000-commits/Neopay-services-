@@ -1391,7 +1391,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           </button>
           {/* Activités */}
           <button
-            onClick={() => { setActiveSection('clients'); loadTransactions(); }}
+            onClick={() => { setActiveSection('requests'); loadWithdrawRequests(); loadClientDepositReqs(); }}
             className={`flex flex-col items-center gap-1 relative transition-colors ${activeSection === 'clients' || activeSection === 'requests' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
           >
             <ListOrdered className="h-6 w-6" />
