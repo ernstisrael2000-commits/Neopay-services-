@@ -5978,6 +5978,30 @@ router.post('/api/admin/ai-chat', async (req, res) => {
   }
 });
 
+// ── Test email (admin only) ───────────────────────────────────────────────────
+router.post('/api/admin/test-email', async (req, res) => {
+  const { to } = req.body as { to?: string };
+  const recipient = to || process.env.ADMIN_EMAIL;
+  if (!recipient) {
+    return res.status(400).json({ error: 'Aucun destinataire fourni et ADMIN_EMAIL non configuré.' });
+  }
+  const { send, FROM_EMAIL } = await import('../lib/email.ts');
+  const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:32px;">
+    <h2 style="color:#059669;">✅ Test email Resend</h2>
+    <p>Si vous lisez ceci, Resend est correctement configuré sur <strong>Rena</strong>.</p>
+    <table style="border-collapse:collapse;width:100%;max-width:400px;">
+      <tr><td style="padding:8px;border:1px solid #eee;color:#888;">FROM</td><td style="padding:8px;border:1px solid #eee;">${FROM_EMAIL}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #eee;color:#888;">TO</td><td style="padding:8px;border:1px solid #eee;">${recipient}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #eee;color:#888;">Date</td><td style="padding:8px;border:1px solid #eee;">${new Date().toLocaleString('fr-FR')}</td></tr>
+    </table>
+  </body></html>`;
+  const result = await send(recipient, '✅ Test email Rena — Resend opérationnel', html, 'test_email');
+  if (result.success) {
+    return res.json({ ok: true, id: result.id, from: FROM_EMAIL, to: recipient });
+  }
+  return res.status(500).json({ ok: false, error: result.error });
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });
