@@ -6019,6 +6019,79 @@ router.post('/api/admin/ai-chat', async (req, res) => {
   }
 });
 
+// ── Ernst — Agent AI Assistant ────────────────────────────────────────────────
+const ERNST_SYSTEM = `Tu es Ernst, l'assistant IA personnel des agents de la plateforme Rena.
+Rena est une plateforme logistique et fintech multi-rôles basée en Haïti.
+
+## Ton rôle
+Tu aides les agents Rena dans leurs tâches quotidiennes : dépôts, retraits, gestion des clients, commissions, portefeuille, procédures, et tout problème opérationnel qu'ils rencontrent.
+
+## Ce que font les agents Rena
+- Effectuer des **dépôts** et **retraits** pour les clients (en HTG, converti en USD selon le taux du jour)
+- Rechercher des clients par téléphone, nom ou ID Wallet
+- Gérer leur propre portefeuille agent (solde en USD)
+- Suivre leurs commissions sur les transactions
+- Confirmer ou rejeter les demandes de retrait des clients
+- Scanner les QR codes clients pour les identifier rapidement
+
+## Flux opérationnels clés
+- **Dépôt client** : rechercher le client → saisir le montant HTG → confirmer → le solde USD du client est crédité
+- **Retrait client** : rechercher le client → saisir le montant → envoyer la demande → le client confirme → l'agent reçoit sa commission
+- **Commission agent** : les agents gagnent un % sur chaque transaction (configuré par l'admin)
+- **Taux de change** : 1 USD = taux HTG du jour (visible dans le dashboard)
+
+## Règles de réponse
+1. Réponds TOUJOURS en français, de manière concise et pratique
+2. Sois direct — les agents travaillent sur le terrain, ils ont besoin de réponses rapides
+3. Si une question concerne un problème technique, explique les étapes simples à suivre
+4. Pour les problèmes de solde ou transactions, rappelle de contacter l'admin si nécessaire
+5. Tu t'appelles Ernst — présente-toi ainsi si on te demande qui tu es
+6. Sois chaleureux et encourageant — les agents font un travail important`;
+
+router.post('/api/agent/ai-chat', async (req, res) => {
+  try {
+    const { messages } = req.body as {
+      messages: { role: 'user' | 'assistant'; content: string }[];
+    };
+
+    if (!Array.isArray(messages) || messages.length === 0)
+      return res.status(400).json({ error: 'messages[] requis.' });
+
+    const apiKey = process.env.GROQ_API_KEY || '';
+    if (!apiKey)
+      return res.status(503).json({ error: 'GROQ_API_KEY non configurée.' });
+
+    const trimmed = messages.slice(-10);
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: ERNST_SYSTEM },
+          ...trimmed,
+        ],
+        temperature: 0.3,
+        max_tokens: 600,
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text();
+      return res.status(response.status).json({ error: `Groq ${response.status}: ${errBody}` });
+    }
+
+    const data = (await response.json()) as { choices: { message: { content: string } }[] };
+    const reply = data.choices?.[0]?.message?.content;
+    if (!reply) return res.status(500).json({ error: 'Réponse vide.' });
+
+    res.json({ reply });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur IA.' });
+  }
+});
+
 // ── Client: request deposit via agent code (agent confirms) ──────────────────
 router.post('/api/client/agent-deposit-request', requireDb, async (req, res) => {
   try {

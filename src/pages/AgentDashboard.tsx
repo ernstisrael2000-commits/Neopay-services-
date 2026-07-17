@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth';
 import { motion, AnimatePresence } from 'motion/react';
 import { apiFetch } from '../lib/apiFetch';
 import { useSettings } from '../services/parcelService';
+import ErnstChat from '../components/ErnstChat';
 
 interface AgentDashboardProps {
   agentUid: string;
@@ -1698,6 +1699,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           }}
         />
       )}
+
+      {/* ── Ernst AI Assistant ── */}
+      <ErnstChat agentName={agent.name} />
 
     </div>
   );
