@@ -1945,12 +1945,25 @@ router.post('/api/admin/agent-personal-deposit/:txId/approve', requireDb, async 
 
     const agentRef = adminDb.collection('agents').doc(txData.agentId);
     await adminDb.runTransaction(async (txn) => {
+      const agentSnap = await txn.get(agentRef);
+      if (!agentSnap.exists()) throw new Error('Agent introuvable.');
       txn.update(agentRef, {
         balance: FieldValue.increment(txData.amount),
         updatedAt: FieldValue.serverTimestamp(),
       });
       txn.update(txRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     });
+
+    // Notify agent by email
+    const agentSnap = await agentRef.get();
+    const agentData = agentSnap.exists ? agentSnap.data()! : {};
+    if (agentData.email) {
+      fireEmail(
+        () => emailDepositApproved({ clientName: `Agent ${agentData.name || txData.agentCode}`, clientEmail: agentData.email, amount: txData.amount }),
+        { type: 'agent_personal_deposit_approved', to: agentData.email, amount: txData.amount },
+      );
+    }
+
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -6028,6 +6041,14 @@ router.post('/api/client/agent-deposit-request', requireDb, async (req, res) => 
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    // Notify the agent by email
+    if (agentData.email) {
+      fireEmail(
+        () => emailAgentNewRequest({ agentName: agentData.name || '', agentEmail: agentData.email, clientName: clientName || 'Client', type: 'deposit', amount: usd }),
+        { type: 'agent_client_deposit_request', to: agentData.email, amount: usd },
+      );
+    }
+
     res.json({ success: true, agentName: agentData.name || '', requestId: reqRef.id });
   } catch (e: any) {
     console.error('[client/agent-deposit-request]', e);
@@ -6060,13 +6081,30 @@ router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, r
     const agentRef = adminDb.collection('agents').doc(reqData.agentId);
     const clientRef = adminDb.collection('clients').doc(reqData.clientId);
 
+    // Load fee settings for commission calculation
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const feeSettings = settingsSnap.exists ? settingsSnap.data()! : {};
+    const depositFeeMode = feeSettings.agentDepositFeeMode || 'percent';
+    const depositCommissionPct = Number(feeSettings.agentDepositCommissionPercent || 0);
+    const depositCommissionFixed = Number(feeSettings.agentDepositCommissionFixed || 0);
+    let commissionAmount = 0;
+    if (depositFeeMode === 'fixed') {
+      commissionAmount = parseFloat(depositCommissionFixed.toFixed(4));
+    } else if (depositCommissionPct > 0) {
+      commissionAmount = parseFloat((reqData.amount * depositCommissionPct / 100).toFixed(4));
+    }
+
     await adminDb.runTransaction(async (txn) => {
       const agentSnap = await txn.get(agentRef);
       if (!agentSnap.exists()) throw new Error('Agent introuvable.');
       const agentData = agentSnap.data()!;
       if ((agentData.balance || 0) < reqData.amount) throw new Error('Solde agent insuffisant pour ce dépôt.');
 
-      txn.update(agentRef, { balance: FieldValue.increment(-reqData.amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(agentRef, {
+        balance: FieldValue.increment(-reqData.amount),
+        ...(commissionAmount > 0 && { commissionBalance: FieldValue.increment(commissionAmount) }),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       txn.update(clientRef, { balance: FieldValue.increment(reqData.amount), updatedAt: FieldValue.serverTimestamp() });
       txn.update(reqRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
 
@@ -6083,10 +6121,56 @@ router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, r
         method: 'Agent',
         source: 'client_agent_deposit',
         description: `Dépôt approuvé par Agent ${reqData.agentName}`,
+        ...(commissionAmount > 0 && { agentCommission: commissionAmount }),
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+
+      // Fee record for commission tracking
+      if (commissionAmount > 0) {
+        txn.set(adminDb.collection('agent_fee_records').doc(), {
+          agentId: reqData.agentId,
+          agentCode: reqData.agentCode,
+          agentName: reqData.agentName || '',
+          clientId: reqData.clientId,
+          clientName: reqData.clientName || '',
+          operationType: 'deposit',
+          baseAmount: reqData.amount,
+          feeTotal: commissionAmount,
+          agentShare: commissionAmount,
+          adminShare: 0,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Client notification
+      txn.set(adminDb.collection('client_notifications').doc(), {
+        clientId: reqData.clientId,
+        type: 'deposit_approved',
+        title: '✅ Dépôt confirmé',
+        message: `Votre dépôt de ${reqData.amount.toFixed(2)} a été approuvé par l'agent ${reqData.agentName}.`,
+        amount: reqData.amount,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
+
+    // Email: agent processed the deposit (notify admin + client)
+    adminDb.collection('clients').doc(reqData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentProcessed({ agentName: reqData.agentName || '', clientName: reqData.clientName || '', clientEmail, type: 'deposit', action: 'confirmed', amount: reqData.amount }),
+        { type: 'agent_client_deposit_approved_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: reqData.clientId, amount: reqData.amount },
+      );
+    }).catch(() => {});
+
+    // Push notification to client
+    sendFcmToClient(
+      reqData.clientId,
+      '✅ Dépôt confirmé',
+      `Votre dépôt de ${reqData.amount.toFixed(2)} a été approuvé par l'agent ${reqData.agentName}.`,
+      { type: 'deposit_approved' }
+    );
 
     res.json({ success: true });
   } catch (e: any) {
@@ -6101,8 +6185,40 @@ router.post('/api/agent/client-deposit/:reqId/reject', requireDb, async (req, re
     const reqRef = adminDb.collection('client_agent_deposit_requests').doc(req.params.reqId);
     const reqSnap = await reqRef.get();
     if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
-    if (reqSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
-    await reqRef.update({ status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    const reqData = reqSnap.data()!;
+    if (reqData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+
+    const batch = adminDb.batch();
+    batch.update(reqRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+
+    // Client notification
+    batch.set(adminDb.collection('client_notifications').doc(), {
+      clientId: reqData.clientId,
+      type: 'deposit_rejected',
+      title: '❌ Demande de dépôt refusée',
+      message: `Votre demande de dépôt de ${(reqData.amount || 0).toFixed(2)} a été refusée par l'agent ${reqData.agentName}.${reason ? ` Raison: ${reason}` : ''}`,
+      amount: reqData.amount,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    // Push + email to client
+    sendFcmToClient(
+      reqData.clientId,
+      '❌ Dépôt refusé',
+      `Votre demande de dépôt de ${(reqData.amount || 0).toFixed(2)} a été refusée par l'agent ${reqData.agentName}.`,
+      { type: 'deposit_rejected' }
+    );
+
+    adminDb.collection('clients').doc(reqData.clientId).get().then(cSnap => {
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentProcessed({ agentName: reqData.agentName || '', clientName: reqData.clientName || '', clientEmail, type: 'deposit', action: 'rejected', amount: reqData.amount, reason }),
+        { type: 'agent_client_deposit_rejected_email', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId: reqData.clientId, amount: reqData.amount },
+      );
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -6113,6 +6229,7 @@ router.post('/api/agent/client-deposit/:reqId/reject', requireDb, async (req, re
 router.get('/api/admin/agent-personal-transactions', requireDb, async (_req, res) => {
   try {
     const snap = await adminDb.collection('agent_personal_transactions')
+      .where('status', '==', 'pending')
       .orderBy('createdAt', 'desc').limit(200).get();
     res.json({ transactions: snap.docs.map(serializeDoc) });
   } catch (e: any) {
