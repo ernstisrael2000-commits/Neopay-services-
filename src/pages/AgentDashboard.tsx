@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import {
   useAgentDataByUid,
   useAgentWithdrawals,
@@ -158,6 +159,12 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
   // Reject reason state
   const [rejectReasonMap, setRejectReasonMap] = useState<Record<string, string>>({});
+
+  // Barcode / QR scanner
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerContainerId = 'rena-qr-scanner-container';
 
   // Self-deposit (agent recharges own balance)
   const [isSelfDepositOpen, setIsSelfDepositOpen] = useState(false);
@@ -532,7 +539,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       </header>
 
       {/* ── Main Content ── */}
-      <main className="flex-1 overflow-y-auto px-6 pt-[80px] pb-32 space-y-8" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
+      <main className="flex-1 overflow-y-auto px-6 pt-[80px] pb-36 space-y-8" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' } as React.CSSProperties}>
 
       <AnimatePresence mode="wait">
 
@@ -1228,7 +1235,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       </main>
 
       {/* ── Bottom Navigation ── */}
-      <footer className="shrink-0 pb-8 bg-white border-t border-slate-100 z-40">
+      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 pb-safe">
         <nav className="flex justify-between items-center px-6 py-4">
           {/* Accueil */}
           <button
@@ -1254,7 +1261,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           {/* Center Scan button */}
           <div className="-mt-12">
             <button
-              onClick={() => setActiveSection('deposit')}
+              onClick={() => { setScannerError(null); setScannerOpen(true); }}
               className="w-14 h-14 bg-[#0A3D91] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/40 ring-4 ring-white active:scale-90 transition-transform"
             >
               <Scan className="h-7 w-7" />
@@ -1530,6 +1537,147 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         </Dialog>
       )}
 
+      {/* ── QR / Barcode Scanner Modal ── */}
+      {scannerOpen && (
+        <ScannerModal
+          containerId={scannerContainerId}
+          scannerRef={scannerRef}
+          error={scannerError}
+          setError={setScannerError}
+          onClose={() => setScannerOpen(false)}
+          onScan={(code) => {
+            setScannerOpen(false);
+            setClientSearch(code);
+            setActiveSection('deposit');
+            // auto-trigger search after a tick so the deposit section mounts
+            setTimeout(() => handleSearchClient(), 80);
+          }}
+        />
+      )}
+
+    </div>
+  );
+}
+
+// ─── QR / Barcode Scanner Modal ───────────────────────────────────────────────
+
+interface ScannerModalProps {
+  containerId: string;
+  scannerRef: React.MutableRefObject<Html5Qrcode | null>;
+  error: string | null;
+  setError: (e: string | null) => void;
+  onClose: () => void;
+  onScan: (code: string) => void;
+}
+
+function ScannerModal({ containerId, scannerRef, error, setError, onClose, onScan }: ScannerModalProps) {
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    let scanner: Html5Qrcode | null = null;
+
+    const start = async () => {
+      try {
+        scanner = new Html5Qrcode(containerId);
+        scannerRef.current = scanner;
+
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 260, height: 260 } },
+          (decodedText) => {
+            onScan(decodedText.trim());
+          },
+          () => { /* ignore per-frame errors */ }
+        );
+        setStarted(true);
+      } catch (err: any) {
+        const msg: string = err?.message || String(err);
+        if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('notallowed')) {
+          setError("Accès à la caméra refusé. Veuillez autoriser l'accès dans les paramètres de votre navigateur.");
+        } else if (msg.toLowerCase().includes('notfound') || msg.toLowerCase().includes('no camera')) {
+          setError("Aucune caméra détectée sur cet appareil.");
+        } else {
+          setError("Impossible de démarrer la caméra : " + msg);
+        }
+      }
+    };
+
+    start();
+
+    return () => {
+      if (scanner) {
+        scanner.isScanning
+          ? scanner.stop().catch(() => {}).finally(() => scanner?.clear())
+          : scanner.clear();
+        scannerRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col bg-black">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 pt-14 pb-4 bg-black/70">
+        <div>
+          <p className="text-white font-bold text-lg">Scanner un code client</p>
+          <p className="text-white/50 text-xs mt-0.5">Pointez la caméra sur le QR code ou code-barres</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Viewfinder or error */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+        {error ? (
+          <div className="text-center space-y-4 max-w-xs">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle className="h-8 w-8 text-red-400" />
+            </div>
+            <p className="text-white font-bold">{error}</p>
+            <button
+              onClick={onClose}
+              className="px-6 py-3 bg-white text-[#0A3D91] font-bold rounded-2xl active:scale-95 transition-transform"
+            >
+              Fermer
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Scanner container — html5-qrcode renders the video here */}
+            <div
+              id={containerId}
+              className="w-full max-w-[320px] rounded-3xl overflow-hidden"
+              style={{ minHeight: 320 }}
+            />
+            {!started && (
+              <div className="flex items-center gap-3 text-white/60">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm">Démarrage de la caméra…</span>
+              </div>
+            )}
+            {/* Corner guides overlay */}
+            {started && (
+              <p className="text-white/40 text-xs text-center">
+                Alignez le code dans le cadre
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Footer hint */}
+      {!error && (
+        <div className="px-6 pb-12 text-center">
+          <p className="text-white/30 text-xs">
+            Le scan est automatique dès que le code est détecté
+          </p>
+        </div>
+      )}
     </div>
   );
 }
