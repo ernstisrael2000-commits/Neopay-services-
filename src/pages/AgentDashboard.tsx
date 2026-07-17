@@ -559,37 +559,26 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         {activeSection === 'overview' && (
           <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
 
-            {/* ── MES WALLETS ── */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Wallet Agent */}
-              <button
-                onClick={() => setActiveSection('finances')}
-                className="relative rounded-[2rem] bg-slate-900 text-white overflow-hidden shadow-xl text-left active:scale-[0.97] transition-transform"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-10"><Wallet className="h-10 w-10" /></div>
-                <div className="p-4">
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Wallet Agent</p>
-                  <p className="text-2xl font-black leading-none">${(agent.balance || 0).toFixed(2)}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">≈ {((agent.balance || 0) * rate).toLocaleString()} HTG</p>
-                  {agent.walletLocked && <span className="text-[9px] font-black text-red-400 uppercase tracking-wider mt-1.5 block">🔒 Verrouillé</span>}
-                  <p className="text-[9px] text-slate-500 font-bold mt-2">Caisse opérationnelle</p>
+            {/* ── MON WALLET ── */}
+            <button
+              onClick={() => setActiveSection('finances')}
+              className="relative w-full rounded-[2rem] bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 text-white overflow-hidden shadow-xl text-left active:scale-[0.98] transition-transform"
+            >
+              <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full" />
+              <div className="absolute bottom-0 right-8 opacity-10"><TrendingUp className="h-16 w-16" /></div>
+              <div className="p-5 relative">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/60">Wallet Commissions</p>
+                  <BadgeDollarSign className="h-4 w-4 text-white/40" />
                 </div>
-              </button>
-
-              {/* Wallet Affilié */}
-              <button
-                onClick={() => setActiveSection('finances')}
-                className="relative rounded-[2rem] bg-gradient-to-br from-amber-400 to-orange-500 text-white overflow-hidden shadow-xl text-left active:scale-[0.97] transition-transform"
-              >
-                <div className="absolute top-0 right-0 p-4 opacity-20"><TrendingUp className="h-10 w-10" /></div>
-                <div className="p-4">
-                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-100 mb-1">Wallet Affilié</p>
-                  <p className="text-2xl font-black leading-none">${(agent.commissionBalance || 0).toFixed(2)}</p>
-                  <p className="text-[10px] text-amber-100 mt-1">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
-                  <p className="text-[9px] text-amber-100/70 font-bold mt-2">Commissions cumulées</p>
+                <p className="text-3xl font-black leading-none">${(agent.commissionBalance || 0).toFixed(2)}</p>
+                <p className="text-[11px] text-white/60 mt-1.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/15">
+                  <p className="text-[9px] text-white/50 font-black uppercase tracking-widest">Mes commissions cumulées</p>
+                  <ChevronRight className="h-4 w-4 text-white/40" />
                 </div>
-              </button>
-            </div>
+              </div>
+            </button>
 
             <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
               <BarChart3 className="h-5 w-5 text-primary" />
@@ -880,7 +869,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3.5 flex items-start gap-3">
               <ShieldCheck className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
               <p className="text-xs text-emerald-700 leading-relaxed">
-                Le montant sera <strong>déduit de votre solde agent</strong> et crédité instantanément au client.
+                Le montant sera <strong>déduit de votre wallet commissions</strong> et crédité instantanément au client.
               </p>
             </div>
 
