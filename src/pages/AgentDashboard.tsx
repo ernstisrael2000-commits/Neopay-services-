@@ -1719,22 +1719,46 @@ function ScannerModal({ containerId, scannerRef, error, setError, onClose, onSca
 
   useEffect(() => {
     let scanner: Html5Qrcode | null = null;
+    let unmounted = false;
 
     const start = async () => {
       try {
+        // Try to resolve the camera ID without triggering a new permission prompt.
+        // Html5Qrcode.getCameras() uses enumerateDevices under the hood:
+        //   - If permission is already granted → returns devices with labels immediately (no prompt).
+        //   - If not yet granted → triggers getUserMedia once (normal first-time prompt).
+        // Using a device ID instead of { facingMode } avoids repeated permission dialogs
+        // on subsequent opens because the browser doesn't re-prompt for a known device.
+        let cameraConstraint: string | { facingMode: string } = { facingMode: 'environment' };
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras && cameras.length > 0) {
+            // Prefer the rear/back camera
+            const rear = cameras.find(c =>
+              /back|rear|arrière|environment/i.test(c.label)
+            );
+            cameraConstraint = (rear ?? cameras[cameras.length - 1]).id;
+          }
+        } catch {
+          // getCameras failed (e.g. permission denied here already) — fall through to facingMode
+        }
+
+        if (unmounted) return;
+
         scanner = new Html5Qrcode(containerId);
         scannerRef.current = scanner;
 
         await scanner.start(
-          { facingMode: 'environment' },
+          cameraConstraint,
           { fps: 10, qrbox: { width: 260, height: 260 } },
           (decodedText) => {
             onScan(decodedText.trim());
           },
           () => { /* ignore per-frame errors */ }
         );
-        setStarted(true);
+        if (!unmounted) setStarted(true);
       } catch (err: any) {
+        if (unmounted) return;
         const msg: string = err?.message || String(err);
         if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('notallowed')) {
           setError("Accès à la caméra refusé. Veuillez autoriser l'accès dans les paramètres de votre navigateur.");
@@ -1749,6 +1773,7 @@ function ScannerModal({ containerId, scannerRef, error, setError, onClose, onSca
     start();
 
     return () => {
+      unmounted = true;
       if (scanner) {
         scanner.isScanning
           ? scanner.stop().catch(() => {}).finally(() => scanner?.clear())

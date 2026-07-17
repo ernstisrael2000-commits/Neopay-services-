@@ -1623,6 +1623,11 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
     const agentId = agentSnap.docs[0].id;
     const amount = Number(txData.amount || txData.usdAmount || 0);
 
+    // Check agent has sufficient balance before proceeding
+    if ((agentData.balance || 0) < amount) {
+      return res.status(400).json({ error: 'Solde agent insuffisant pour traiter ce retrait.' });
+    }
+
     // Load fee settings
     const settingsSnap = await adminDb.collection('settings').doc('global').get();
     const feeSettings = settingsSnap.exists ? settingsSnap.data()! : {};
@@ -1640,16 +1645,21 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
       const clientBalance = clientSnap.data()!.balance || 0;
       if (clientBalance < amount) throw new Error('Solde client insuffisant pour ce retrait.');
 
+      // Re-fetch agent balance inside transaction for consistency
+      const agentSnapTxn = await txn.get(agentRef);
+      const agentBalanceTxn = agentSnapTxn.exists ? (agentSnapTxn.data()!.balance || 0) : 0;
+      if (agentBalanceTxn < amount) throw new Error('Solde agent insuffisant pour traiter ce retrait.');
+
       // Debit client balance
       txn.update(clientRef, {
         balance: FieldValue.increment(-amount),
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      // Credit agent balance: float increases by the net cash they hand to the client,
-      // commission credited separately for their share of the fee.
+      // Debit agent balance: agent pays out cash to client, balance decreases.
+      // Commission credited separately for their share of the fee.
       txn.update(agentRef, {
-        balance: FieldValue.increment(amount - totalFee),
+        balance: FieldValue.increment(-amount),
         commissionBalance: FieldValue.increment(agentShareFee),
         updatedAt: FieldValue.serverTimestamp(),
       });
