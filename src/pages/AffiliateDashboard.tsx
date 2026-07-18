@@ -1389,6 +1389,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               )}
             </div>
           </div>
+          </div>
         )}
 
         {/* ═══ FILLEULS ═══ */}
@@ -1464,7 +1465,6 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
             {/* Arbre de parrainage */}
             <ReferralTree affiliate={affiliate} />
-          </div>
           </div>
         )}
 
