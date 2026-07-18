@@ -5239,6 +5239,153 @@ router.post('/api/affiliate/scan-tx-code', requireDb, async (req, res) => {
 });
 
 
+// ── Agent: scan client QR tx-code ─────────────────────────────────────────────
+router.post('/api/agent/scan-tx-code', requireDb, async (req, res) => {
+  try {
+    const { agentCode, codeData } = req.body;
+    if (!agentCode || !codeData) return res.status(400).json({ error: 'agentCode et codeData requis.' });
+
+    let parsed: { id: string; tk: string; ty: string; a: number; cn: string };
+    try { parsed = JSON.parse(codeData); } catch { return res.status(400).json({ error: 'Code QR invalide — format non reconnu.' }); }
+    const { id: codeId, tk: token } = parsed;
+    if (!codeId || !token) return res.status(400).json({ error: 'Code QR malformé.' });
+
+    // Verify agent
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(403).json({ error: 'Code agent invalide.' });
+    const agentRef = agentSnap.docs[0].ref;
+    const agentId  = agentSnap.docs[0].id;
+    const agentData = agentSnap.docs[0].data();
+    if (agentData.status === 'inactive') return res.status(403).json({ error: 'Agent inactif.' });
+
+    // Verify QR code document
+    const codeRef = adminDb.collection('tx_codes').doc(codeId);
+    const codeDoc = await codeRef.get();
+    if (!codeDoc.exists) return res.status(404).json({ error: 'Code introuvable ou déjà supprimé.' });
+    const code = codeDoc.data()!;
+
+    if (code.token !== token)       return res.status(403).json({ error: 'Code QR invalide.' });
+    if (code.used)                  return res.status(409).json({ error: 'Ce code a déjà été utilisé.' });
+    if (Date.now() > code.expiresAt) return res.status(410).json({ error: 'Ce code QR a expiré (validité 60 min).' });
+
+    const usd    = parseFloat(code.amount);
+    const txType = code.type as 'deposit' | 'withdrawal';
+
+    // Get client
+    const clientRef  = adminDb.collection('clients').doc(code.clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+
+    // Load fee settings
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const feeSettings  = settingsSnap.data() || {};
+    const agentDepositCommissionPct   = Number(feeSettings.agentDepositCommissionPercent   || 0);
+    const agentWithdrawPct            = Number(feeSettings.agentWithdrawPercent            || 0);
+    const agentWithdrawAgentSharePct  = Number(feeSettings.agentWithdrawAgentSharePercent  ?? 100);
+    const agentDepositFeeMode  = feeSettings.agentDepositFeeMode  || 'percent';
+    const agentWithdrawFeeMode = feeSettings.agentWithdrawFeeMode || 'percent';
+
+    // Fee calculation (same logic as /api/agent/client-transaction)
+    let commissionAmount = 0;
+    let totalFee = 0, agentShareFee = 0, adminShareFee = 0;
+    if (txType === 'deposit') {
+      commissionAmount = agentDepositFeeMode === 'fixed'
+        ? parseFloat(Number(feeSettings.agentDepositCommissionFixed || 0).toFixed(4))
+        : parseFloat((usd * agentDepositCommissionPct / 100).toFixed(4));
+    } else {
+      totalFee = agentWithdrawFeeMode === 'fixed'
+        ? parseFloat(Number(feeSettings.agentWithdrawFixed || 0).toFixed(4))
+        : parseFloat((usd * agentWithdrawPct / 100).toFixed(4));
+      agentShareFee = parseFloat((totalFee * agentWithdrawAgentSharePct / 100).toFixed(4));
+      adminShareFee = parseFloat((totalFee - agentShareFee).toFixed(4));
+    }
+
+    // Balance checks
+    if (txType === 'deposit' && (agentData.balance || 0) < usd)
+      return res.status(400).json({ error: `Solde agent insuffisant (${(agentData.balance || 0).toFixed(2)} disponible).` });
+    if (txType === 'withdrawal' && (clientData.balance || 0) < usd)
+      return res.status(400).json({ error: `Solde client insuffisant (${(clientData.balance || 0).toFixed(2)} disponible).` });
+
+    const label = txType === 'deposit' ? 'Dépôt' : 'Retrait';
+
+    await adminDb.runTransaction(async (txn: any) => {
+      const freshCode = (await txn.get(codeRef)).data();
+      if (freshCode!.used) throw new Error('Code déjà utilisé.');
+      const now = FieldValue.serverTimestamp();
+
+      if (txType === 'deposit') {
+        txn.update(clientRef, { balance: FieldValue.increment(usd), updatedAt: now });
+        txn.update(agentRef, {
+          balance: FieldValue.increment(-usd),
+          commissionBalance: FieldValue.increment(commissionAmount),
+          monthlyTransactions: FieldValue.increment(1),
+          updatedAt: now,
+        });
+      } else {
+        txn.update(clientRef, { balance: FieldValue.increment(-usd), updatedAt: now });
+        txn.update(agentRef, {
+          balance: FieldValue.increment(usd - totalFee),
+          commissionBalance: FieldValue.increment(agentShareFee),
+          monthlyTransactions: FieldValue.increment(1),
+          updatedAt: now,
+        });
+        if (adminShareFee > 0) {
+          txn.update(adminDb.collection('settings').doc('global'), { feesBalance: FieldValue.increment(adminShareFee) });
+        }
+      }
+
+      txn.update(codeRef, { used: true, usedAt: now, usedBy: agentId, usedByCode: agentCode });
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      txn.set(txRef, {
+        clientId: code.clientId,
+        clientName: code.clientName || clientData.name || '',
+        type: txType, amount: usd, status: 'approved',
+        method: `Agent QR Code: ${agentData.name}`,
+        agentCode, agentName: agentData.name || '', agentId,
+        description: `${label} via Code QR — Agent: ${agentData.name}`,
+        ...(txType === 'deposit'    && commissionAmount > 0 && { agentCommission: commissionAmount }),
+        ...(txType === 'withdrawal' && totalFee > 0         && { fee: totalFee, agentFeeShare: agentShareFee, adminFeeShare: adminShareFee }),
+        createdAt: now, updatedAt: now,
+      });
+
+      if (commissionAmount > 0 || totalFee > 0) {
+        txn.set(adminDb.collection('agent_fee_records').doc(), {
+          agentId, agentCode, agentName: agentData.name || '',
+          clientId: code.clientId, clientName: code.clientName || clientData.name || '',
+          operationType: txType, baseAmount: usd,
+          feeTotal: txType === 'deposit' ? commissionAmount : totalFee,
+          agentShare: txType === 'deposit' ? commissionAmount : agentShareFee,
+          adminShare: txType === 'deposit' ? 0 : adminShareFee,
+          createdAt: now,
+        });
+      }
+
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: `agent_client_${txType}_qr`,
+        clientId: code.clientId, clientName: code.clientName || clientData.name || '',
+        agentCode, agentName: agentData.name || '', amount: usd,
+        ...(txType === 'deposit'    && commissionAmount > 0 && { agentCommission: commissionAmount }),
+        ...(txType === 'withdrawal' && totalFee > 0         && { fee: totalFee, agentFeeShare: agentShareFee }),
+        read: false, createdAt: now,
+      });
+    });
+
+    res.json({
+      success: true, type: txType, amount: usd,
+      clientName: code.clientName || clientData.name || '',
+      ...(txType === 'deposit'    && commissionAmount > 0 && { agentCommission: commissionAmount }),
+      ...(txType === 'withdrawal' && totalFee > 0         && { fee: totalFee }),
+      message: `${label} de ${usd.toFixed(2)} traité avec succès pour ${code.clientName || clientData.name}`,
+    });
+  } catch (e: any) {
+    if (e.message === 'Code déjà utilisé.') return res.status(409).json({ error: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── Teachers ──────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════

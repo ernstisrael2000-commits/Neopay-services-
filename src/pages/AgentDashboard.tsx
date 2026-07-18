@@ -27,7 +27,7 @@ import {
   Phone, RefreshCw, TrendingUp, BarChart3, Users, Settings,
   Home, AlertCircle, BadgeDollarSign, ChevronRight, Star,
   ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck, PlusCircle, AlertTriangle, X,
-  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle,
+  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -169,6 +169,10 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [scannerError, setScannerError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerContainerId = 'rena-qr-scanner-container';
+
+  // Scanned QR tx-code pending confirmation
+  const [scannedTxCode, setScannedTxCode] = useState<{ id: string; tk: string; ty: 'deposit' | 'withdrawal'; a: number; cn: string } | null>(null);
+  const [processingTx, setProcessingTx] = useState(false);
 
   // Self-deposit (agent recharges own balance)
   const [isSelfDepositOpen, setIsSelfDepositOpen] = useState(false);
@@ -452,6 +456,24 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       setSelfDepositMethod('MonCash');
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setSelfDepositSubmitting(false); }
+  };
+
+  // Confirm a scanned QR tx-code transaction
+  const handleConfirmScanTx = async () => {
+    if (!scannedTxCode || !agent?.agentCode) return;
+    setProcessingTx(true);
+    try {
+      const data = await apiFetch('/api/agent/scan-tx-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agent.agentCode, codeData: JSON.stringify(scannedTxCode) }),
+      });
+      const htg = Math.round(scannedTxCode.a * rate);
+      setAgentSuccessModal({ type: scannedTxCode.ty, clientName: scannedTxCode.cn, htg, usd: scannedTxCode.a });
+      setScannedTxCode(null);
+      await loadStats();
+    } catch (e: any) { toast.error(e.message || 'Erreur lors du traitement du code QR.'); }
+    finally { setProcessingTx(false); }
   };
 
   // Submit direct deposit (instant, no confirmation needed)
@@ -1017,15 +1039,73 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           <motion.div key="deposit" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
             <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
               <ArrowDownLeft className="h-5 w-5 text-emerald-500" />
-              Dépôt pour un client
+              {scannedTxCode ? 'Confirmation QR' : 'Dépôt pour un client'}
             </h3>
 
-            <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3.5 flex items-start gap-3">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-emerald-700 leading-relaxed">
-                Le montant sera <strong>déduit de votre wallet commissions</strong> et crédité instantanément au client.
-              </p>
-            </div>
+            {/* ── QR scan confirmation card ── */}
+            {scannedTxCode ? (
+              <motion.div
+                key="qr-confirm"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={`rounded-3xl overflow-hidden shadow-xl ${scannedTxCode.ty === 'deposit' ? 'shadow-emerald-200' : 'shadow-violet-200'}`}
+              >
+                {/* Header */}
+                <div className={`px-6 py-5 text-white ${scannedTxCode.ty === 'deposit' ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-violet-500 to-purple-700'}`}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-11 w-11 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                      <QrCode className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Code QR scanné</p>
+                      <p className="font-black text-base leading-tight">{scannedTxCode.cn}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black">{Math.round(scannedTxCode.a * rate).toLocaleString('fr-FR')}</span>
+                    <span className="text-xl text-white/60 font-bold">HTG</span>
+                  </div>
+                  <p className="text-white/50 text-xs font-bold mt-0.5">≈ ${scannedTxCode.a.toFixed(2)} USD · {scannedTxCode.ty === 'deposit' ? 'Dépôt' : 'Retrait'}</p>
+                </div>
+
+                {/* Details */}
+                <div className="bg-white px-6 py-4 space-y-3">
+                  <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-2xl p-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-700 leading-relaxed">
+                      {scannedTxCode.ty === 'deposit'
+                        ? `Le client vous a remis ${Math.round(scannedTxCode.a * rate).toLocaleString('fr-FR')} HTG en espèces. Confirmez pour créditer son compte.`
+                        : `Remettez ${Math.round(scannedTxCode.a * rate).toLocaleString('fr-FR')} HTG en espèces au client après confirmation.`
+                      }
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setScannedTxCode(null)}
+                      disabled={processingTx}
+                      className="h-12 rounded-2xl border-2 border-gray-200 font-black text-gray-500 hover:border-red-300 hover:text-red-500 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      onClick={handleConfirmScanTx}
+                      disabled={processingTx}
+                      className={`h-12 rounded-2xl font-black text-white flex items-center justify-center gap-2 transition-opacity ${processingTx ? 'opacity-60' : ''} ${scannedTxCode.ty === 'deposit' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-violet-500 hover:bg-violet-600'}`}
+                    >
+                      {processingTx ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Confirmer
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <>
+                <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3.5 flex items-start gap-3">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-emerald-700 leading-relaxed">
+                    Le montant sera <strong>déduit de votre wallet commissions</strong> et crédité instantanément au client.
+                  </p>
+                </div>
 
             <DirectTxForm
               type="deposit"
@@ -1051,6 +1131,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               agentWithdrawPercent={settings?.agentWithdrawPercent ?? 0}
               agentWithdrawAgentSharePercent={settings?.agentWithdrawAgentSharePercent ?? 100}
             />
+              </>
+            )}
           </motion.div>
         )}
 
@@ -1718,9 +1800,19 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           onClose={() => setScannerOpen(false)}
           onScan={(code) => {
             setScannerOpen(false);
-            setClientSearch(code);
+            // Try to detect a structured QR tx-code (JSON produced by the client app)
+            try {
+              const parsed = JSON.parse(code.trim());
+              if (parsed && parsed.id && parsed.tk && parsed.ty && typeof parsed.a === 'number') {
+                // It's a valid client transaction QR → show confirmation flow
+                setScannedTxCode({ id: parsed.id, tk: parsed.tk, ty: parsed.ty, a: parsed.a, cn: parsed.cn || 'Client' });
+                setActiveSection('deposit');
+                return;
+              }
+            } catch { /* not JSON — fall through to text search */ }
+            // Plain walletId, phone, or name barcode → existing search flow
+            setClientSearch(code.trim());
             setActiveSection('deposit');
-            // auto-trigger search after a tick so the deposit section mounts
             setTimeout(() => handleSearchClient(), 80);
           }}
         />,

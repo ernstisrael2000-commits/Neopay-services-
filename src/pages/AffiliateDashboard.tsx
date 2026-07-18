@@ -732,7 +732,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
         {/* ═══ ACCUEIL ═══ */}
         {activeTab === 'accueil' && (
-          <>
+          <div>
           <ContestPodium participantId={affiliateId} participantType="affiliate" />
           <div className="p-4 space-y-4">
 
@@ -1465,7 +1465,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             {/* Arbre de parrainage */}
             <ReferralTree affiliate={affiliate} />
           </div>
-          </>
+          </div>
         )}
 
         {/* ═══ HISTORIQUE ═══ */}
