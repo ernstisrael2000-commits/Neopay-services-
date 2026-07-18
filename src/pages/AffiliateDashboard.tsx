@@ -19,6 +19,7 @@ import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
 import { useUniversalFCM } from '../hooks/useUniversalFCM';
 import NotificationBell from '../components/NotificationBell';
 import PhotoUrlEditor from '../components/PhotoUrlEditor';
+import ReferralTree from '../components/ReferralTree';
 import { getAgentByCode, submitAgentDepositRequest } from '../services/agentService';
 import { Affiliate, WithdrawalRequest, WalletTransaction, TransactionStatus } from '../types';
 import { Progress } from '../components/ui/progress';
@@ -1469,6 +1470,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </div>
               </div>
             )}
+
+            {/* Arbre de parrainage */}
+            <ReferralTree affiliate={affiliate} />
           </div>
         )}
 

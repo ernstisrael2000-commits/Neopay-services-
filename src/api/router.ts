@@ -2994,6 +2994,10 @@ async function triggerAffiliateCommissions(
     if (!affSnap.exists) return;
     const aff = affSnap.data()!;
 
+    // Collecter les données parent/grand-parent pour emails après commit
+    let parentData: { name: string; email?: string } | null = null;
+    let gpData:     { name: string; email?: string } | null = null;
+
     const batch = adminDb.batch();
 
     batch.update(affRef, {
@@ -3017,7 +3021,7 @@ async function triggerAffiliateCommissions(
     batch.set(n1, {
       affiliateId: directAffiliateId,
       title: 'Nouvelle Vente !',
-      message: `Félicitations ! Vous avez gagné ${directHTG} Goud et ${pointsEarned} points.`,
+      message: `Félicitations ! Vous avez gagné ${directHTG} Goud et ${pointsEarned} points sur "${itemName || 'une vente'}".`,
       type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -3025,6 +3029,8 @@ async function triggerAffiliateCommissions(
       const parentRef  = adminDb.collection('affiliates').doc(aff.parentAffiliateId);
       const parentSnap = await parentRef.get();
       if (parentSnap.exists) {
+        const pd = parentSnap.data()!;
+        parentData = { name: pd.name, email: pd.email };
         batch.update(parentRef, {
           balance: FieldValue.increment(parentUSD), indirectRevenue: FieldValue.increment(parentUSD),
           totalEarnings: FieldValue.increment(parentUSD), updatedAt: FieldValue.serverTimestamp(),
@@ -3042,6 +3048,8 @@ async function triggerAffiliateCommissions(
       const gpRef  = adminDb.collection('affiliates').doc(aff.grandparentAffiliateId);
       const gpSnap = await gpRef.get();
       if (gpSnap.exists) {
+        const gd = gpSnap.data()!;
+        gpData = { name: gd.name, email: gd.email };
         batch.update(gpRef, {
           balance: FieldValue.increment(grandparentUSD), indirectRevenue: FieldValue.increment(grandparentUSD),
           totalEarnings: FieldValue.increment(grandparentUSD), updatedAt: FieldValue.serverTimestamp(),
@@ -3057,6 +3065,49 @@ async function triggerAffiliateCommissions(
 
     await batch.commit();
     console.log(`[Commission] ✓ Auto-attribuée à ${aff.name} (${type}) — direct: ${directHTG} HTG`);
+
+    // ── Emails de commission (fire-and-forget après commit) ───────────────────
+    const serviceName = itemName || (type === 'virtual_card' ? 'Carte MasterCard' : 'Service');
+
+    // Direct
+    if (aff.email) {
+      fireEmail(
+        () => emailAffiliateCommission({
+          affiliateName: aff.name,
+          affiliateEmail: aff.email,
+          amount: directHTG,
+          sourceClientName: serviceName,
+          type: 'Commission directe (filleul)',
+        }),
+        { type: 'affiliate_commission_direct', to: aff.email, amount: directHTG },
+      );
+    }
+    // Parent (niveau 1 indirect)
+    if (parentData?.email) {
+      fireEmail(
+        () => emailAffiliateCommission({
+          affiliateName: parentData!.name,
+          affiliateEmail: parentData!.email,
+          amount: parentHTG,
+          sourceClientName: `${aff.name} (filleul de votre filleul)`,
+          type: 'Commission Niveau 1',
+        }),
+        { type: 'affiliate_commission_parent', to: parentData.email, amount: parentHTG },
+      );
+    }
+    // Grand-parent (niveau 2 indirect)
+    if (gpData?.email) {
+      fireEmail(
+        () => emailAffiliateCommission({
+          affiliateName: gpData!.name,
+          affiliateEmail: gpData!.email,
+          amount: grandparentHTG,
+          sourceClientName: `${aff.name} (réseau indirect)`,
+          type: 'Commission Niveau 2',
+        }),
+        { type: 'affiliate_commission_grandparent', to: gpData.email, amount: grandparentHTG },
+      );
+    }
   } catch (e: any) {
     console.error('[Commission] Erreur auto-commission:', e?.message);
   }
