@@ -91,6 +91,9 @@ import {
   Coins,
   ShieldCheck,
   Smartphone,
+  Eye,
+  EyeOff,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -99,7 +102,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettings } from '../services/parcelService';
 
-type Tab = 'accueil' | 'reseau' | 'gains' | 'historique' | 'profil';
+type Tab = 'accueil' | 'filleuls' | 'historique' | 'profil';
 
 interface AffiliateDashboardProps {
   affiliateId: string;
@@ -147,6 +150,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [balanceVisible, setBalanceVisible] = useState(true);
 
   // Point de Service (Agent Mode)
   type PointTab = 'deposit' | 'scan' | 'requests';
@@ -482,6 +486,45 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   // unreadCount comes from useRealtimeNotifs
   const recentTx = transactions.slice(0, 5);
 
+  // ── Computed values for new design ──
+  const rate = settings?.exchangeRate || 146;
+
+  const pendingHTG = React.useMemo(() => {
+    return Math.round(
+      transactions
+        .filter(t => t.status === 'pending_agent')
+        .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0) * rate
+    );
+  }, [transactions, rate]);
+
+  const validatedHTG = React.useMemo(() => {
+    return Math.round(
+      transactions
+        .filter(t => t.status === 'completed' || t.status === 'approved')
+        .filter(t => ['deposit', 'commission', 'transfer_received'].includes(t.type))
+        .reduce((sum, t) => sum + (t.amount || 0), 0) * rate
+    );
+  }, [transactions, rate]);
+
+  const convRate = React.useMemo(() => {
+    const clients = affiliate?.referredClients || 0;
+    const earned = affiliate?.totalEarnings || 0;
+    if (!clients) return 0;
+    const estimatedActive = Math.min(clients, earned / 0.5);
+    return Math.min(99.9, Math.max(0, (estimatedActive / clients) * 100));
+  }, [affiliate?.referredClients, affiliate?.totalEarnings]);
+
+  const nextLevelName = React.useMemo(() => {
+    const level = levelInfo?.level;
+    if (level === 'Bronze') return 'Silver';
+    if (level === 'Silver') return 'Gold';
+    if (level === 'Gold') return 'VIP';
+    return 'Élite';
+  }, [levelInfo?.level]);
+
+  const targetFilleuls = levelInfo?.level === 'VIP' ? 200 : levelInfo?.level === 'Gold' ? 100 : levelInfo?.level === 'Silver' ? 50 : 25;
+  const bonusHTG = Math.round((affiliate?.totalEarnings || 0) * rate);
+
   // Ensure both wallet IDs exist
   useEffect(() => {
     if (affiliate && !affiliateLoading) {
@@ -493,7 +536,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
-    const walletBalance = withdrawWallet === 'commissions' ? (affiliate!.commissionBalance || 0) : affiliate!.balance;
+    const walletBalance = affiliate!.commissionBalance || 0;
     if (amount > walletBalance) { toast.error('Solde insuffisant.'); return; }
     const exchangeRate = settings?.exchangeRate || 146;
     const minWithdrawUSD = 20 / exchangeRate;
@@ -516,7 +559,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur serveur');
       toast.success("Demande de retrait soumise ! Vous recevrez un email de confirmation.");
-      setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber(''); setWithdrawWallet('principal');
+      setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber('');
       setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null);
     } catch (error: any) {
       toast.error(error.message || 'Erreur lors du retrait.');
@@ -644,8 +687,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'accueil', label: 'Accueil', icon: Home },
-    { id: 'reseau', label: 'Réseau', icon: Users },
-    { id: 'gains', label: 'Gains', icon: TrendingUp },
+    { id: 'filleuls', label: 'Filleuls', icon: Users },
     { id: 'historique', label: 'Historique', icon: History },
     { id: 'profil', label: 'Profil', icon: User },
   ];
@@ -654,18 +696,19 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Fixed Header ── */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 h-14">
-        <div className="flex items-center justify-between h-full px-4 max-w-2xl mx-auto">
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 max-w-2xl mx-auto">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-black text-sm shrink-0">
-              {affiliate.name.charAt(0).toUpperCase()}
-            </div>
+            <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-white font-black text-base shrink-0">R</div>
             <div>
-              <p className="text-sm font-black text-dark leading-none truncate max-w-[160px]">{affiliate.name}</p>
-              <p className="text-[10px] text-gray-400 font-mono">#{affiliate.code}</p>
+              <p className="text-sm font-black text-gray-900 leading-tight">Rena</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Affilié Vérifié</p>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <NotificationBell
               notifications={notifications}
               unreadCount={unreadCount}
@@ -674,10 +717,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               onMarkAllRead={markAllRead}
               onClearAll={clearAll}
             />
-            <button onClick={onLogout}
-              className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
-              <LogOut className="h-4 w-4" />
-            </button>
+            <div className="h-9 w-9 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Trophy className="h-4 w-4 text-amber-500" />
+            </div>
           </div>
         </div>
       </div>
@@ -689,69 +731,123 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         {activeTab === 'accueil' && (
           <div className="p-4 space-y-4">
 
-            {/* Dual Wallet Cards */}
-            <div className="grid grid-cols-2 gap-3">
-
-              {/* Wallet Principal */}
-              <div className="relative rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-4 text-white overflow-hidden shadow-xl shadow-primary/20">
-                <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/5 rounded-full" />
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[8px] font-black text-white/60 uppercase tracking-widest">Wallet Principal</p>
-                    <Badge className="bg-white/15 text-white border-0 text-[8px] font-black uppercase tracking-widest px-1.5 py-0">
-                      {levelInfo?.level || 'Bronze'}
-                    </Badge>
-                  </div>
-                  <p className="text-[8px] text-white/50 font-black uppercase tracking-widest">Solde Disponible</p>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-2xl font-black tabular-nums leading-none">{(affiliate.balance || 0).toLocaleString()}</span>
-                    <span className="text-sm font-bold text-white/60">$</span>
-                  </div>
-                  <p className="text-[9px] text-white/40 mt-0.5">≈ {Math.round((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
-                  <button onClick={copyWalletId} className="flex items-center gap-1 mt-3 pt-2.5 border-t border-white/10 group w-full">
-                    <p className="text-[8px] text-white/40 font-black uppercase tracking-widest shrink-0">ID</p>
-                    <div className="flex items-center gap-1 min-w-0">
-                      <span className="font-mono font-black text-white/70 text-[9px] tracking-wider truncate">{affiliate.walletId || '........'}</span>
-                      {copied ? <CheckCircle2 className="h-3 w-3 text-emerald-300 shrink-0" /> : <Copy className="h-2.5 w-2.5 text-white/30 shrink-0 group-hover:text-white/60 transition-colors" />}
-                    </div>
-                  </button>
-                </div>
+            {/* ── Greeting ── */}
+            <div className="flex items-center justify-between pt-1">
+              <div>
+                <p className="text-[11px] text-gray-400 leading-none">Bonjour,</p>
+                <p className="text-2xl font-black text-gray-900 leading-tight mt-0.5">{affiliate.name}</p>
               </div>
-
-              {/* Wallet Commissions */}
-              <div className="relative rounded-[2rem] bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-white overflow-hidden shadow-xl shadow-amber-200">
-                <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full" />
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[8px] font-black text-amber-100 uppercase tracking-widest">Wallet Commissions</p>
-                    <TrendingUp className="h-3.5 w-3.5 text-white/50" />
-                  </div>
-                  <p className="text-[8px] text-white/60 font-black uppercase tracking-widest">Gains Cumulés</p>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-2xl font-black tabular-nums leading-none">{(affiliate.totalEarnings || 0).toLocaleString()}</span>
-                    <span className="text-sm font-bold text-white/60">$</span>
-                  </div>
-                  <p className="text-[9px] text-amber-100/60 mt-0.5">≈ {Math.round((affiliate.totalEarnings || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
-                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/10">
-                    <p className="text-[8px] text-white/50 font-black uppercase tracking-widest">Score</p>
-                    <p className="font-black text-white/80 text-sm">{affiliate.points || 0} pts</p>
-                  </div>
-                </div>
-              </div>
-
+              <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                levelInfo?.level === 'VIP' ? 'bg-purple-100 text-purple-700' :
+                levelInfo?.level === 'Gold' ? 'bg-amber-100 text-amber-700' :
+                levelInfo?.level === 'Silver' ? 'bg-gray-100 text-gray-600' :
+                'bg-orange-100 text-orange-700'
+              }`}>Niveau {levelInfo?.level || 'Bronze'}</div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-3 gap-3">
-              <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
-                <DialogTrigger render={
-                  <button className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
-                    <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-200">
-                      <PlusCircle className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Dépôt</span>
+            {/* ── Single Commission Wallet Card ── */}
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl" style={{ background: 'linear-gradient(135deg, #1a3799 0%, #1e3a8a 40%, #1d4ed8 100%)' }}>
+              <div className="absolute -top-14 -right-14 w-44 h-44 bg-white/5 rounded-full pointer-events-none" />
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/5 rounded-full pointer-events-none" />
+              <div className="relative p-6">
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-[10px] font-black text-white/50 uppercase tracking-widest">Solde Disponible</p>
+                  <button onClick={() => setBalanceVisible(v => !v)} className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                    {balanceVisible ? <Eye className="h-3.5 w-3.5 text-white/60" /> : <EyeOff className="h-3.5 w-3.5 text-white/60" />}
                   </button>
-                } />
+                </div>
+                <div className="leading-none mb-1">
+                  {balanceVisible ? (
+                    <p>
+                      <span className="text-[2.5rem] font-black text-white tabular-nums">
+                        {Math.round((affiliate.commissionBalance || 0) * rate).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xl font-bold text-white/50 ml-2">HTG</span>
+                    </p>
+                  ) : (
+                    <p className="text-[2.5rem] font-black text-white/30 tracking-[0.12em]">••••••</p>
+                  )}
+                </div>
+                <p className="text-[12px] text-white/40 mb-5">
+                  {balanceVisible ? `≈ ${(affiliate.commissionBalance || 0).toFixed(2)} USD` : '≈ ••••••'}
+                </p>
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
+                  <div>
+                    <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-0.5">En Attente</p>
+                    <p className="text-sm font-black text-white/60">{balanceVisible ? `${pendingHTG.toLocaleString()} HTG` : '•••••'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mb-0.5">Validée</p>
+                    <p className="text-sm font-black text-emerald-400">{balanceVisible ? `${validatedHTG.toLocaleString()} HTG` : '•••••'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Stats ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="h-9 w-9 rounded-xl bg-blue-50 flex items-center justify-center mb-2.5">
+                  <Users className="h-4 w-4 text-primary" />
+                </div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Filleuls</p>
+                <p className="text-2xl font-black text-gray-900">{affiliate.referredClients || 0}</p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="h-9 w-9 rounded-xl bg-emerald-50 flex items-center justify-center mb-2.5">
+                  <Zap className="h-4 w-4 text-emerald-500" />
+                </div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Taux Conv.</p>
+                <p className="text-2xl font-black text-gray-900">{convRate.toFixed(1)}%</p>
+              </div>
+            </div>
+
+            {/* ── Actions ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setIsWithdrawModalOpen(true)}
+                className="flex items-center justify-center gap-2.5 h-14 rounded-2xl bg-emerald-500 text-white font-black text-sm shadow-lg shadow-emerald-200 active:scale-[0.98] transition-all">
+                <ArrowUpFromLine className="h-4 w-4" />
+                Retirer
+              </button>
+              <button onClick={() => setIsTransferModalOpen(true)}
+                className="flex items-center justify-center gap-2.5 h-14 rounded-2xl bg-white border-2 border-gray-200 text-gray-700 font-black text-sm shadow-sm active:scale-[0.98] transition-all">
+                <ArrowRightLeft className="h-4 w-4" />
+                Transférer
+              </button>
+            </div>
+
+            {/* ── Programme de Récompenses ── */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-black text-gray-900 text-sm">Programme de Récompenses</h3>
+                <ChevronRight className="h-4 w-4 text-gray-300" />
+              </div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
+                Prochain Niveau : <span className="text-primary">{nextLevelName}</span>
+              </p>
+              <div className="relative h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${levelInfo?.progress || 0}%` }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full"
+                />
+              </div>
+              <p className="text-right text-[10px] font-black text-emerald-600 mt-1.5 mb-3">{Math.round(levelInfo?.progress || 0)}%</p>
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-50">
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Objectif Mois</p>
+                  <p className="text-sm font-black text-gray-800">{affiliate.referredClients || 0}/{targetFilleuls} Filleuls</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Bonus Débloqué</p>
+                  <p className="text-sm font-black text-emerald-600">+{bonusHTG.toLocaleString()} HTG</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Deposit Dialog (controlled) ── */}
+            <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
                 <DialogContent className="w-[96%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
                   {/* Header */}
                   <div className="relative bg-gradient-to-br from-emerald-500 to-teal-600 p-6 pb-8">
@@ -914,43 +1010,26 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
-                <DialogTrigger render={
-                  <button className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
-                    <div className="h-10 w-10 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-200">
-                      <MinusCircle className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-700">Retrait</span>
-                  </button>
-                } />
+            <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
                 <DialogContent className="w-[96%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
                   {/* Header */}
-                  <div className="relative bg-gradient-to-br from-indigo-500 to-purple-600 p-6 pb-8">
+                  <div className="relative bg-gradient-to-br from-emerald-500 to-emerald-700 p-6">
                     <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
                       <X className="h-4 w-4 text-white" />
                     </DialogClose>
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="flex items-center gap-3 mb-4">
                       <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                        <MinusCircle className="h-5 w-5 text-white" />
+                        <ArrowUpFromLine className="h-5 w-5 text-white" />
                       </div>
                       <div>
-                        <DialogTitle className="text-lg font-black text-white leading-tight">Retrait de Fonds</DialogTitle>
-                        <DialogDescription className="text-indigo-100 text-[11px] font-medium">Choisissez votre méthode de retrait</DialogDescription>
+                        <DialogTitle className="text-lg font-black text-white leading-tight">Retrait de Commissions</DialogTitle>
+                        <DialogDescription className="text-emerald-100 text-[11px] font-medium">Choisissez votre méthode de retrait</DialogDescription>
                       </div>
                     </div>
-                    {/* Wallet pills */}
-                    <div className="flex gap-2 mt-4">
-                      <button onClick={() => setWithdrawWallet('principal')}
-                        className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${withdrawWallet === 'principal' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
-                        <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'principal' ? 'text-indigo-600' : 'text-white/70'}`}>Principal</p>
-                        <p className={`text-base font-black ${withdrawWallet === 'principal' ? 'text-indigo-700' : 'text-white'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
-                      </button>
-                      <button onClick={() => setWithdrawWallet('commissions')}
-                        className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${withdrawWallet === 'commissions' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
-                        <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'commissions' ? 'text-amber-600' : 'text-white/70'}`}>Commissions</p>
-                        <p className={`text-base font-black ${withdrawWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.commissionBalance || 0).toFixed(2)} $</p>
-                        {affiliate.commissionWalletId && <p className={`text-[8px] font-mono mt-0.5 ${withdrawWallet === 'commissions' ? 'text-amber-500' : 'text-white/40'}`}>#{affiliate.commissionWalletId}</p>}
-                      </button>
+                    <div className="bg-white/15 rounded-2xl p-3.5">
+                      <p className="text-[9px] font-black text-white/60 uppercase tracking-widest mb-0.5">Solde Disponible</p>
+                      <p className="text-2xl font-black text-white">${(affiliate.commissionBalance || 0).toFixed(2)}</p>
+                      <p className="text-[10px] text-white/50 mt-0.5">≈ {Math.round((affiliate.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
                     </div>
                   </div>
 
@@ -1093,7 +1172,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         ))}
                       </div>
                       <p className="text-[10px] text-gray-400 font-bold">
-                        Solde {withdrawWallet === 'commissions' ? 'Commissions' : 'Principal'} : {withdrawWallet === 'commissions' ? (affiliate.commissionBalance || 0).toFixed(2) : (affiliate.balance || 0).toFixed(2)} $
+                        Solde Commissions : {(affiliate.commissionBalance || 0).toFixed(2)} $
                       </p>
                     </div>
 
@@ -1104,15 +1183,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
-                <DialogTrigger render={
-                  <button className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
-                    <div className="h-10 w-10 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-200">
-                      <ArrowRightLeft className="h-5 w-5 text-white" />
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-700">Transfert</span>
-                  </button>
-                } />
+            <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
                 <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
                   <DialogHeader className="p-7 bg-blue-600 text-white relative">
                     <DialogTitle className="text-xl font-black">Transfert Entre Affiliés</DialogTitle>
@@ -1163,7 +1234,6 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-            </div>
 
             {/* ── Demandes Clients (dépôts + retraits en attente) ── */}
             {(withdrawalRequests.length > 0 || depositRequests.length > 0) && (
@@ -1272,7 +1342,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
                 <h3 className="font-black text-dark text-sm">Opérations Récentes</h3>
                 {transactions.length > 0 && (
-                  <button onClick={() => setActiveTab('gains')} className="text-[10px] font-black text-primary hover:underline flex items-center gap-0.5">
+                  <button onClick={() => setActiveTab('historique')} className="text-[10px] font-black text-primary hover:underline flex items-center gap-0.5">
                     Voir tout <ChevronRight className="h-3 w-3" />
                   </button>
                 )}
@@ -1316,8 +1386,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           </div>
         )}
 
-        {/* ═══ RÉSEAU ═══ */}
-        {activeTab === 'reseau' && (
+        {/* ═══ FILLEULS ═══ */}
+        {activeTab === 'filleuls' && (
           <div className="p-4 space-y-4">
 
             {/* Referral code card */}
@@ -1402,159 +1472,27 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           </div>
         )}
 
-        {/* ═══ GAINS ═══ */}
-        {activeTab === 'gains' && (
-          <div className="p-4 space-y-4">
-
-            {/* Monthly Rankings */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-3">
-                <div className="h-8 w-8 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <Trophy className="h-4 w-4 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="font-black text-dark text-sm">Élite du Mois</h3>
-                  <p className="text-[10px] text-gray-400 font-medium">Les meilleurs performeurs</p>
-                </div>
-                <Badge className="ml-auto bg-amber-100 text-amber-700 border-0 text-[9px] font-black uppercase">Live</Badge>
-              </div>
-              <div className="p-5">
-                {rankingsLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-amber-500" /></div>
-                ) : (
-                  <div className="space-y-2">
-                    {(monthlyRankings.length > 0 ? monthlyRankings : winnersQueue).slice(0, 5).map((a, idx) => (
-                      <div key={a.id} className={`flex items-center gap-3 p-3 rounded-2xl ${a.id === affiliate.id ? 'bg-primary/5 border border-primary/10' : 'hover:bg-gray-50'} transition-colors`}>
-                        <span className={`w-6 text-center font-black text-sm ${idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-gray-300'}`}>
-                          #{idx + 1}
-                        </span>
-                        <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center font-black text-sm text-gray-600 shrink-0">
-                          {a.name.charAt(0)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-black text-sm text-dark truncate">{a.name} {a.id === affiliate.id && <span className="text-primary text-[10px]">(vous)</span>}</p>
-                          <p className="text-[10px] text-gray-400 font-mono">{a.code}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-black text-sm text-emerald-600">{a.points || 0} pts</p>
-                          <p className="text-[9px] text-gray-400">{idx === 0 ? '500 $' : idx === 1 ? '250 $' : idx === 2 ? '150 $' : ''}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Full Transaction History */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-xl bg-blue-50 flex items-center justify-center">
-                    <History className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-dark text-sm">Historique Complet</h3>
-                    <p className="text-[10px] text-gray-400">{transactions.length} opération(s)</p>
-                  </div>
-                </div>
-                {transactions.length > 0 && (
-                  <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
-                    <DialogTrigger render={
-                      <button className="text-[10px] font-black text-red-400 hover:text-red-600 flex items-center gap-1 transition-colors">
-                        <AlertCircle className="h-3 w-3" /> Vider
-                      </button>
-                    } />
-                    <DialogContent className="max-w-sm rounded-[2.5rem] p-7 border-0 shadow-2xl">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-lg font-black">
-                          <AlertCircle className="h-5 w-5 text-red-500" /> Supprimer l'historique ?
-                        </DialogTitle>
-                        <DialogDescription className="text-sm text-gray-500 pt-1">Cette action est irréversible.</DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter className="gap-2 mt-5">
-                        <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="flex-1 h-11 rounded-2xl font-bold">Retour</Button>
-                        <Button variant="destructive" onClick={handleClearTransactionHistory} disabled={isSubmitting} className="flex-1 h-11 rounded-2xl font-black">
-                          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Effacer'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-              {transactionsLoading ? (
-                <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-              ) : transactions.length > 0 ? (
-                <div className="divide-y divide-gray-50">
-                  {transactions.map(t => {
-                    const isCredit = t.type === 'deposit' || t.type === 'transfer_received';
-                    return (
-                      <div key={t.id} className="px-5 py-4 flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                            t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
-                            t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600' :
-                            t.type === 'transfer' || t.type === 'transfer_sent' ? 'bg-blue-50 text-blue-600' :
-                            'bg-teal-50 text-teal-600'
-                          }`}>
-                            {isCredit ? <Download className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-                          </div>
-                          <div>
-                            <p className={`text-sm font-black ${isCredit ? 'text-emerald-600' : 'text-rose-500'}`}>
-                              {isCredit ? '+' : '-'}{t.amount.toFixed(2)} $
-                            </p>
-                            <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{t.description || t.type}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[9px] text-gray-400">
-                                {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy • HH:mm', { locale: fr }) : ''}
-                              </span>
-                              {t.method && <Badge variant="outline" className="h-4 text-[8px] font-black">{t.method}</Badge>}
-                            </div>
-                            {t.status === 'rejected' && t.rejectionReason && (
-                              <p className="text-[10px] text-red-500 mt-1 font-bold">{t.rejectionReason}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="shrink-0 mt-0.5">{getTransactionStatusBadge(t.status)}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-400">
-                  <Fingerprint className="h-10 w-10 mx-auto mb-2 opacity-10" />
-                  <p className="text-sm font-medium">Aucune opération</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ═══ COMMANDES / POINT DE SERVICE ═══ */}
+        {/* ═══ HISTORIQUE ═══ */}
         {activeTab === 'historique' && (
           <div className="p-4 space-y-4">
 
             {/* Header */}
-            <div className="bg-gradient-to-br from-primary to-indigo-700 rounded-3xl p-5 text-white shadow-lg shadow-primary/20">
-              <div className="flex items-center justify-between mb-3">
+            <div className="relative rounded-3xl overflow-hidden shadow-xl" style={{ background: 'linear-gradient(135deg, #1a3799 0%, #1e3a8a 40%, #1d4ed8 100%)' }}>
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full pointer-events-none" />
+              <div className="relative p-5">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                    <History className="h-5 w-5" />
+                    <History className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black">Historique</h2>
-                    <p className="text-xs text-white/70">Toutes vos transactions</p>
+                    <h2 className="text-lg font-black text-white">Historique</h2>
+                    <p className="text-xs text-white/60">{transactions.length} opération(s)</p>
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <div className="bg-white/10 rounded-2xl p-3">
-                  <p className="text-[10px] text-white/60 font-black uppercase">Wallet Principal</p>
-                  <p className="text-xl font-black">${(affiliate.balance || 0).toFixed(2)}</p>
-                </div>
-                <div className="bg-white/10 rounded-2xl p-3">
-                  <p className="text-[10px] text-white/60 font-black uppercase">Commissions</p>
-                  <p className="text-xl font-black">${(affiliate.commissionBalance || 0).toFixed(2)}</p>
+                <div className="mt-4 bg-white/10 rounded-2xl p-3.5">
+                  <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-0.5">Solde Commissions</p>
+                  <p className="text-2xl font-black text-white">${(affiliate.commissionBalance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-white/40 mt-0.5">≈ {Math.round((affiliate.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
                 </div>
               </div>
             </div>
@@ -1572,16 +1510,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="divide-y divide-gray-50">
                   {transactions.map((tx: WalletTransaction) => {
-                    const isCredit = tx.type === 'deposit' || tx.type === 'commission' || tx.type === 'transfer_in';
+                    const txType = tx.type as string;
+                    const isCredit = txType === 'deposit' || txType === 'commission' || txType === 'transfer_in' || txType === 'transfer_received';
                     const date = tx.createdAt
                       ? format(new Date((tx.createdAt as any)._seconds ? (tx.createdAt as any)._seconds * 1000 : tx.createdAt), 'dd MMM yyyy • HH:mm', { locale: fr })
                       : '';
-                    const label = tx.type === 'deposit' ? 'Dépôt'
-                      : tx.type === 'withdrawal' ? 'Retrait'
-                      : tx.type === 'commission' ? 'Commission'
-                      : tx.type === 'transfer_in' ? 'Transfert reçu'
-                      : tx.type === 'transfer_out' ? 'Transfert envoyé'
-                      : tx.type || 'Transaction';
+                    const label = txType === 'deposit' ? 'Dépôt'
+                      : txType === 'withdrawal' ? 'Retrait'
+                      : txType === 'commission' ? 'Commission'
+                      : txType === 'transfer_in' || txType === 'transfer_received' ? 'Transfert reçu'
+                      : txType === 'transfer_out' || txType === 'transfer_sent' ? 'Transfert envoyé'
+                      : txType || 'Transaction';
                     return (
                       <div key={tx.id} className="p-4 flex items-center gap-3">
                         <div className={`h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 ${
@@ -1712,24 +1651,44 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         )}
       </div>
 
-      {/* ── Fixed Bottom Tab Bar ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 safe-area-pb">
-        <div className="flex max-w-2xl mx-auto">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 px-1 transition-colors relative ${activeTab === tab.id ? 'text-primary' : 'text-gray-400'}`}
-            >
-              {activeTab === tab.id && (
-                <motion.div layoutId="tab-indicator"
-                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
-              )}
-              <tab.icon className="h-5 w-5" />
-              <span className="text-[9px] font-black uppercase tracking-wider">{tab.label}</span>
-              {/* no badge for historique tab */}
+      {/* ── Fixed Bottom Nav ── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="flex items-center max-w-2xl mx-auto h-16">
+          {/* Slot 1 — Accueil */}
+          <button onClick={() => setActiveTab('accueil')}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 relative transition-colors ${activeTab === 'accueil' ? 'text-primary' : 'text-gray-400'}`}>
+            {activeTab === 'accueil' && <motion.div layoutId="tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
+            <Home className="h-5 w-5" />
+            <span className="text-[9px] font-black uppercase tracking-wider">Accueil</span>
+          </button>
+          {/* Slot 2 — Filleuls */}
+          <button onClick={() => setActiveTab('filleuls')}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 relative transition-colors ${activeTab === 'filleuls' ? 'text-primary' : 'text-gray-400'}`}>
+            {activeTab === 'filleuls' && <motion.div layoutId="tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
+            <Users className="h-5 w-5" />
+            <span className="text-[9px] font-black uppercase tracking-wider">Filleuls</span>
+          </button>
+          {/* Slot 3 — Centre raised button (Retrait rapide) */}
+          <div className="flex-1 flex justify-center relative">
+            <button onClick={() => setIsWithdrawModalOpen(true)}
+              className="absolute -top-7 h-14 w-14 rounded-full bg-primary shadow-xl shadow-primary/30 flex items-center justify-center border-4 border-white active:scale-95 transition-transform">
+              <ArrowUpFromLine className="h-5 w-5 text-white" />
             </button>
-          ))}
+          </div>
+          {/* Slot 4 — Historique */}
+          <button onClick={() => setActiveTab('historique')}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 relative transition-colors ${activeTab === 'historique' ? 'text-primary' : 'text-gray-400'}`}>
+            {activeTab === 'historique' && <motion.div layoutId="tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
+            <History className="h-5 w-5" />
+            <span className="text-[9px] font-black uppercase tracking-wider">Historique</span>
+          </button>
+          {/* Slot 5 — Profil */}
+          <button onClick={() => setActiveTab('profil')}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 relative transition-colors ${activeTab === 'profil' ? 'text-primary' : 'text-gray-400'}`}>
+            {activeTab === 'profil' && <motion.div layoutId="tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
+            <User className="h-5 w-5" />
+            <span className="text-[9px] font-black uppercase tracking-wider">Profil</span>
+          </button>
         </div>
       </div>
 
