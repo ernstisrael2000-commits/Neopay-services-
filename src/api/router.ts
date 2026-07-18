@@ -2912,7 +2912,8 @@ async function triggerAffiliateCommissions(
   directAffiliateId: string,
   type: 'purchase' | 'subscription' | 'virtual_card',
   itemName?: string,
-  transactionAmountUSD?: number   // used when commissionMode === 'percentage'
+  transactionAmountUSD?: number,  // used when commissionMode === 'percentage'
+  serviceCommissionRate?: number  // % du prix défini par service dans le catalogue
 ) {
   try {
     const settingsSnap = await adminDb.collection('settings').doc('global').get();
@@ -2926,7 +2927,20 @@ async function triggerAffiliateCommissions(
     let directUSD: number, parentUSD: number, grandparentUSD: number;
     let directHTG: number, parentHTG: number, grandparentHTG: number, pointsEarned: number;
 
-    if (commissionMode === 'percentage' && transactionAmountUSD && transactionAmountUSD > 0) {
+    // ── Taux par service (prioritaire sur les taux globaux) ───────────────────
+    if (serviceCommissionRate !== undefined && serviceCommissionRate > 0 && transactionAmountUSD && transactionAmountUSD > 0) {
+      directUSD      = parseFloat((transactionAmountUSD * serviceCommissionRate / 100).toFixed(4));
+      // Le parent reçoit 25% de ce que touche le direct (configurable via commissionParentSharePct)
+      const parentSharePct = settings.commissionParentSharePct ?? 25;
+      // Le grand-parent reçoit 12% de ce que touche le direct (configurable via commissionGpSharePct)
+      const gpSharePct     = settings.commissionGpSharePct     ?? 12;
+      parentUSD      = parseFloat((directUSD * parentSharePct / 100).toFixed(4));
+      grandparentUSD = parseFloat((directUSD * gpSharePct     / 100).toFixed(4));
+      directHTG      = parseFloat((directUSD      * exchangeRate).toFixed(2));
+      parentHTG      = parseFloat((parentUSD      * exchangeRate).toFixed(2));
+      grandparentHTG = parseFloat((grandparentUSD * exchangeRate).toFixed(2));
+      pointsEarned   = type === 'virtual_card' ? 25 : (isStreaming ? 5 : type === 'subscription' ? 10 : 1);
+    } else if (commissionMode === 'percentage' && transactionAmountUSD && transactionAmountUSD > 0) {
       // ── Percentage of transaction amount ──
       let dPct: number, pPct: number, gpPct: number;
       if (type === 'virtual_card') {
@@ -3085,7 +3099,7 @@ router.post('/api/admin/affiliate/manual-commission', requireDb, async (req, res
 // ── Purchase ──────────────────────────────────────────────────────────────────
 router.post('/api/client/purchase', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientPhone, clientWalletId, amount, productName, productPrice, directSponsorId } = req.body;
+    const { clientId, clientName, clientPhone, clientWalletId, amount, productName, productPrice, directSponsorId, serviceCommissionRate } = req.body;
     if (!clientId || !clientName || !amount || !productName)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
@@ -3125,7 +3139,7 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
 
     // Auto-trigger commissions for the affiliate chain (fire-and-forget)
     if (directSponsorId) {
-      triggerAffiliateCommissions(directSponsorId, 'purchase', productName, amount).catch(() => {});
+      triggerAffiliateCommissions(directSponsorId, 'purchase', productName, amount, serviceCommissionRate ?? undefined).catch(() => {});
     }
 
     sendFcmToClient(
@@ -4170,7 +4184,13 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
 
     // Auto-commission pour le parrain du client (formation)
     if (price > 0 && clientData.directSponsorId) {
-      triggerAffiliateCommissions(clientData.directSponsorId, 'subscription', formationTitle || 'Formation', price).catch(() => {});
+      // Récupère le taux de commission défini sur la formation (si configuré)
+      const formCommissionRate = formationId
+        ? await adminDb.collection('formations').doc(formationId).get()
+            .then(s => (s.exists ? (s.data()!.commissionRate as number | undefined) : undefined))
+            .catch(() => undefined)
+        : undefined;
+      triggerAffiliateCommissions(clientData.directSponsorId, 'subscription', formationTitle || 'Formation', price, formCommissionRate).catch(() => {});
     }
 
     // Email admin + client pour achat formation

@@ -31,6 +31,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Checkbox } from '../components/ui/checkbox';
+import AdminCatalogCommissions from '../components/AdminCatalogCommissions';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
 import { 
   useAllAffiliates, 
@@ -2288,6 +2289,7 @@ function EmailLogsPanel() {
         { value: 'teachers', label: 'Professeurs', icon: LucideIcons.UserCheck, permission: 'products' },
         { value: 'teacher-withdrawals', label: 'Retraits Professeurs', icon: LucideIcons.Banknote, permission: 'settings' },
         { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
+        { value: 'commissions-catalog', label: 'Commissions & Tarifs', icon: LucideIcons.BadgePercent, permission: 'settings' },
       ]
     },
     {
@@ -8426,6 +8428,10 @@ function EmailLogsPanel() {
 
         <TabsContent value="shipping">
           <AdminShippingManager />
+        </TabsContent>
+
+        <TabsContent value="commissions-catalog" className="space-y-6">
+          <AdminCatalogCommissions />
         </TabsContent>
 
         <TabsContent value="online-services" className="space-y-6">
