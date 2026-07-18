@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Checkbox } from '../components/ui/checkbox';
 import AdminCatalogCommissions from '../components/AdminCatalogCommissions';
+import AdminContestManager from '../components/AdminContestManager';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
 import { 
   useAllAffiliates, 
@@ -2290,6 +2291,7 @@ function EmailLogsPanel() {
         { value: 'teacher-withdrawals', label: 'Retraits Professeurs', icon: LucideIcons.Banknote, permission: 'settings' },
         { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
         { value: 'commissions-catalog', label: 'Commissions & Tarifs', icon: LucideIcons.BadgePercent, permission: 'settings' },
+        { value: 'contest', label: 'Concours', icon: LucideIcons.Trophy, permission: 'settings' },
       ]
     },
     {

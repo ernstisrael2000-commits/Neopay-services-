@@ -974,6 +974,7 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
         txn.update(agentRef, {
           balance: FieldValue.increment(-usd),
           commissionBalance: FieldValue.increment(commissionAmount),
+          monthlyTransactions: FieldValue.increment(1), // compteur concours
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else {
@@ -987,6 +988,7 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
         txn.update(agentRef, {
           balance: FieldValue.increment(usd - totalFee),
           commissionBalance: FieldValue.increment(agentShareFee),
+          monthlyTransactions: FieldValue.increment(1), // compteur concours
           updatedAt: FieldValue.serverTimestamp(),
         });
         // Admin treasury gets its share of the fee

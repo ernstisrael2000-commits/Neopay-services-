@@ -605,70 +605,69 @@ export const clearMonthlyWinners = async () => {
 
 export const awardMonthlyPrizes = async () => {
   try {
-    // 1. Clear all current monthly winners first to ensure a fresh start
+    // 0. Lire la config du concours depuis settings/global
+    const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+    const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+    const metric: string  = settings.affiliateContestMetric || 'points';
+    const prize1 = settings.prize1 || { amount: 500, label: '1er Prix',  emoji: '🥇' };
+    const prize2 = settings.prize2 || { amount: 250, label: '2ème Prix', emoji: '🥈' };
+    const prize3 = settings.prize3 || { amount: 150, label: '3ème Prix', emoji: '🥉' };
+    const prizeConfigs = [prize1, prize2, prize3];
+
+    // 1. Clear all current monthly winners
     const winnersQuery = query(collection(db, 'affiliates'), where('isMonthlyWinner', '==', true));
     const winnersSnap = await getDocs(winnersQuery);
-    const clearPromises = winnersSnap.docs.map(d => updateDoc(doc(db, 'affiliates', d.id), { 
-      isMonthlyWinner: false,
-      updatedAt: serverTimestamp() 
+    const clearPromises = winnersSnap.docs.map(d => updateDoc(doc(db, 'affiliates', d.id), {
+      isMonthlyWinner: false, updatedAt: serverTimestamp()
     }));
     await Promise.all(clearPromises);
 
-    // 2. Get all affiliates to calculate new winners based on points
+    // 2. Get all affiliates, sort by chosen metric
     const snapshot = await getDocs(collection(db, 'affiliates'));
-    const affiliates = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Affiliate[];
+    const affiliates = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Affiliate[];
 
-    // 3. Filter those with points > 0 and sort descending
     const eligible = affiliates
-      .filter(a => (a.points || 0) > 0)
-      .sort((a, b) => (b.points || 0) - (a.points || 0))
+      .filter(a => ((a as any)[metric] || 0) > 0)
+      .sort((a, b) => ((b as any)[metric] || 0) - ((a as any)[metric] || 0))
       .slice(0, 3);
 
     if (eligible.length === 0) return [];
 
-    const prizes = [500, 250, 150];
-    const promises = [];
+    const promises: Promise<void>[] = [];
     const awardedWinners: Affiliate[] = [];
-
-    // 4. Award prizes and mark as winners
     const officialWinners = [];
+
+    // 3. Award prizes
     for (let i = 0; i < eligible.length; i++) {
       const affiliateRef = doc(db, 'affiliates', eligible[i].id!);
-      const prize = prizes[i];
-      
+      const pcfg = prizeConfigs[i];
+      const prizeHTG = pcfg.amount || 0;
+
       promises.push(updateDoc(affiliateRef, {
-        balance: (eligible[i].balance || 0) + prize,
+        ...(prizeHTG > 0 && { balance: (eligible[i].balance || 0) + prizeHTG }),
         isMonthlyWinner: true,
         updatedAt: serverTimestamp()
       }));
-      
-      const winnerInfo = {
+
+      officialWinners.push({
         id: eligible[i].id!,
         name: eligible[i].name,
+        score: (eligible[i] as any)[metric] || 0,
+        metric,
+        prize: prizeHTG,
+        prizeLabel: pcfg.label || '',
+        prizeEmoji: pcfg.emoji || '',
         points: eligible[i].points || 0,
-        prize: prize,
         monthlySales: eligible[i].monthlySales || 0,
-        monthlyReferredClients: eligible[i].monthlyReferredClients || 0
-      };
-      
-      officialWinners.push(winnerInfo);
-      
-      awardedWinners.push({
-        ...eligible[i],
-        balance: (eligible[i].balance || 0) + prize,
-        isMonthlyWinner: true
+        monthlyReferredClients: eligible[i].monthlyReferredClients || 0,
       });
+
+      awardedWinners.push({ ...eligible[i], isMonthlyWinner: true });
     }
 
-    // 5. Update official winners in settings
+    // 4. Persist to settings/global
     const settingsRef = doc(db, 'settings', 'global');
-    promises.push(setDoc(settingsRef, {
-      officialWinners: officialWinners,
-      updatedAt: serverTimestamp()
-    }, { merge: true }));
+    promises.push(setDoc(settingsRef, { officialWinners, updatedAt: serverTimestamp() }, { merge: true }) as any);
 
     await Promise.all(promises);
     return awardedWinners;
@@ -678,19 +677,88 @@ export const awardMonthlyPrizes = async () => {
   }
 };
 
+// ── Décerne les prix aux top 3 agents ────────────────────────────────────────
+export const awardAgentMonthlyPrizes = async () => {
+  try {
+    // 0. Config concours
+    const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+    const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+    const metric: string  = settings.agentContestMetric || 'monthlyTransactions';
+    const prize1 = settings.prize1 || { amount: 500, label: '1er Prix',  emoji: '🥇' };
+    const prize2 = settings.prize2 || { amount: 250, label: '2ème Prix', emoji: '🥈' };
+    const prize3 = settings.prize3 || { amount: 150, label: '3ème Prix', emoji: '🥉' };
+    const prizeConfigs = [prize1, prize2, prize3];
+
+    // 1. Get all agents, sort by chosen metric
+    const snapshot = await getDocs(collection(db, 'agents'));
+    const agents = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const eligible = agents
+      .filter((a: any) => (a[metric] || 0) > 0)
+      .sort((a: any, b: any) => (b[metric] || 0) - (a[metric] || 0))
+      .slice(0, 3);
+
+    if (eligible.length === 0) return [];
+
+    const promises: Promise<void>[] = [];
+    const officialAgentWinners = [];
+
+    for (let i = 0; i < eligible.length; i++) {
+      const agentRef = doc(db, 'agents', eligible[i].id!);
+      const pcfg = prizeConfigs[i];
+      const prizeHTG = pcfg.amount || 0;
+
+      if (prizeHTG > 0) {
+        promises.push(updateDoc(agentRef, {
+          commissionBalance: ((eligible[i] as any).commissionBalance || 0) + prizeHTG,
+          updatedAt: serverTimestamp()
+        }));
+      }
+
+      officialAgentWinners.push({
+        id: eligible[i].id!,
+        name: (eligible[i] as any).name || 'Agent',
+        score: (eligible[i] as any)[metric] || 0,
+        metric,
+        prize: prizeHTG,
+        prizeLabel: pcfg.label || '',
+        prizeEmoji: pcfg.emoji || '',
+      });
+    }
+
+    const settingsRef = doc(db, 'settings', 'global');
+    promises.push(setDoc(settingsRef, { officialAgentWinners, updatedAt: serverTimestamp() }, { merge: true }) as any);
+
+    await Promise.all(promises);
+    return eligible;
+  } catch (error) {
+    console.error('awardAgentMonthlyPrizes error:', error);
+    throw error;
+  }
+};
+
 export const resetMonthlyStats = async () => {
   try {
-    const snapshot = await getDocs(collection(db, 'affiliates'));
-    const promises = snapshot.docs.map(docSnap => 
+    // Réinitialiser affiliés
+    const affSnap = await getDocs(collection(db, 'affiliates'));
+    const affPromises = affSnap.docs.map(docSnap =>
       updateDoc(doc(db, 'affiliates', docSnap.id), {
         monthlyReferredClients: 0,
         monthlySales: 0,
         points: 0,
-        isMonthlyWinner: false, // Reset winner status
+        isMonthlyWinner: false,
         updatedAt: serverTimestamp()
       })
     );
-    await Promise.all(promises);
+    // Réinitialiser agents
+    const agentSnap = await getDocs(collection(db, 'agents'));
+    const agentPromises = agentSnap.docs.map(docSnap =>
+      updateDoc(doc(db, 'agents', docSnap.id), {
+        monthlyTransactions: 0,
+        updatedAt: serverTimestamp()
+      })
+    );
+    await Promise.all([...affPromises, ...agentPromises]);
   } catch (error) {
     handleFirestoreError(error, 'update', 'affiliates', auth);
   }
