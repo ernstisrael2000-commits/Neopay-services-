@@ -17,7 +17,7 @@ import { Button } from '../components/ui/button';
 import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { loginClientWithGoogle } from '../services/clientService';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -86,7 +86,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange }: FormationsViewProps) {
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
 
   // Data
   const [formations, setFormations] = useState<Formation[]>([]);

@@ -15,7 +15,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter, DialogClose,
 } from '../components/ui/dialog';
-import { useProducts, useGames, useCardTopups, useSettings } from '../services/parcelService';
+import { useProducts, useGames, useCardTopups } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -89,7 +90,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   const exchangeRate = settings?.exchangeRate || 146;
 
   const { client: liveClient } = useClientData(loggedClient?.id || null);
@@ -277,6 +278,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                           <img
                             src={card.image}
                             alt={card.name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/card/400/300'; }}
                           />
@@ -337,6 +340,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                         <img
                           src={game.image}
                           alt={game.name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400'; }}
                         />
@@ -405,6 +410,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                         <img
                           src={product.image}
                           alt={product.name}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/300'; }}
                         />
@@ -448,6 +455,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                 <img
                   src={selectedGame.image}
                   alt={selectedGame.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover opacity-80"
                   onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/600/300'; }}
                 />
@@ -933,6 +942,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                 <img
                   src={selectedProduct.image}
                   alt={selectedProduct.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />

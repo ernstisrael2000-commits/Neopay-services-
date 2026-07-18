@@ -112,11 +112,13 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               className="flex items-center gap-2 cursor-pointer shrink-0"
               onClick={() => handleNav('home')}
             >
+              {/* Fixed width prevents CLS when logo URL loads asynchronously */}
               {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="Rena Logo" className="h-7 w-auto object-contain"
+                <img src={settings.logoUrl} alt="Rena Logo" width={28} height={28}
+                  className="h-7 w-7 object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <RenaLogo size={32} />
+                <RenaLogo size={28} />
               )}
               <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Rena</span>
             </div>

@@ -59,7 +59,7 @@ export const useAllAgents = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'agents'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'agents'), orderBy('createdAt', 'desc'), limit(200));
     const unsubscribe = onSnapshot(q, (snapshot: any) => {
       const data = snapshot.docs.map((doc: any) => ({
         id: doc.id,

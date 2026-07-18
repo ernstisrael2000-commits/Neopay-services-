@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Teacher, TeacherTransaction, Formation, FormationModule, FormationChapter } from '../types';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -66,7 +66,7 @@ function fmtDate(ts: any) {
 }
 
 export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboardProps) {
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   const rate = settings?.exchangeRate ?? 146;
   const { notifications: notifs, unreadCount: notifCount, loading: notifsLoading, markRead, markAllRead, clearAll } = useRealtimeNotifs('teacher', teacher.id || null);
   useUniversalFCM('teacher', teacher.id || null);

@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { useSettings, updateSettings } from '../services/parcelService';
+import { updateSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useAllClientTransactions, useAllClients } from '../services/clientService';
 import { PaymentMethod, PaymentMethodType, DEFAULT_PAYMENT_METHODS, ClientTransaction } from '../types';
 import { motion } from 'motion/react';
@@ -182,7 +183,7 @@ function MethodDialog({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminWalletManager() {
-  const { settings, loading: settingsLoading } = useSettings();
+  const { settings, loading: settingsLoading } = useSettingsCtx();
   const { transactions, loading: txLoading } = useAllClientTransactions();
   const { clients } = useAllClients();
 

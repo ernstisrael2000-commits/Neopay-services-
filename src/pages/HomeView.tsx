@@ -10,10 +10,12 @@ import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Button } from '../components/ui/button';
 import { useState, useEffect } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import {
-  useSliderImages, useNavButtons, useSettings,
+  useSliderImages, useNavButtons,
   useProducts, useGames, useCardTopups,
 } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData, useClientTransactions, submitClientPurchase } from '../services/clientService';
 import { toast } from 'sonner';
 import { Client } from '../types';
@@ -68,7 +70,7 @@ const SECTION_CARDS = [
 export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: HomeViewProps) {
   const { sliderImages } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
 
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -90,6 +92,8 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // Debounce filtering so heavy .filter() only runs 250ms after the user stops typing
+  const debouncedSearch = useDebounce(searchQuery, 250);
   const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; image: string; price?: string; type: string; description?: string } | null>(null);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
@@ -278,11 +282,11 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black text-dark">
-            {searchQuery.trim() ? `Résultats (${
-              [...products, ...games, ...cards].filter(i => i.name.toLowerCase().includes(searchQuery.trim().toLowerCase())).length
+            {debouncedSearch.trim() ? `Résultats (${
+              [...products, ...games, ...cards].filter(i => i.name.toLowerCase().includes(debouncedSearch.trim().toLowerCase())).length
             })` : 'Nos Produits'}
           </h2>
-          {!searchQuery.trim() && (
+          {!debouncedSearch.trim() && (
             <button
               onClick={() => onViewChange('products')}
               className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
@@ -299,7 +303,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           </div>
         ) : (
           (() => {
-            const q = searchQuery.trim().toLowerCase();
+            const q = debouncedSearch.trim().toLowerCase();
             const allItems = [
               ...products.map(p => ({ id: p.id!, name: p.name, image: p.image, price: p.price, type: 'product', description: p.description })),
               ...games.map(g => ({ id: g.id!, name: g.name, image: g.image, price: (g as any).priceRange || (g as any).price || '', type: 'game', description: (g as any).description || '' })),
@@ -336,6 +340,8 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       <img
                         src={item.image}
                         alt={item.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/200/150'; }}
                       />
@@ -436,6 +442,8 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                 <img
                   src={selectedItem.image}
                   alt={selectedItem.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                   onError={e => { (e.target as HTMLImageElement).src = '/icon.svg'; }}
                 />

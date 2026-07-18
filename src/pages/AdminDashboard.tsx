@@ -33,7 +33,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Checkbox } from '../components/ui/checkbox';
 import AdminCatalogCommissions from '../components/AdminCatalogCommissions';
 import AdminContestManager from '../components/AdminContestManager';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { 
   useAllAffiliates, 
   useAllWithdrawals, 
@@ -1139,7 +1140,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { services: onlineServices, loading: onlineServicesLoading } = useOnlineServices();
-  const { settings, loading: settingsLoading } = useSettings();
+  const { settings, loading: settingsLoading } = useSettingsCtx();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
   const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();

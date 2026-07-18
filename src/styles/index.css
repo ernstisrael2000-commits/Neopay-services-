@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap');
+/* Google Fonts moved to <link> in index.html to avoid render-blocking @import */
 @import "tailwindcss";
 
 @theme {
@@ -56,7 +56,8 @@
 
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+/* @fontsource-variable/geist supprimé — non utilisé (aucun --font-* ne le référence),
+   causait un layout shift inutile lors du swap de police. */
 
 @custom-variant dark (&:is(.dark *));
 

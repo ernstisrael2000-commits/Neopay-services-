@@ -101,7 +101,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { apiFetch } from '../lib/apiFetch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 
 type Tab = 'accueil' | 'filleuls' | 'historique' | 'profil';
 
@@ -117,7 +117,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { notifications, unreadCount, loading: notificationsLoading, markRead, markAllRead, clearAll } = useRealtimeNotifs('affiliate', affiliateId);
   const { transactions, loading: transactionsLoading } = useWalletTransactions(affiliateId);
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   useUniversalFCM('affiliate', affiliateId);
 
   // Tab navigation

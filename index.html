@@ -48,6 +48,22 @@
     <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
     <link rel="dns-prefetch" href="https://storage.googleapis.com" />
 
+    <!--
+      Fonts — loaded as <link> (non-blocking) instead of CSS @import (render-blocking).
+      Preconnect to both fonts.googleapis.com and fonts.gstatic.com to remove
+      the round-trip DNS lookup latency before the font files start downloading.
+      display=swap prevents FOIT; the font-face fallback reduces CLS on swap.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+
+    <!-- LCP hint: preconnect to image CDN used by the hero slider -->
+    <link rel="preconnect" href="https://images.unsplash.com" />
+    <link rel="dns-prefetch" href="https://images.unsplash.com" />
+
     <!-- Structured Data — Organization -->
     <script type="application/ld+json">
     {

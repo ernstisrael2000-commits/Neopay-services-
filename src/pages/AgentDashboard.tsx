@@ -33,7 +33,7 @@ import { fr } from 'date-fns/locale';
 import { useAuth } from '../hooks/useAuth';
 import { motion, AnimatePresence } from 'motion/react';
 import { apiFetch } from '../lib/apiFetch';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import ErnstChat from '../components/ErnstChat';
 
 interface AgentDashboardProps {
@@ -119,7 +119,7 @@ function fmtDate(ts: any, fmt = 'dd MMM yyyy HH:mm') {
 export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardProps) {
   const { agent, loading: agentLoading } = useAgentDataByUid(agentUid);
   const { transactions: agentHistory, loading: historyLoading } = useAgentWithdrawals(agent?.id || null);
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   const { notifications: notifs, unreadCount: notifCount, loading: notifsLoading, markRead, markAllRead, clearAll } = useRealtimeNotifs('agent', agent?.id || null);
   useUniversalFCM('agent', agent?.id || null);
 

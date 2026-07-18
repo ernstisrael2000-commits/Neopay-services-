@@ -5,7 +5,8 @@ import {
   Globe, Package, Truck, ArrowRight, ExternalLink,
   Zap, ShieldCheck, Clock, Phone, MessageCircle,
 } from 'lucide-react';
-import { useOnlineServices, useSettings } from '../services/parcelService';
+import { useOnlineServices } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 
 interface ServicesViewProps {
   onTrackingClick: () => void;
@@ -48,7 +49,7 @@ const SERVICE_COLORS = [
 
 export default function ServicesView({ onTrackingClick, onViewChange }: ServicesViewProps) {
   const { services: rawServices } = useOnlineServices();
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
 
   const activeServices = rawServices.filter(s => s.active);
   const displayServices = activeServices.length > 0 ? activeServices : DEFAULT_SERVICES;

@@ -23,7 +23,7 @@ import {
   submitClientDeposit, submitClientWithdrawal, submitClientTransfer,
 } from '../services/clientService';
 import { apiFetch } from '../lib/apiFetch';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { Client, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 
 interface ClientDashboardProps {
@@ -172,7 +172,7 @@ function VirtualCard({
 export default function ClientDashboard({ clientId, onLogout, open, onClose }: ClientDashboardProps) {
   const { client, loading } = useClientData(clientId);
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
 
   const rate    = settings?.exchangeRate || 135;
   const balance = client?.balance || 0;
