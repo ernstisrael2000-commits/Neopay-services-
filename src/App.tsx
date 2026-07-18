@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import Navbar from './layouts/Navbar';
 import BottomNav from './layouts/BottomNav';
 import FormationsNavbar from './layouts/FormationsNavbar';
@@ -41,6 +41,8 @@ import { toast } from 'sonner';
 export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
+  // Direction for page slide: 1 = left (new page comes from right), -1 = right (back)
+  const navDirection = useRef<1 | -1>(1);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'agent' | 'admin' | null>(null);
   const { loading } = useAuth();
@@ -122,8 +124,14 @@ export default function App() {
     return () => clearTimeout(t);
   }, []);
   
+  // Ordered nav slots — used to compute slide direction
+  const NAV_ORDER = ['home', 'products', 'services', 'formations', 'tracking', 'shipping'];
+
   const handleViewChange = (newView: typeof view) => {
     if (newView === view) return;
+    const fromIdx = NAV_ORDER.indexOf(view);
+    const toIdx   = NAV_ORDER.indexOf(newView);
+    navDirection.current = (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) ? -1 : 1;
     setHistory(prev => [...prev, newView]);
     setView(newView);
     setAccessChoice(null);
@@ -131,6 +139,7 @@ export default function App() {
 
   const handleBack = () => {
     setAccessChoice(null);
+    navDirection.current = -1;
     if (history.length > 1) {
       const newHistory = [...history];
       newHistory.pop();
@@ -342,110 +351,119 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'} flex-grow relative ${!['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[74px]' : ''}`}>
-        <Suspense fallback={<div className="flex items-center justify-center min-h-[40vh]"><div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
-          {['tracking', 'shipping'].includes(view) && (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleBack}
-                className="group flex items-center gap-1.5 text-subtext hover:text-primary hover:bg-accent-light/50 rounded-lg transition-all pl-2 pr-3"
+        <main
+          className={`${
+            view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
+          } flex-grow relative ${
+            !['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[74px]' : ''
+          }`}
+          style={{ overflowX: 'hidden' }}
+        >
+          <Suspense fallback={<div className="flex items-center justify-center min-h-[40vh]"><div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+            <AnimatePresence mode="popLayout" initial={false} custom={navDirection.current}>
+              <motion.div
+                key={view}
+                custom={navDirection.current}
+                variants={{
+                  initial:  (dir: number) => ({ opacity: 0, x: dir * 24, willChange: 'transform, opacity' }),
+                  animate:  { opacity: 1, x: 0,      willChange: 'transform, opacity' },
+                  exit:     (dir: number) => ({ opacity: 0, x: dir * -18, willChange: 'transform, opacity' }),
+                }}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ type: 'spring', stiffness: 310, damping: 32, mass: 0.9 }}
+                className="min-h-full"
               >
-                <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                <span className="text-xs font-semibold uppercase tracking-wider">Retour</span>
-              </Button>
-            </div>
-          )}
-          
-          {view === 'home' && (
-            <HomeView 
-              onTrackingClick={() => handleViewChange('tracking')} 
-              onViewChange={handleViewChange}
-              loggedClient={loggedClient}
-              onOpenWallet={() => setShowClientDashboard(true)}
-              onRequestAuth={() => setShowAuthModal(true)}
-            />
-          )}
+                {['tracking', 'shipping'].includes(view) && (
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleBack}
+                      className="group flex items-center gap-1.5 text-subtext hover:text-primary hover:bg-accent-light/50 rounded-lg transition-all pl-2 pr-3"
+                    >
+                      <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+                      <span className="text-xs font-semibold uppercase tracking-wider">Retour</span>
+                    </Button>
+                  </div>
+                )}
 
-          {view === 'products' && (
-            <ProductsView
-              loggedClient={loggedClient}
-              onOpenWallet={() => setShowClientDashboard(true)}
-              onViewChange={handleViewChange}
-              onProductDetailChange={setIsProductDetailOpen}
-            />
-          )}
+                {view === 'home' && (
+                  <HomeView
+                    onTrackingClick={() => handleViewChange('tracking')}
+                    onViewChange={handleViewChange}
+                    loggedClient={loggedClient}
+                    onOpenWallet={() => setShowClientDashboard(true)}
+                    onRequestAuth={() => setShowAuthModal(true)}
+                  />
+                )}
 
-          {view === 'services' && (
-            <ServicesView
-              onTrackingClick={() => handleViewChange('tracking')}
-              onViewChange={handleViewChange}
-            />
-          )}
-          
-          {view === 'tracking' && (
-            <TrackingView />
-          )}
+                {view === 'products' && (
+                  <ProductsView
+                    loggedClient={loggedClient}
+                    onOpenWallet={() => setShowClientDashboard(true)}
+                    onViewChange={handleViewChange}
+                    onProductDetailChange={setIsProductDetailOpen}
+                  />
+                )}
 
-          {view === 'shipping' && (
-            <ShippingView />
-          )}
+                {view === 'services' && (
+                  <ServicesView
+                    onTrackingClick={() => handleViewChange('tracking')}
+                    onViewChange={handleViewChange}
+                  />
+                )}
 
-          {view === 'formations' && (
-            <FormationsView
-              loggedClient={loggedClient}
-              onOpenWallet={() => setShowClientDashboard(true)}
-              onClientLogin={handleClientLogin}
-              activeTab={formationsTab}
-              onTabChange={setFormationsTab}
-              searchQuery={formationsSearch}
-              onSearchChange={setFormationsSearch}
-              onPlayerChange={setFormationsInPlayer}
-            />
-          )}
+                {view === 'tracking' && <TrackingView />}
 
-          {view === 'admin' && (
-            loggedAdmin ? (
-              <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-            ) : (
-              <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('home')} />
-            )
-          )}
+                {view === 'shipping' && <ShippingView />}
 
-          {view === 'teacher' && (
-            loggedTeacher ? (
-              <TeacherDashboard teacher={loggedTeacher} onLogout={handleTeacherLogout} />
-            ) : (
-              <TeacherLogin onLoginSuccess={handleTeacherLogin} onBack={() => handleViewChange('home')} />
-            )
-          )}
+                {view === 'formations' && (
+                  <FormationsView
+                    loggedClient={loggedClient}
+                    onOpenWallet={() => setShowClientDashboard(true)}
+                    onClientLogin={handleClientLogin}
+                    activeTab={formationsTab}
+                    onTabChange={setFormationsTab}
+                    searchQuery={formationsSearch}
+                    onSearchChange={setFormationsSearch}
+                    onPlayerChange={setFormationsInPlayer}
+                  />
+                )}
 
-          {view === 'affiliate' && (
-            loggedAffiliate ? (
-              <AffiliateDashboard 
-                affiliateId={loggedAffiliate.id!} 
-                onLogout={handleAffiliateLogout} 
-              />
-            ) : loggedAgent ? (
-              <AgentDashboard
-                agentUid={loggedAgent.uid!}
-                onLogout={handleAgentLogout}
-              />
-            ) : loggedAdmin ? (
-              <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-            ) : accessChoice === 'affiliate' ? (
-              <AffiliateLogin onLogin={handleAffiliateLogin} />
-            ) : accessChoice === 'agent' ? (
-              <AgentLogin onLogin={handleAgentLogin} />
-            ) : accessChoice === 'admin' ? (
-              <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
-            ) : (
-              <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
-            )
-          )}
+                {view === 'admin' && (
+                  loggedAdmin
+                    ? <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+                    : <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('home')} />
+                )}
 
-        </Suspense>
+                {view === 'teacher' && (
+                  loggedTeacher
+                    ? <TeacherDashboard teacher={loggedTeacher} onLogout={handleTeacherLogout} />
+                    : <TeacherLogin onLoginSuccess={handleTeacherLogin} onBack={() => handleViewChange('home')} />
+                )}
+
+                {view === 'affiliate' && (
+                  loggedAffiliate ? (
+                    <AffiliateDashboard affiliateId={loggedAffiliate.id!} onLogout={handleAffiliateLogout} />
+                  ) : loggedAgent ? (
+                    <AgentDashboard agentUid={loggedAgent.uid!} onLogout={handleAgentLogout} />
+                  ) : loggedAdmin ? (
+                    <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+                  ) : accessChoice === 'affiliate' ? (
+                    <AffiliateLogin onLogin={handleAffiliateLogin} />
+                  ) : accessChoice === 'agent' ? (
+                    <AgentLogin onLogin={handleAgentLogin} />
+                  ) : accessChoice === 'admin' ? (
+                    <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
+                  ) : (
+                    <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
+                  )
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </Suspense>
         </main>
 
         {!['admin', 'affiliate', 'teacher', 'formations'].includes(view) && (
