@@ -355,7 +355,7 @@ export default function App() {
           className={`${
             view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
           } flex-grow relative ${
-            !['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[74px]' : ''
+            !['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[64px]' : ''
           }`}
           style={{ overflowX: 'hidden' }}
         >
