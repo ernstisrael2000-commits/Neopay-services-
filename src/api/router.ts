@@ -6367,51 +6367,6 @@ router.post('/api/admin/test-email', async (req, res) => {
   return res.status(500).json({ ok: false, error: result.error });
 });
 
-// ── WhatsApp Bot (Twilio webhook) ─────────────────────────────────────────────
-router.post(
-  '/webhook/whatsapp',
-  express.urlencoded({ extended: false }),
-  async (req, res) => {
-    try {
-      const authToken = process.env.TWILIO_AUTH_TOKEN;
-      const signature = req.headers['x-twilio-signature'] as string | undefined;
-
-      // Valider la signature Twilio en production
-      if (authToken && signature) {
-        const { validateTwilioSignature } = await import('./whatsapp/bot.ts');
-        const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-        const isValid = validateTwilioSignature(authToken, signature, url, req.body);
-        if (!isValid) {
-          console.warn('[WhatsApp] ⚠️  Signature Twilio invalide — requête ignorée');
-          res.status(403).send('Forbidden');
-          return;
-        }
-      }
-
-      const from: string = req.body.From || '';
-      const body: string = req.body.Body || '';
-
-      if (!from || !body) {
-        res.status(400).send('Missing From or Body');
-        return;
-      }
-
-      console.log(`[WhatsApp] ← Message de ${from}: ${body.slice(0, 100)}`);
-
-      const { handleWhatsAppMessage, twimlResponse } = await import('./whatsapp/bot.ts');
-      const reply = await handleWhatsAppMessage(from, body);
-
-      res.setHeader('Content-Type', 'text/xml');
-      res.send(twimlResponse(reply));
-    } catch (e: any) {
-      console.error('[WhatsApp] Erreur webhook:', e.message);
-      // Toujours répondre avec un TwiML valide pour éviter les retries Twilio
-      res.setHeader('Content-Type', 'text/xml');
-      res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Message>Une erreur est survenue. Veuillez réessayer.</Message></Response>');
-    }
-  },
-);
-
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });
