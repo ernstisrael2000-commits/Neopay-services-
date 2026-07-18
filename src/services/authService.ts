@@ -59,15 +59,19 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
         return { user, type: 'none', error: "Aucun compte agent trouvé avec cet email." };
       }
 
-      const updates: any = {
-        uid: user.uid,
-        email: email,
-        updatedAt: serverTimestamp()
-      };
-      
-      await updateDoc(doc(db, 'agents', agent.id!), updates);
-      
-      return { user, agent: { ...agent, ...updates }, type: 'agent' };
+      // Use backend endpoint (Admin SDK) to write uid/email — client-side
+      // Firestore rules don't allow agents to write these fields themselves.
+      const linkRes = await fetch('/api/agent/link-uid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: agent.id, uid: user.uid, email }),
+      });
+      if (!linkRes.ok) {
+        const err = await linkRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Impossible de lier le compte Google.');
+      }
+
+      return { user, agent: { ...agent, uid: user.uid, email }, type: 'agent' };
     }
   } catch (error: any) {
     const mapped = mapGoogleAuthError(error);

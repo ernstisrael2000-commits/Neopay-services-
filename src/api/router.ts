@@ -1117,6 +1117,41 @@ router.get('/api/agent/lookup', requireDb, async (req, res) => {
   }
 });
 
+// ── Agent: link Google UID to agent document (bypasses client Firestore rules) ──────
+// Called by authService.ts immediately after a successful Google sign-in.
+// Security: verifies that the stored email on the agent doc matches the one
+// claimed by the caller before writing the uid field.
+router.post('/api/agent/link-uid', requireDb, async (req, res) => {
+  try {
+    const { agentId, uid, email } = req.body as { agentId?: string; uid?: string; email?: string };
+    if (!agentId || !uid || !email) {
+      return res.status(400).json({ error: 'agentId, uid et email sont requis.' });
+    }
+
+    const agentRef = adminDb.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) {
+      return res.status(404).json({ error: 'Agent introuvable.' });
+    }
+
+    const storedEmail: string | undefined = agentSnap.data()?.email;
+    if (!storedEmail || storedEmail.toLowerCase() !== email.toLowerCase()) {
+      return res.status(403).json({ error: "L'email ne correspond pas au compte agent." });
+    }
+
+    await agentRef.update({
+      uid,
+      email,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return res.json({ ok: true });
+  } catch (e: any) {
+    console.error('[Agent link-uid]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Client: submit agent/affiliate withdrawal request (pending, no immediate debit) ──
 router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
   try {
