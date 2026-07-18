@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, animate, MotionConfig } from 'motion/react';
 import { Client } from '../types';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 
 /* ─── Props ──────────────────────────────────────────────────── */
 export interface BottomNavProps {
@@ -43,7 +43,7 @@ export default function BottomNav({
   onOpenWallet,
   onRequestAuth,
 }: BottomNavProps) {
-  const { settings }  = useSettings();
+  const { settings } = useSettingsCtx();
   const rate          = settings?.exchangeRate ?? 146;
   const balanceHTG    = loggedClient ? Math.round((loggedClient.balance ?? 0) * rate) : 0;
   const balanceLabel  =

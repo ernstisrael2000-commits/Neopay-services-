@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import { usePendingCounts } from '../services/affiliateService';
 import { usePendingClientCount, useClientNotifications, markClientNotificationRead, markAllClientNotificationsRead, clearAllClientNotifications } from '../services/clientService';
 import React, { useState, useEffect, useRef } from 'react';
@@ -35,7 +35,7 @@ const NAV_ITEMS = [
 
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, onTeacherAccess, formationsTab, onFormationsTabChange }: NavbarProps) {
   const { user, isAdmin } = useAuth();
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   const { total: pendingAffiliateCount } = usePendingCounts(isAdmin);
   const pendingClientCount = usePendingClientCount();
   const pendingCount = isAdmin ? pendingAffiliateCount + pendingClientCount : 0;

@@ -3,6 +3,7 @@ import Navbar from './layouts/Navbar';
 import BottomNav from './layouts/BottomNav';
 import FormationsNavbar from './layouts/FormationsNavbar';
 import LoadingScreen from './components/LoadingScreen';
+import { SettingsProvider, useSettingsCtx } from './contexts/SettingsContext';
 
 // Heavy pages — loaded only when the user navigates to them
 const HomeView = lazy(() => import('./pages/HomeView'));
@@ -27,7 +28,6 @@ import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import UserAuthModal from './components/UserAuthModal';
 import { useAuth } from './hooks/useAuth';
-import { useSettings } from './services/parcelService';
 import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
@@ -38,7 +38,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
-export default function App() {
+function AppInner() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
   // Direction for page slide: 1 = left (new page comes from right), -1 = right (back)
@@ -46,7 +46,7 @@ export default function App() {
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'agent' | 'admin' | null>(null);
   const { loading } = useAuth();
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [showClientDashboard, setShowClientDashboard] = useState(false);
@@ -531,5 +531,13 @@ export default function App() {
         <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
       </div>
     </ErrorBoundary>
+  );
+}
+
+export default function App() {
+  return (
+    <SettingsProvider>
+      <AppInner />
+    </SettingsProvider>
   );
 }

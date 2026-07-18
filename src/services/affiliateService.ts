@@ -454,35 +454,28 @@ export const usePendingCounts = (enabled: boolean = false) => {
       return;
     }
 
-    const qReg = query(collection(db, 'affiliate_requests'), where('status', '==', 'pending'));
-    const qWith = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
-    const qDep = query(collection(db, 'wallet_transactions'), where('type', '==', 'deposit'), where('status', '==', 'pending'));
-
-    const unsubReg = onSnapshot(qReg, (snapReg) => {
-      const regCount = snapReg.size;
-      const unsubWith = onSnapshot(qWith, (snapWith) => {
-        const withCount = snapWith.size;
-        const unsubDep = onSnapshot(qDep, (snapDep) => {
-          const depCount = snapDep.size;
-          setCounts({
-            registrations: regCount,
-            withdrawals: withCount,
-            deposits: depCount,
-            total: regCount + withCount + depCount
-          });
-        }, (error) => {
-          console.error("Error fetching pending deposits:", error);
-        });
-        return () => unsubDep();
-      }, (error) => {
-        console.error("Error fetching pending withdrawals:", error);
-      });
-      return () => unsubWith();
-    }, (error) => {
-      console.error("Error fetching pending registrations:", error);
+    // ── OPTIMISÉ : 3 listeners PLATS au lieu de 3 niveaux imbriqués ──────────
+    // Avant : les listeners internes n'étaient jamais nettoyés (fuite mémoire).
+    // Après : ref partagé, tous les unsubs trackés et nettoyés ensemble.
+    const latest = { reg: 0, with: 0, dep: 0 };
+    const update = () => setCounts({
+      registrations: latest.reg,
+      withdrawals:   latest.with,
+      deposits:      latest.dep,
+      total:         latest.reg + latest.with + latest.dep,
     });
 
-    return () => unsubReg();
+    const qReg  = query(collection(db, 'affiliate_requests'),  where('status', '==', 'pending'));
+    const qWith = query(collection(db, 'withdrawals'),          where('status', '==', 'pending'));
+    const qDep  = query(collection(db, 'wallet_transactions'),  where('type', '==', 'deposit'), where('status', '==', 'pending'));
+
+    const unsubs = [
+      onSnapshot(qReg,  snap => { latest.reg  = snap.size; update(); }, err => console.error('[Counts] reg:',  err)),
+      onSnapshot(qWith, snap => { latest.with = snap.size; update(); }, err => console.error('[Counts] with:', err)),
+      onSnapshot(qDep,  snap => { latest.dep  = snap.size; update(); }, err => console.error('[Counts] dep:',  err)),
+    ];
+
+    return () => unsubs.forEach(u => u());
   }, [enabled]);
 
   return counts;

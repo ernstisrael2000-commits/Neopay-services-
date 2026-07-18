@@ -4,7 +4,7 @@ import {
   Wallet, Menu, Grid3X3, Heart, Award, X
 } from 'lucide-react';
 import { Client } from '../types';
-import { useSettings } from '../services/parcelService';
+import { useSettingsCtx } from '../contexts/SettingsContext';
 import RenaLogo from '../components/RenaLogo';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -23,7 +23,7 @@ export default function FormationsNavbar({
   onGoHome, loggedClient, onOpenWallet, onRequestAuth,
   activeTab, onTabChange, searchQuery, onSearch,
 }: FormationsNavbarProps) {
-  const { settings } = useSettings();
+  const { settings } = useSettingsCtx();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
