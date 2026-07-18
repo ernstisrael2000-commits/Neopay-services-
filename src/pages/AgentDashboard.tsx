@@ -468,8 +468,11 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode, codeData: JSON.stringify(scannedTxCode) }),
       });
-      const htg = Math.round(scannedTxCode.a * rate);
-      setAgentSuccessModal({ type: scannedTxCode.ty, clientName: scannedTxCode.cn, htg, usd: scannedTxCode.a });
+      const isWd = scannedTxCode.ty === 'withdrawal';
+      const wdPct = isWd ? (settings?.agentWithdrawPercent ?? 0) : 0;
+      const netUsd = isWd ? scannedTxCode.a * (1 - wdPct / 100) : scannedTxCode.a;
+      const htg = Math.round(netUsd * rate);
+      setAgentSuccessModal({ type: scannedTxCode.ty, clientName: scannedTxCode.cn, htg, usd: netUsd });
       setScannedTxCode(null);
       await loadStats();
     } catch (e: any) { toast.error(e.message || 'Erreur lors du traitement du code QR.'); }
@@ -1070,12 +1073,73 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
                 {/* Details */}
                 <div className="bg-white px-6 py-4 space-y-3">
+                  {/* Fee breakdown */}
+                  {(() => {
+                    const usd = scannedTxCode.a;
+                    const isDeposit = scannedTxCode.ty === 'deposit';
+                    const depPct   = settings?.agentDepositCommissionPercent ?? 0;
+                    const wdPct    = settings?.agentWithdrawPercent ?? 0;
+                    const agentPct = settings?.agentWithdrawAgentSharePercent ?? 100;
+                    if (isDeposit) {
+                      const commission = usd > 0 ? parseFloat((usd * depPct / 100).toFixed(4)) : 0;
+                      return (
+                        <div className="rounded-2xl border border-gray-100 overflow-hidden text-xs">
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                            <span className="text-gray-500 font-medium">Crédité au client</span>
+                            <span className="font-black text-gray-800">{Math.round(usd * rate).toLocaleString('fr-FR')} HTG</span>
+                          </div>
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                            <span className="text-gray-500 font-medium">Débité de votre solde</span>
+                            <span className="font-black text-red-500">−${usd.toFixed(2)} USD</span>
+                          </div>
+                          {commission > 0 && (
+                            <div className="flex justify-between items-center px-3.5 py-2 bg-emerald-50">
+                              <span className="font-black text-emerald-800 uppercase tracking-wide">Votre commission ({depPct}%)</span>
+                              <span className="font-black text-emerald-700">+${commission.toFixed(2)} USD</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else {
+                      if (wdPct <= 0) return null;
+                      const fee       = parseFloat((usd * wdPct / 100).toFixed(4));
+                      const agentShare = parseFloat((fee * agentPct / 100).toFixed(4));
+                      const netUsd    = parseFloat((usd - fee).toFixed(4));
+                      const netHtg    = Math.round(netUsd * rate);
+                      return (
+                        <div className="rounded-2xl border border-gray-100 overflow-hidden text-xs">
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                            <span className="text-gray-500 font-medium">Débité du client</span>
+                            <span className="font-black text-gray-800">${usd.toFixed(2)} USD</span>
+                          </div>
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                            <span className="text-red-500 font-medium">Frais ({wdPct}%)</span>
+                            <span className="font-black text-red-500">−${fee.toFixed(2)} USD</span>
+                          </div>
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-rose-50 border-b border-rose-100">
+                            <span className="font-black text-rose-800 uppercase tracking-wide">À remettre au client</span>
+                            <span className="font-black text-rose-700">{netHtg.toLocaleString('fr-FR')} HTG ≈ ${netUsd.toFixed(2)}</span>
+                          </div>
+                          {agentShare > 0 && (
+                            <div className="flex justify-between items-center px-3.5 py-2 bg-emerald-50">
+                              <span className="font-black text-emerald-800 uppercase tracking-wide">Votre commission</span>
+                              <span className="font-black text-emerald-700">+${agentShare.toFixed(2)} USD</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                  })()}
                   <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-2xl p-3">
                     <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-700 leading-relaxed">
                       {scannedTxCode.ty === 'deposit'
                         ? `Le client vous a remis ${Math.round(scannedTxCode.a * rate).toLocaleString('fr-FR')} HTG en espèces. Confirmez pour créditer son compte.`
-                        : `Remettez ${Math.round(scannedTxCode.a * rate).toLocaleString('fr-FR')} HTG en espèces au client après confirmation.`
+                        : (() => {
+                            const wdPct = settings?.agentWithdrawPercent ?? 0;
+                            const net   = scannedTxCode.a * (1 - wdPct / 100);
+                            return `Remettez ${Math.round(net * rate).toLocaleString('fr-FR')} HTG en espèces au client (montant après frais).`;
+                          })()
                       }
                     </p>
                   </div>

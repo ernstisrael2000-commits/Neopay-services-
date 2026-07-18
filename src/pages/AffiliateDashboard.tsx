@@ -1508,9 +1508,16 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   {transactions.map((tx: WalletTransaction) => {
                     const txType = tx.type as string;
                     const isCredit = txType === 'deposit' || txType === 'commission' || txType === 'transfer_in' || txType === 'transfer_received';
-                    const date = tx.createdAt
-                      ? format(new Date((tx.createdAt as any)._seconds ? (tx.createdAt as any)._seconds * 1000 : tx.createdAt), 'dd MMM yyyy • HH:mm', { locale: fr })
-                      : '';
+                    const date = (() => {
+                      if (!tx.createdAt) return '';
+                      const ts = tx.createdAt as any;
+                      let d: Date;
+                      if (ts.toDate) d = ts.toDate();
+                      else if (ts._seconds) d = new Date(ts._seconds * 1000);
+                      else if (ts.seconds) d = new Date(ts.seconds * 1000);
+                      else d = new Date(ts);
+                      try { return format(d, 'dd MMM yyyy • HH:mm', { locale: fr }); } catch { return ''; }
+                    })();
                     const label = txType === 'deposit' ? 'Dépôt'
                       : txType === 'withdrawal' ? 'Retrait'
                       : txType === 'commission' ? 'Commission'
