@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   useAgentDataByUid,
@@ -1384,57 +1385,60 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
       </main>
 
-      {/* ── Bottom Navigation ── */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 pb-safe">
-        <nav className="flex justify-between items-center px-6 py-4">
-          {/* Accueil */}
-          <button
-            onClick={() => setActiveSection('overview')}
-            className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'overview' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
-          >
-            <LayoutGrid className="h-6 w-6" />
-            <span className="text-[10px] font-bold uppercase tracking-tight">Accueil</span>
-          </button>
-          {/* Activités */}
-          <button
-            onClick={() => { setActiveSection('requests'); loadWithdrawRequests(); loadClientDepositReqs(); }}
-            className={`flex flex-col items-center gap-1 relative transition-colors ${activeSection === 'clients' || activeSection === 'requests' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
-          >
-            <ListOrdered className="h-6 w-6" />
-            <span className="text-[10px] font-bold uppercase tracking-tight">Activités</span>
-            {totalPendingCount > 0 && (
-              <span className="absolute -top-1 -right-2 bg-amber-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
-                {totalPendingCount}
-              </span>
-            )}
-          </button>
-          {/* Center Scan button */}
-          <div className="-mt-12">
+      {/* ── Bottom Navigation — portaled to body to escape motion.div containing block ── */}
+      {createPortal(
+        <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 pb-safe">
+          <nav className="flex justify-between items-center px-6 py-4">
+            {/* Accueil */}
             <button
-              onClick={() => { setScannerError(null); setScannerOpen(true); }}
-              className="w-14 h-14 bg-[#0A3D91] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/40 ring-4 ring-white active:scale-90 transition-transform"
+              onClick={() => setActiveSection('overview')}
+              className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'overview' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
             >
-              <Scan className="h-7 w-7" />
+              <LayoutGrid className="h-6 w-6" />
+              <span className="text-[10px] font-bold uppercase tracking-tight">Accueil</span>
             </button>
-          </div>
-          {/* Portefeuille */}
-          <button
-            onClick={() => setActiveSection('finances')}
-            className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'finances' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
-          >
-            <Banknote className="h-6 w-6" />
-            <span className="text-[10px] font-bold uppercase tracking-tight">Portefeuille</span>
-          </button>
-          {/* Profil */}
-          <button
-            onClick={() => setActiveSection('settings')}
-            className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'settings' || activeSection === 'commissions' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
-          >
-            <User className="h-6 w-6" />
-            <span className="text-[10px] font-bold uppercase tracking-tight">Profil</span>
-          </button>
-        </nav>
-      </footer>
+            {/* Activités */}
+            <button
+              onClick={() => { setActiveSection('requests'); loadWithdrawRequests(); loadClientDepositReqs(); }}
+              className={`flex flex-col items-center gap-1 relative transition-colors ${activeSection === 'clients' || activeSection === 'requests' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+            >
+              <ListOrdered className="h-6 w-6" />
+              <span className="text-[10px] font-bold uppercase tracking-tight">Activités</span>
+              {totalPendingCount > 0 && (
+                <span className="absolute -top-1 -right-2 bg-amber-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
+                  {totalPendingCount}
+                </span>
+              )}
+            </button>
+            {/* Center Scan button — fixed at the top of the nav bar */}
+            <div className="-mt-12">
+              <button
+                onClick={() => { setScannerError(null); setScannerOpen(true); }}
+                className="w-14 h-14 bg-[#0A3D91] text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/40 ring-4 ring-white active:scale-90 transition-transform"
+              >
+                <Scan className="h-7 w-7" />
+              </button>
+            </div>
+            {/* Portefeuille */}
+            <button
+              onClick={() => setActiveSection('finances')}
+              className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'finances' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+            >
+              <Banknote className="h-6 w-6" />
+              <span className="text-[10px] font-bold uppercase tracking-tight">Portefeuille</span>
+            </button>
+            {/* Profil */}
+            <button
+              onClick={() => setActiveSection('settings')}
+              className={`flex flex-col items-center gap-1 transition-colors ${activeSection === 'settings' || activeSection === 'commissions' ? 'text-[#0A3D91]' : 'text-slate-400'}`}
+            >
+              <User className="h-6 w-6" />
+              <span className="text-[10px] font-bold uppercase tracking-tight">Profil</span>
+            </button>
+          </nav>
+        </footer>,
+        document.body
+      )}
 
       {/* ── Personal Deposit Dialog ───────────────────────────────────────── */}
       <Dialog open={personalDepositOpen} onOpenChange={v => { if (!v) { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); } setPersonalDepositOpen(v); }}>
@@ -1698,8 +1702,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         </Dialog>
       )}
 
-      {/* ── QR / Barcode Scanner Modal ── */}
-      {scannerOpen && (
+      {/* ── QR / Barcode Scanner Modal — portaled to body so it covers the full viewport ── */}
+      {scannerOpen && createPortal(
         <ScannerModal
           containerId={scannerContainerId}
           scannerRef={scannerRef}
@@ -1713,7 +1717,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             // auto-trigger search after a tick so the deposit section mounts
             setTimeout(() => handleSearchClient(), 80);
           }}
-        />
+        />,
+        document.body
       )}
 
       {/* ── Ernst AI Assistant ── */}

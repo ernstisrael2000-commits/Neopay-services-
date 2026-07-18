@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   useAffiliateData, 
   useTopAffiliates, 
@@ -1655,8 +1656,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         )}
       </div>
 
-      {/* ── Fixed Bottom Nav ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      {/* ── Fixed Bottom Nav — portaled to body to escape motion.div containing block ── */}
+      {createPortal(<div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="flex items-center max-w-2xl mx-auto h-16">
           {/* Slot 1 — Accueil */}
           <button onClick={() => setActiveTab('accueil')}
@@ -1694,7 +1695,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             <span className="text-[9px] font-black uppercase tracking-wider">Profil</span>
           </button>
         </div>
-      </div>
+      </div>, document.body)}
 
     </div>
   );
