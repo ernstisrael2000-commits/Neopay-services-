@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import ContestPodium from '../components/ContestPodium';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   useAgentDataByUid,
@@ -591,6 +592,11 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         {/* ── OVERVIEW ── */}
         {activeSection === 'overview' && (
           <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-8">
+
+            {/* Contest Podium */}
+            <div className="-mx-6">
+              <ContestPodium participantId={agentUid} participantType="agent" />
+            </div>
 
             {/* Actions Rapides */}
             <section>

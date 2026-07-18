@@ -636,8 +636,9 @@ export const awardMonthlyPrizes = async () => {
       const pcfg = prizeConfigs[i];
       const prizeHTG = pcfg.amount || 0;
 
+      const isWalletPrize = (pcfg.type || 'wallet') !== 'physical';
       promises.push(updateDoc(affiliateRef, {
-        ...(prizeHTG > 0 && { balance: (eligible[i].balance || 0) + prizeHTG }),
+        ...(isWalletPrize && prizeHTG > 0 && { balance: (eligible[i].balance || 0) + prizeHTG }),
         isMonthlyWinner: true,
         updatedAt: serverTimestamp()
       }));
@@ -650,6 +651,9 @@ export const awardMonthlyPrizes = async () => {
         prize: prizeHTG,
         prizeLabel: pcfg.label || '',
         prizeEmoji: pcfg.emoji || '',
+        prizeType: pcfg.type || 'wallet',
+        prizeImageUrl: (pcfg as any).imageUrl || null,
+        prizeDescription: (pcfg as any).description || null,
         points: eligible[i].points || 0,
         monthlySales: eligible[i].monthlySales || 0,
         monthlyReferredClients: eligible[i].monthlyReferredClients || 0,
@@ -701,7 +705,8 @@ export const awardAgentMonthlyPrizes = async () => {
       const pcfg = prizeConfigs[i];
       const prizeHTG = pcfg.amount || 0;
 
-      if (prizeHTG > 0) {
+      const isWalletPrize = (pcfg.type || 'wallet') !== 'physical';
+      if (isWalletPrize && prizeHTG > 0) {
         promises.push(updateDoc(agentRef, {
           commissionBalance: ((eligible[i] as any).commissionBalance || 0) + prizeHTG,
           updatedAt: serverTimestamp()
@@ -716,6 +721,9 @@ export const awardAgentMonthlyPrizes = async () => {
         prize: prizeHTG,
         prizeLabel: pcfg.label || '',
         prizeEmoji: pcfg.emoji || '',
+        prizeType: pcfg.type || 'wallet',
+        prizeImageUrl: (pcfg as any).imageUrl || null,
+        prizeDescription: (pcfg as any).description || null,
       });
     }
 

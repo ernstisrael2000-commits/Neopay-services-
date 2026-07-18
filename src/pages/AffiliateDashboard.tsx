@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import ContestPodium from '../components/ContestPodium';
 import { 
   useAffiliateData, 
   useTopAffiliates, 
@@ -731,6 +732,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
         {/* ═══ ACCUEIL ═══ */}
         {activeTab === 'accueil' && (
+          <>
+          <ContestPodium participantId={affiliateId} participantType="affiliate" />
           <div className="p-4 space-y-4">
 
             {/* ── Greeting ── */}
@@ -1459,22 +1462,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               )}
             </div>
 
-            {/* Ranking position */}
-            {rankingPosition > 0 && (
-              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
-                  <Trophy className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Votre Classement</p>
-                  <p className="font-black text-dark">#{rankingPosition} au classement global</p>
-                </div>
-              </div>
-            )}
-
             {/* Arbre de parrainage */}
             <ReferralTree affiliate={affiliate} />
           </div>
+          </>
         )}
 
         {/* ═══ HISTORIQUE ═══ */}
