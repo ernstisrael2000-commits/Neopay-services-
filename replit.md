@@ -1,63 +1,66 @@
 # Rena — Logistics & Fintech Platform
 
-Multi-role web app (clients, affiliates, agents, admins) for parcel management, payments, wallets, and online formations.
+Application web multi-rôles (clients, affiliés, agents, admins) pour la gestion de colis, paiements, portefeuilles et formations en ligne.
 
 ## Stack
-- **Frontend**: React 19 + Vite + Tailwind CSS v4
-- **Backend**: Express (tsx / Node 20)
-- **Database**: Firebase Firestore (Admin SDK)
-- **Auth**: Firebase client SDK
-- **Email**: Resend (RESEND_API_KEY) or Nodemailer (SMTP_USER / SMTP_PASS)
 
-## How to run
+| Couche | Technologie |
+|--------|-------------|
+| Frontend | React 19, Vite 6, Tailwind CSS 4, shadcn/ui |
+| Backend | Express 4, Node 20 (tsx) |
+| Base de données | Cloud Firestore (named DB) |
+| Auth | Firebase Auth (clients) + credentials Firestore (admin/affiliate/agent) |
+| Email | Resend (RESEND_API_KEY) |
+| IA | Groq (GROQ_API_KEY) |
+| Paiements | NowPayments (NOWPAYMENTS_API_KEY) + MonCash/NatCash (Haïti) |
+| Push | Web Push / FCM — VAPID keys configurées |
+
+## Démarrer
 
 ```bash
 npm install
-npm run dev      # Dev: Express on :5000, Vite on :5173
-npm run build    # Production build
-npm run start    # Production server
+npm run dev        # → http://localhost:5000
+npm run build      # Build production
+npm run start      # Production
 ```
 
-The workflow **Start application** runs `npm run dev` and exposes port 5000.
+## Variables d'environnement
 
-## Required secrets
-| Secret | Purpose |
-|--------|---------|
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK (Firestore, Auth) — JSON from Firebase Console → Service Accounts |
-| `GROQ_API_KEY` | Groq AI API key (console.groq.com) |
-| `RESEND_API_KEY` | Transactional email via Resend (resend.com) |
-| `SESSION_SECRET` | Express session signing |
+Toutes gérées via Replit Secrets / Env Vars.
 
-## Optional env vars (already set)
-| Key | Value |
-|-----|-------|
-| `VAPID_PUBLIC_KEY` | Web push public key |
-| `FIREBASE_VAPID_KEY` | Firebase messaging VAPID key |
-| `APP_URL` | Public app URL |
-| `RESEND_FROM_EMAIL` | Sender address for Resend |
-| `ADMIN_EMAIL` | Admin notification address |
+| Variable | Obligatoire | Description |
+|----------|-------------|-------------|
+| `FIREBASE_SERVICE_ACCOUNT` | ✅ | JSON du compte de service Firebase Admin |
+| `RESEND_API_KEY` | ✅ | Clé API Resend pour les emails |
+| `GROQ_API_KEY` | ✅ | Clé API Groq pour l'IA |
+| `NOWPAYMENTS_API_KEY` | ✅ | Clé API NowPayments |
+| `FIRESTORE_DB_ID` | ✅ (env var) | `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2` |
+| `VAPID_PUBLIC_KEY` | ✅ (env var) | Clé publique VAPID pour Push |
+| `APP_URL` | ✅ (env var) | URL publique de l'app |
+| `RECAPTCHA_SECRET_KEY` | ❌ | Clé secrète reCAPTCHA v2 |
+| `MONCASH_SECRET_KEY` | ❌ | Clé secrète MonCash |
+| `SMTP_USER` / `SMTP_PASS` | ❌ | Gmail SMTP (remplacé par Resend) |
 
-## Optional secrets
-| Secret | Purpose |
-|--------|---------|
-| `RESEND_API_KEY` | Transactional email via Resend |
-| `SMTP_USER` / `SMTP_PASS` | Gmail SMTP fallback |
-| `RECAPTCHA_SECRET_KEY` | reCAPTCHA v2 server-side |
-| `VAPID_PRIVATE_KEY` | Web push private key |
+## Firebase
 
-## Project structure
+- **Projet** : `gen-lang-client-0739219145`
+- **Base de données nommée** : `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`
+- **Console** : https://console.firebase.google.com/project/gen-lang-client-0739219145
+
+## Structure
+
 ```
-src/pages/       — Views and dashboards per role
-src/layouts/     — Navbar, BottomNav
-src/components/  — Reusable UI components
-src/hooks/       — React hooks
-src/services/    — Firestore client services
-src/lib/         — Firebase, email, utilities
-src/types/       — TypeScript types
-src/api/         — Express API router
-database/        — Firestore & Storage rules
-docs/            — Full documentation
+src/pages/      — Vues et dashboards
+src/layouts/    — Navbar, BottomNav
+src/components/ — Composants réutilisables
+src/hooks/      — Hooks React
+src/services/   — Services Firestore client
+src/lib/        — Firebase, email, utilitaires
+src/types/      — Types TypeScript
+database/       — Règles Firestore & Storage
+docs/           — Documentation complète
 ```
 
-## User preferences
-- Keep the existing project structure and stack — do not restructure or migrate.
+## User Preferences
+
+- Langue de communication : Français

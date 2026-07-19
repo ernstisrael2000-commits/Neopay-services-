@@ -1390,7 +1390,6 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               )}
             </div>
           </div>
-          </div>
         )}
 
         {/* ═══ FILLEULS ═══ */}
