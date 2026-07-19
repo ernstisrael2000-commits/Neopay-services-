@@ -249,18 +249,21 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   )}
                 </div>
 
-                {/* Bottom row: masked ID + Mastercard */}
+                {/* Bottom row: wallet ID copiable */}
                 <div className="flex items-end justify-between">
-                  <span className="text-white/25 text-[10px] font-mono tracking-[0.25em]">
-                    {'•••• •••• '}
-                    {effectiveClient?.walletId
-                      ? effectiveClient.walletId.slice(-4).toUpperCase()
-                      : '••••'}
-                  </span>
-                  {/* Mastercard circles */}
-                  <div className="flex -space-x-2.5">
-                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(220,38,38,0.80)' }} />
-                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(251,191,36,0.85)' }} />
+                  <div>
+                    <p className="text-white/25 text-[7px] font-black uppercase tracking-[0.3em] mb-0.5">ID Wallet</p>
+                    <button
+                      onClick={copyWalletId}
+                      className="flex items-center gap-1.5 group"
+                    >
+                      <span className="text-white/50 text-[11px] font-mono tracking-[0.15em] group-hover:text-white/75 transition-colors">
+                        {effectiveClient?.walletId || '—'}
+                      </span>
+                      {walletCopied
+                        ? <CheckCircle2 className="h-3 w-3 text-emerald-300 shrink-0" />
+                        : <Copy className="h-3 w-3 text-white/20 group-hover:text-white/50 transition-colors shrink-0" />}
+                    </button>
                   </div>
                 </div>
               </div>
