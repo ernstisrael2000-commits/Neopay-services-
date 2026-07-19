@@ -173,32 +173,37 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               onClick={onOpenWallet}
               className="relative w-full rounded-[28px] overflow-hidden cursor-pointer select-none"
               style={{
-                background: 'linear-gradient(135deg, #3B0F8C 0%, #5B1FD4 30%, #7C3AED 60%, #6027C0 100%)',
+                background: 'linear-gradient(135deg, #050A1C 0%, #0D1B3E 35%, #0A2440 65%, #061428 100%)',
                 aspectRatio: '1.9 / 1',
               }}
             >
-              {/* Grid overlay */}
+              {/* Diagonal line texture */}
               <div className="absolute inset-0 pointer-events-none" style={{
-                backgroundImage: 'linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)',
-                backgroundSize: '30px 30px',
+                backgroundImage: 'repeating-linear-gradient(120deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 28px)',
               }} />
-              {/* Top-left radial glow */}
+              {/* Top-left gold glow */}
               <div className="absolute inset-0 pointer-events-none" style={{
-                background: 'radial-gradient(ellipse at 15% 20%, rgba(180,150,255,0.22) 0%, transparent 55%)',
+                background: 'radial-gradient(ellipse at 10% 15%, rgba(251,191,36,0.10) 0%, transparent 50%)',
               }} />
-              {/* Bottom-right glow */}
-              <div className="absolute bottom-0 right-0 w-48 h-32 pointer-events-none" style={{
-                background: 'radial-gradient(ellipse at 90% 100%, rgba(120,60,255,0.35) 0%, transparent 65%)',
+              {/* Bottom-right cyan glow */}
+              <div className="absolute bottom-0 right-0 w-56 h-36 pointer-events-none" style={{
+                background: 'radial-gradient(ellipse at 85% 95%, rgba(34,211,238,0.14) 0%, transparent 65%)',
               }} />
-              {/* Decorative rings top-right */}
-              <div className="absolute -right-20 -top-20 w-72 h-72 rounded-full border border-white/[0.05] pointer-events-none" />
-              <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full border border-white/[0.08] pointer-events-none" />
+              {/* Decorative arc top-right */}
+              <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full border border-white/[0.05] pointer-events-none" />
+              <div className="absolute -right-6 -top-6 w-36 h-36 rounded-full border border-white/[0.06] pointer-events-none" />
+              {/* Thin gold accent line at top */}
+              <div className="absolute top-0 left-8 right-8 h-[1px] pointer-events-none" style={{
+                background: 'linear-gradient(90deg, transparent, rgba(251,191,36,0.4), transparent)',
+              }} />
 
               <div className="relative z-10 h-full flex flex-col justify-between p-5">
-                {/* Top row: name + eye + chip */}
+                {/* Top row: label + eye + chip */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.35em] mb-1">Rena Wallet</p>
+                    <p className="text-[8px] font-black uppercase tracking-[0.4em] mb-1" style={{ color: 'rgba(251,191,36,0.55)' }}>
+                      Rena Wallet
+                    </p>
                     <p className="text-white font-black text-[15px] leading-snug tracking-wide max-w-[200px] truncate">
                       {effectiveClient?.name || loggedClient.name}
                     </p>
@@ -206,18 +211,18 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   <div className="flex items-center gap-2.5">
                     <button
                       onClick={e => { e.stopPropagation(); setBalanceHidden(v => !v); }}
-                      className="text-white/30 hover:text-white/60 transition-colors"
+                      className="text-white/25 hover:text-white/55 transition-colors"
                     >
                       {balanceHidden ? <EyeOff className="h-[15px] w-[15px]" /> : <Eye className="h-[15px] w-[15px]" />}
                     </button>
                     {/* EMV chip */}
                     <div
                       className="h-[26px] w-[36px] rounded-md shadow-lg"
-                      style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 45%, #F59E0B 100%)' }}
+                      style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #B45309 50%, #F59E0B 100%)' }}
                     >
                       <div className="w-full h-full grid grid-cols-2 gap-[1.5px] p-[3.5px]">
                         {[...Array(4)].map((_, i) => (
-                          <div key={i} className="rounded-[2px]" style={{ background: 'rgba(100,50,0,0.30)' }} />
+                          <div key={i} className="rounded-[2px]" style={{ background: 'rgba(80,35,0,0.35)' }} />
                         ))}
                       </div>
                     </div>
@@ -226,7 +231,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
                 {/* Balance */}
                 <div>
-                  <p className="text-white/35 text-[8px] font-black uppercase tracking-[0.3em] mb-1.5">Solde disponible</p>
+                  <p className="text-white/30 text-[8px] font-black uppercase tracking-[0.3em] mb-1.5">Solde disponible</p>
                   {balanceHidden ? (
                     <p className="text-white font-black text-3xl tracking-[0.3em] leading-none select-none">••••••</p>
                   ) : (
@@ -235,38 +240,40 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         <span className="text-white font-black leading-none tabular-nums" style={{ fontSize: '2.1rem' }}>
                           ${balanceUSD}
                         </span>
-                        <span className="text-white/45 text-sm font-bold">USD</span>
+                        <span className="text-white/40 text-sm font-bold">USD</span>
                       </div>
-                      <p className="text-white/30 text-[10px] font-semibold mt-1 tabular-nums">
+                      <p className="text-white/25 text-[10px] font-semibold mt-1 tabular-nums">
                         ≈ {balanceHTG.toLocaleString()} HTG
                       </p>
                     </>
                   )}
                 </div>
 
-                {/* Bottom row: walletId + Mastercard */}
+                {/* Bottom row: masked ID + Mastercard */}
                 <div className="flex items-end justify-between">
-                  <button
-                    onClick={copyWalletId}
-                    className="flex items-center gap-1.5 group"
-                  >
-                    <span className="text-white/30 text-[10px] font-mono tracking-[0.2em] group-hover:text-white/55 transition-colors">
-                      {effectiveClient?.walletId
-                        ? effectiveClient.walletId.match(/.{1,4}/g)?.slice(0, 4).join(' ')
-                        : '•••• •••• ••••'}
-                    </span>
-                    {walletCopied
-                      ? <CheckCircle2 className="h-3 w-3 text-emerald-300" />
-                      : <Copy className="h-3 w-3 text-white/20 group-hover:text-white/55 transition-colors" />}
-                  </button>
+                  <span className="text-white/25 text-[10px] font-mono tracking-[0.25em]">
+                    {'•••• •••• '}
+                    {effectiveClient?.walletId
+                      ? effectiveClient.walletId.slice(-4).toUpperCase()
+                      : '••••'}
+                  </span>
                   {/* Mastercard circles */}
                   <div className="flex -space-x-2.5">
-                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(220,38,38,0.82)' }} />
-                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(251,191,36,0.88)' }} />
+                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(220,38,38,0.80)' }} />
+                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(251,191,36,0.85)' }} />
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* ── Recharger button ── */}
+            <button
+              onClick={onOpenWallet}
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-[0.98] transition-all shadow-sm"
+            >
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+              <span className="text-sm font-black text-gray-700 tracking-wide">Recharger</span>
+            </button>
 
           </motion.section>
         ) : (
