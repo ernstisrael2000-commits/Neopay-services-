@@ -104,9 +104,9 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
           whileHover={{ scale: 1.18, y: -1.5 }}
           whileTap={{ scale: 0.88 }}
         >
-          <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-gray-600 group-hover:text-primary'}`} />
+          <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`} />
         </motion.div>
-        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-gray-600/75 group-hover:text-primary/80'}`}>{item.label}</span>
+        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-gray-900/80 group-hover:text-primary/80'}`}>{item.label}</span>
       </button>
     );
   };
