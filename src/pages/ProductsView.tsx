@@ -184,6 +184,41 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
     { key: 'products', label: 'Produits', icon: <ShoppingBag className="h-4 w-4" /> },
   ];
 
+  // ── Vue Jeux : pleine page indépendante ──────────────────────────
+  if (activeTab === 'games') {
+    return (
+      <motion.div
+        key="games-page"
+        initial={{ opacity: 0, x: 30 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 30 }}
+        transition={{ duration: 0.25 }}
+        className="min-h-screen bg-gray-50 pb-28"
+      >
+        {/* Sticky top bar */}
+        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
+          <button
+            onClick={() => setActiveTab('products')}
+            className="h-9 w-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 active:scale-95 transition-all shrink-0"
+          >
+            <LucideIcons.ArrowLeft className="h-4 w-4 text-gray-700" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
+              <Gamepad2 className="h-3.5 w-3.5 text-white" />
+            </div>
+            <span className="font-black text-gray-900 text-base">Top-up Jeux</span>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-3xl mx-auto px-4 pt-4">
+          <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}

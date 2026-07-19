@@ -6856,7 +6856,12 @@ router.get('/api/fazer/topups/offers', async (req, res) => {
     const r = await fazerFetch(`/topups/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
     const data = await r.json() as any;
-    const items = Array.isArray(data) ? data : (data.items || data.offers || data.data || []);
+    const raw: any[] = Array.isArray(data) ? data : (data.items || data.offers || data.data || []);
+    // Normalise: map price_usd (string) → price (float), keep other fields
+    const items = raw.map((o: any) => ({
+      ...o,
+      price: typeof o.price === 'number' ? o.price : parseFloat(o.price_usd ?? o.price ?? '0') || 0,
+    }));
     res.json({ items });
   } catch (e: any) {
     console.error('[fazer/topups/offers]', e.message);
