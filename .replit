@@ -98,8 +98,8 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-VAPID_PUBLIC_KEY = "BJbF5eXIPt1j38cH2EDG4otYFQlstt17vMOg8YHUUvWP3zEneHczFTN9hnmzqBJ6kSi5ZvHXmUY2J8ncAzLQnN4"
-FIREBASE_VAPID_KEY = "BMxSn0OiBM1q77aEQ7zP8WU8h12NXm4wkTXIEpgT_0wgEIhDuF0eB-WWl0kNZ5B7DkXo1SGKdxhCjSPju1bEyDM"
+VAPID_PUBLIC_KEY = "BNvy3JQdOQhO2CMIeuPsyw7xDz2IBifplVmvc_Va5m_H1LrwxFI54K28EyD5tegjKcULruoygpQxwaB0k1uZ91I"
+FIREBASE_VAPID_KEY = "BNvy3JQdOQhO2CMIeuPsyw7xDz2IBifplVmvc_Va5m_H1LrwxFI54K28EyD5tegjKcULruoygpQxwaB0k1uZ91I"
 APP_URL = "https://neopay-services--ernstisrael2000.replit.app"
 NAPI_RS_FORCE_WASI = "true"
 RESEND_FROM_EMAIL = "noreply@renaservices.shop"

@@ -36,6 +36,9 @@ Toutes gérées via Replit Secrets / Env Vars.
 | `NOWPAYMENTS_API_KEY` | ✅ | Clé API NowPayments |
 | `FIRESTORE_DB_ID` | ✅ (env var) | `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2` |
 | `VAPID_PUBLIC_KEY` | ✅ (env var) | Clé publique VAPID pour Push |
+| `VAPID_PRIVATE_KEY` | ✅ (secret) | Clé privée VAPID (base64, 32 octets) — ⚠️ doit être 32 octets décodés |
+| `NOWPAYMENTS_IPN_SECRET` | ✅ (secret) | Secret IPN NowPayments pour validation webhooks |
+| `FAZERCARDS_API_KEY` | ✅ (secret) | Clé API FazerCards |
 | `APP_URL` | ✅ (env var) | URL publique de l'app |
 | `RECAPTCHA_SECRET_KEY` | ❌ | Clé secrète reCAPTCHA v2 |
 | `MONCASH_SECRET_KEY` | ❌ | Clé secrète MonCash |
