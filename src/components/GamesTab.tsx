@@ -53,17 +53,22 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
   const [selected, setSelected] = useState<FazerCategory | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const filtered = categories.filter(c =>
+  // Filter: keep only Free Fire LATAM (hide all other FF regions)
+  const isHiddenFFRegion = (c: FazerCategory) =>
+    c.name.toLowerCase().startsWith('free fire') && !c.name.toLowerCase().includes('latam');
+
+  const visibleCategories = categories.filter(c => !isHiddenFFRegion(c));
+  const filteredVisible = visibleCategories.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Featured game: prefer Free Fire (any region), else PUBG, else first game
+  // Featured game: prefer Free Fire LATAM, else PUBG, else first game
   const freefire =
-    categories.find(c => c.name.toLowerCase().startsWith('free fire')) ||
-    categories.find(c => c.name.toLowerCase().includes('pubg')) ||
-    categories.find(c => c.name.toLowerCase().includes('mobile legend')) ||
-    categories[0] || null;
-  const rest = filtered.filter(c => c.category_id !== freefire?.category_id);
+    visibleCategories.find(c => c.name.toLowerCase().includes('free fire') && c.name.toLowerCase().includes('latam')) ||
+    visibleCategories.find(c => c.name.toLowerCase().includes('pubg')) ||
+    visibleCategories.find(c => c.name.toLowerCase().includes('mobile legend')) ||
+    visibleCategories[0] || null;
+  const rest = filteredVisible.filter(c => c.category_id !== freefire?.category_id);
 
   const openGame = (cat: FazerCategory) => {
     setSelected(cat);
