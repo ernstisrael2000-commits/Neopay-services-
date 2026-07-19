@@ -33,7 +33,7 @@ const NAV_ITEMS = [
 
 type NavKey = (typeof NAV_ITEMS)[number]['key'] | 'wallet';
 
-const SPRING = { type: 'spring', stiffness: 380, damping: 26, mass: 0.8 } as const;
+const SPRING = { type: 'spring', stiffness: 320, damping: 28, mass: 0.6 } as const;
 
 /* ─── Component ──────────────────────────────────────────────── */
 export default function BottomNav({
@@ -144,16 +144,15 @@ export default function BottomNav({
             rise={RISE}
             ringSize={RING_SZ}
             onClick={isLoggedIn ? () => onViewChange('wallet') : onRequestAuth}
-            walletStyle={isLoggedIn ? 'logged' : 'guest'}
           >
             {isLoggedIn
-              ? <Wallet style={{ width: 20, height: 20 }} className="text-white" strokeWidth={2.5} />
-              : <Lock   style={{ width: 18, height: 18 }} className="text-gray-400" strokeWidth={2} />
+              ? <Wallet style={{ width: 20, height: 20 }} strokeWidth={currentView === 'wallet' ? 2.5 : 1.75} />
+              : <Lock   style={{ width: 18, height: 18 }} strokeWidth={2} />
             }
             {/* Balance badge */}
             {isLoggedIn && balanceHTG > 0 && (
               <span
-                className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[14px] px-0.5 bg-emerald-500 text-white text-[6.5px] font-black rounded-full flex items-center justify-center leading-none pointer-events-none"
+                className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[14px] px-0.5 bg-blue-600 text-white text-[6.5px] font-black rounded-full flex items-center justify-center leading-none pointer-events-none"
                 style={{ border: '2px solid white' }}
               >
                 {balanceLabel}
@@ -173,13 +172,10 @@ interface TabButtonProps {
   rise: number;
   ringSize: number;
   onClick: () => void;
-  walletStyle?: 'logged' | 'guest';
   children: React.ReactNode;
 }
 
-function TabButton({ label, active, rise, ringSize, onClick, walletStyle, children }: TabButtonProps) {
-  const isWallet = Boolean(walletStyle);
-
+function TabButton({ label, active, rise, ringSize, onClick, children }: TabButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -192,11 +188,11 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
       <motion.div
         className="relative flex items-center justify-center"
         style={{ width: ringSize, height: ringSize }}
-        animate={{ y: active ? -(rise) : 0, scale: active ? 1 : 0.95 }}
+        animate={{ y: active ? -rise : 0, scale: active ? 1.05 : 1 }}
         transition={SPRING}
       >
-        {/* ── Moving blue ring (only for nav items, not wallet) ── */}
-        {active && !isWallet && (
+        {/* ── Shared blue ring for all active tabs ── */}
+        {active && (
           <motion.div
             layoutId="nav-ring"
             className="absolute inset-0 rounded-full"
@@ -208,26 +204,14 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
           />
         )}
 
-        {/* ── Wallet-specific ring (static, different colour) ── */}
-        {isWallet && (
-          <div
-            className="absolute inset-0 rounded-full"
-            style={{
-              background: walletStyle === 'logged'
-                ? 'linear-gradient(135deg, #10b981, #059669)'
-                : '#f3f4f6',
-              boxShadow: walletStyle === 'logged'
-                ? '0 4px 14px rgba(16,185,129,0.35), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.05)'
-                : '0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.05)',
-            }}
-          />
-        )}
-
         {/* Icon (and optional badge slot) */}
         <motion.span
           className="relative z-10 flex items-center justify-center"
-          animate={{ opacity: (active || isWallet) ? 1 : 0.72 }}
-          transition={{ duration: 0.15 }}
+          animate={{
+            opacity: active ? 1 : 0.72,
+            color: active ? '#ffffff' : '#111827',
+          }}
+          transition={{ duration: 0.18 }}
         >
           {children}
         </motion.span>
@@ -237,10 +221,10 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
       <motion.span
         className="text-[9.5px] font-bold leading-none tracking-tight mt-0.5"
         animate={{
-          color: active ? '#2563EB' : isWallet && walletStyle === 'logged' ? '#059669' : '#9ca3af',
-          opacity: active ? 1 : 0.65,
+          color: active ? '#2563EB' : '#6b7280',
+          opacity: active ? 1 : 0.7,
         }}
-        transition={{ duration: 0.14 }}
+        transition={{ duration: 0.18 }}
       >
         {label}
       </motion.span>
