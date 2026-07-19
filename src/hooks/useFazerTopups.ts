@@ -58,23 +58,31 @@ export function useFazerTopups() {
   return { categories, loading, error };
 }
 
-// ── Hook: offers for one category ────────────────────────────────
+// ── Hook: offers + player fields for one category ────────────────
 export function useFazerOffers(categoryId: string | null) {
   const [offers, setOffers] = useState<FazerOffer[]>([]);
+  const [fields, setFields] = useState<FazerField[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!categoryId) { setOffers([]); return; }
+    if (!categoryId) { setOffers([]); setFields([]); return; }
     let cancelled = false;
     setLoading(true);
-    apiFetch<{ items: FazerOffer[] }>(`/api/fazer/topups/offers?category_id=${encodeURIComponent(categoryId)}`)
-      .then(data => { if (!cancelled) setOffers(data.items || []); })
-      .catch(() => { if (!cancelled) setOffers([]); })
+    apiFetch<{ items: FazerOffer[]; fields?: FazerField[] }>(
+      `/api/fazer/topups/offers?category_id=${encodeURIComponent(categoryId)}`
+    )
+      .then(data => {
+        if (!cancelled) {
+          setOffers(data.items || []);
+          setFields(data.fields || []);
+        }
+      })
+      .catch(() => { if (!cancelled) { setOffers([]); setFields([]); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [categoryId]);
 
-  return { offers, loading };
+  return { offers, fields, loading };
 }
 
 // ── Hook: games that support ID validation ────────────────────────

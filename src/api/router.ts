@@ -6862,7 +6862,9 @@ router.get('/api/fazer/topups/offers', async (req, res) => {
       ...o,
       price: typeof o.price === 'number' ? o.price : parseFloat(o.price_usd ?? o.price ?? '0') || 0,
     }));
-    res.json({ items });
+    // Include fields (player ID requirements) from the API response
+    const fields = data.fields || [];
+    res.json({ items, fields });
   } catch (e: any) {
     console.error('[fazer/topups/offers]', e.message);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
