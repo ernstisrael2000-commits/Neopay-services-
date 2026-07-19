@@ -1,4 +1,5 @@
 import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
+import { motion } from 'motion/react';
 import RenaLogo from '../components/RenaLogo';
 import { Button } from '../components/ui/button';
 import { auth } from '@/lib/firebase';
@@ -93,10 +94,19 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
     return (
       <button
         onClick={() => handleNav(item.key)}
-        className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group ${active ? 'bg-primary/10' : 'hover:bg-gray-100'}`}
+        className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors duration-200 group ${active ? 'bg-primary/10' : 'hover:bg-gray-100'}`}
       >
-        <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-gray-400 group-hover:text-primary'}`} />
-        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-gray-400/70 group-hover:text-primary/80'}`}>{item.label}</span>
+        <motion.div
+          key={active ? 'active' : 'inactive'}
+          initial={active ? { scale: 0.8, y: 2 } : false}
+          animate={{ scale: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+          whileHover={{ scale: 1.18, y: -1.5 }}
+          whileTap={{ scale: 0.88 }}
+        >
+          <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-gray-600 group-hover:text-primary'}`} />
+        </motion.div>
+        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-gray-600/75 group-hover:text-primary/80'}`}>{item.label}</span>
       </button>
     );
   };
