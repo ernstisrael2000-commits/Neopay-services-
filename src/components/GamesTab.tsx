@@ -58,17 +58,23 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
     c.name.toLowerCase().startsWith('free fire') && !c.name.toLowerCase().includes('latam');
 
   const visibleCategories = categories.filter(c => !isHiddenFFRegion(c));
-  const filteredVisible = visibleCategories.filter(c =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase())
-  );
 
-  // Featured game: prefer Free Fire LATAM, else PUBG, else first game
+  // Featured game: prefer Free Fire LATAM — always pinned first in grid
   const freefire =
     visibleCategories.find(c => c.name.toLowerCase().includes('free fire') && c.name.toLowerCase().includes('latam')) ||
     visibleCategories.find(c => c.name.toLowerCase().includes('pubg')) ||
     visibleCategories.find(c => c.name.toLowerCase().includes('mobile legend')) ||
     visibleCategories[0] || null;
-  const rest = filteredVisible.filter(c => c.category_id !== freefire?.category_id);
+
+  // Grid: Free Fire always first, rest sorted alphabetically, all filtered by search
+  const othersFiltered = visibleCategories
+    .filter(c => c.category_id !== freefire?.category_id)
+    .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()));
+  const freefireMatchesSearch = !search || (freefire && freefire.name.toLowerCase().includes(search.toLowerCase()));
+  const gridItems: FazerCategory[] = [
+    ...(freefire && freefireMatchesSearch ? [freefire] : []),
+    ...othersFiltered,
+  ];
 
   const openGame = (cat: FazerCategory) => {
     setSelected(cat);
@@ -109,8 +115,8 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
         </div>
       </div>
 
-      {/* Free Fire Hero Card */}
-      {freefire && !search && (
+      {/* Free Fire Hero Card — toujours visible */}
+      {freefire && (
         <motion.button
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -165,50 +171,64 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
         </div>
       )}
 
-      {/* Games grid */}
-      {rest.length === 0 && !freefire ? (
+      {/* Games grid — Free Fire toujours en premier */}
+      {gridItems.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
           <Gamepad2 className="h-10 w-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Aucun jeu disponible.</p>
+          <p className="text-gray-400 text-sm">Aucun jeu trouvé.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {rest.map((cat, i) => (
-            <motion.button
-              key={cat.category_id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.04 }}
-              onClick={() => openGame(cat)}
-              className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all text-left group w-full active:scale-[0.98]"
-            >
-              {/* Cover image */}
-              <div className="relative overflow-hidden bg-gray-100" style={{ paddingBottom: '75%' }}>
-                <div className={`absolute inset-0 bg-gradient-to-br ${gameAccent(cat.name)} opacity-80`} />
-                {cat.imageurl ? (
-                  <img
-                    src={cat.imageurl}
-                    alt={cat.name}
-                    loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-400 mix-blend-overlay"
-                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                ) : null}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                <div className="absolute bottom-2 left-2 right-2">
-                  <p className="text-white font-black text-xs leading-tight line-clamp-2 drop-shadow">{cat.name}</p>
+          {gridItems.map((cat, i) => {
+            const isFF = cat.category_id === freefire?.category_id;
+            return (
+              <motion.button
+                key={cat.category_id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.04 }}
+                onClick={() => openGame(cat)}
+                className={`bg-white rounded-2xl border overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all text-left group w-full active:scale-[0.98] ${isFF ? 'border-orange-200 ring-2 ring-orange-300/40' : 'border-gray-100'}`}
+              >
+                {/* Cover image — vraie image sans filtre coloré */}
+                <div className="relative overflow-hidden bg-gray-200" style={{ paddingBottom: '75%' }}>
+                  {cat.imageurl ? (
+                    <img
+                      src={cat.imageurl}
+                      alt={cat.name}
+                      loading="lazy"
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={e => {
+                        const t = e.target as HTMLImageElement;
+                        t.style.display = 'none';
+                        t.parentElement!.style.background = `linear-gradient(135deg, #6366f1, #8b5cf6)`;
+                      }}
+                    />
+                  ) : (
+                    <div className={`absolute inset-0 bg-gradient-to-br ${gameAccent(cat.name)}`} />
+                  )}
+                  {/* Léger gradient bas pour lisibilité du texte */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                  {isFF && (
+                    <div className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[8px] font-black">
+                      <Flame className="h-2.5 w-2.5" /> TOP
+                    </div>
+                  )}
+                  <div className="absolute bottom-2 left-2 right-2">
+                    <p className="text-white font-black text-xs leading-tight line-clamp-2 drop-shadow">{cat.name}</p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Footer */}
-              <div className="px-3 py-2.5 flex items-center justify-between">
-                <span className="text-[9px] font-black text-purple-600 uppercase tracking-wide flex items-center gap-1">
-                  <Zap className="h-2.5 w-2.5" /> Top-up
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-purple-500 group-hover:translate-x-0.5 transition-all" />
-              </div>
-            </motion.button>
-          ))}
+                {/* Footer */}
+                <div className="px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-[9px] font-black text-purple-600 uppercase tracking-wide flex items-center gap-1">
+                    <Zap className="h-2.5 w-2.5" /> Top-up
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-purple-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
       )}
 

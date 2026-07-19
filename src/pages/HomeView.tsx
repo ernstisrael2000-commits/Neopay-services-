@@ -289,7 +289,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             exit={{ opacity: 0 }}
             className="w-full"
           >
-            <div className="relative h-[220px] md:h-[340px] w-full rounded-[28px] overflow-hidden bg-gray-900 shadow-lg">
+            <div
+              className="relative h-[220px] md:h-[340px] w-full rounded-[28px] overflow-hidden bg-gray-900 shadow-lg cursor-pointer"
+              onClick={() => onViewChange('products')}
+            >
               <div className="absolute inset-0 w-full h-full z-0">
                 <AnimatePresence mode="wait">
                   <motion.div
@@ -308,7 +311,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   </motion.div>
                 </AnimatePresence>
               </div>
-              <div className="absolute bottom-6 right-6 z-30 flex gap-2.5 bg-black/20 backdrop-blur-md p-1.5 px-2.5 rounded-full border border-white/10">
+              <div
+                className="absolute bottom-6 right-6 z-30 flex gap-2.5 bg-black/20 backdrop-blur-md p-1.5 px-2.5 rounded-full border border-white/10"
+                onClick={e => e.stopPropagation()}
+              >
                 {imagesToDisplay.map((_, i) => (
                   <button key={i} onClick={() => setCurrentSlide(i)} className="relative h-2 flex items-center justify-center transition-all duration-500">
                     <div className={`h-full rounded-full transition-all duration-500 ${currentSlide === i ? 'bg-primary w-8' : 'bg-white/30 w-2 hover:bg-white/50'}`} />
