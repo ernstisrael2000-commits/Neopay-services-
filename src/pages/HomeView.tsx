@@ -5,6 +5,7 @@ import {
   ShoppingBag, Globe, GraduationCap, Wallet,
   MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp, Loader2,
   Star, BookOpen, Award, Clock,
+  ArrowDownToLine, ArrowUpFromLine, Send, Eye, EyeOff, CheckCircle2, Copy,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -85,6 +86,17 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const balanceUSD = (effectiveClient?.balance ?? 0).toFixed(2);
   const recentTx = clientTx.slice(0, 3);
 
+  const [balanceHidden, setBalanceHidden] = useState(false);
+  const [walletCopied, setWalletCopied] = useState(false);
+  const copyWalletId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const id = effectiveClient?.walletId;
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    setWalletCopied(true);
+    setTimeout(() => setWalletCopied(false), 2000);
+  };
+
   React.useEffect(() => {
     if (settings?.whatsappAdminNumber) (window as any).__renaAdminPhone = settings.whatsappAdminNumber;
   }, [settings?.whatsappAdminNumber]);
@@ -154,70 +166,180 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            className="space-y-3"
           >
+            {/* ── Premium card ── */}
             <div
               onClick={onOpenWallet}
-              className="relative w-full rounded-[28px] overflow-hidden cursor-pointer group select-none"
-              style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 40%, #312e81 70%, #4c1d95 100%)' }}
+              className="relative w-full rounded-[28px] overflow-hidden cursor-pointer select-none"
+              style={{
+                background: 'linear-gradient(135deg, #3B0F8C 0%, #5B1FD4 30%, #7C3AED 60%, #6027C0 100%)',
+                aspectRatio: '1.9 / 1',
+              }}
             >
-              <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/5 pointer-events-none" />
-              <div className="absolute -bottom-10 -left-10 w-44 h-44 rounded-full bg-indigo-500/10 pointer-events-none" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-blue-600/5 blur-3xl pointer-events-none" />
+              {/* Grid overlay */}
+              <div className="absolute inset-0 pointer-events-none" style={{
+                backgroundImage: 'linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)',
+                backgroundSize: '30px 30px',
+              }} />
+              {/* Top-left radial glow */}
+              <div className="absolute inset-0 pointer-events-none" style={{
+                background: 'radial-gradient(ellipse at 15% 20%, rgba(180,150,255,0.22) 0%, transparent 55%)',
+              }} />
+              {/* Bottom-right glow */}
+              <div className="absolute bottom-0 right-0 w-48 h-32 pointer-events-none" style={{
+                background: 'radial-gradient(ellipse at 90% 100%, rgba(120,60,255,0.35) 0%, transparent 65%)',
+              }} />
+              {/* Decorative rings top-right */}
+              <div className="absolute -right-20 -top-20 w-72 h-72 rounded-full border border-white/[0.05] pointer-events-none" />
+              <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full border border-white/[0.08] pointer-events-none" />
 
-              <div className="relative z-10 px-5 pt-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-6 rounded-md bg-gradient-to-br from-yellow-300 to-yellow-500 shadow-md flex items-center justify-center">
-                      <div className="grid grid-cols-2 gap-[2px] p-[3px]">
-                        {[...Array(4)].map((_, i) => <div key={i} className="w-[5px] h-[5px] rounded-[1px] bg-yellow-800/40" />)}
+              <div className="relative z-10 h-full flex flex-col justify-between p-5">
+                {/* Top row: name + eye + chip */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.35em] mb-1">Rena Wallet</p>
+                    <p className="text-white font-black text-[15px] leading-snug tracking-wide max-w-[200px] truncate">
+                      {effectiveClient?.name || loggedClient.name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); setBalanceHidden(v => !v); }}
+                      className="text-white/30 hover:text-white/60 transition-colors"
+                    >
+                      {balanceHidden ? <EyeOff className="h-[15px] w-[15px]" /> : <Eye className="h-[15px] w-[15px]" />}
+                    </button>
+                    {/* EMV chip */}
+                    <div
+                      className="h-[26px] w-[36px] rounded-md shadow-lg"
+                      style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 45%, #F59E0B 100%)' }}
+                    >
+                      <div className="w-full h-full grid grid-cols-2 gap-[1.5px] p-[3.5px]">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className="rounded-[2px]" style={{ background: 'rgba(100,50,0,0.30)' }} />
+                        ))}
                       </div>
                     </div>
-                    <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Rena Wallet</span>
-                  </div>
-                  <Wallet className="h-5 w-5 text-white/25" />
-                </div>
-
-                <div className="mb-4">
-                  <p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Solde disponible</p>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-3xl font-black text-white tabular-nums leading-none">{balanceHTG.toLocaleString()}</span>
-                    <span className="text-sm font-bold text-white/50">HTG</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-[10px] font-bold border border-white/10">≈ ${balanceUSD} USD</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pb-5">
-                  <div>
-                    <p className="text-[9px] text-white/40 uppercase tracking-widest mb-0.5">Titulaire</p>
-                    <p className="text-sm font-black text-white truncate max-w-[180px]">{effectiveClient?.name || loggedClient.name}</p>
-                  </div>
+                {/* Balance */}
+                <div>
+                  <p className="text-white/35 text-[8px] font-black uppercase tracking-[0.3em] mb-1.5">Solde disponible</p>
+                  {balanceHidden ? (
+                    <p className="text-white font-black text-3xl tracking-[0.3em] leading-none select-none">••••••</p>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-white font-black leading-none tabular-nums" style={{ fontSize: '2.1rem' }}>
+                          ${balanceUSD}
+                        </span>
+                        <span className="text-white/45 text-sm font-bold">USD</span>
+                      </div>
+                      <p className="text-white/30 text-[10px] font-semibold mt-1 tabular-nums">
+                        ≈ {balanceHTG.toLocaleString()} HTG
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* Bottom row: walletId + Mastercard */}
+                <div className="flex items-end justify-between">
                   <button
-                    onClick={e => { e.stopPropagation(); onOpenWallet?.(); }}
-                    className="flex items-center gap-1.5 h-9 px-4 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white font-black text-xs transition-all backdrop-blur-sm"
+                    onClick={copyWalletId}
+                    className="flex items-center gap-1.5 group"
                   >
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    Ouvrir
+                    <span className="text-white/30 text-[10px] font-mono tracking-[0.2em] group-hover:text-white/55 transition-colors">
+                      {effectiveClient?.walletId
+                        ? effectiveClient.walletId.match(/.{1,4}/g)?.slice(0, 4).join(' ')
+                        : '•••• •••• ••••'}
+                    </span>
+                    {walletCopied
+                      ? <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+                      : <Copy className="h-3 w-3 text-white/20 group-hover:text-white/55 transition-colors" />}
                   </button>
+                  {/* Mastercard circles */}
+                  <div className="flex -space-x-2.5">
+                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(220,38,38,0.82)' }} />
+                    <div className="h-8 w-8 rounded-full shadow-lg" style={{ background: 'rgba(251,191,36,0.88)' }} />
+                  </div>
                 </div>
               </div>
+            </div>
 
-              {recentTx.length > 0 && (
-                <div className="relative z-10 border-t border-white/[0.08] px-5 py-3 flex gap-2 overflow-x-auto scrollbar-none">
+            {/* ── Quick actions ── */}
+            <div className="grid grid-cols-3 gap-2.5">
+              <button
+                onClick={e => { e.stopPropagation(); onOpenWallet?.(); }}
+                className="flex flex-col items-center gap-1.5 py-3.5 rounded-2xl bg-emerald-500 shadow-lg shadow-emerald-200/70 active:scale-95 transition-all hover:bg-emerald-600"
+              >
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center">
+                  <ArrowDownToLine className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-[11px] font-black text-white">Déposer</span>
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); onOpenWallet?.(); }}
+                className="flex flex-col items-center gap-1.5 py-3.5 rounded-2xl bg-rose-500 shadow-lg shadow-rose-200/70 active:scale-95 transition-all hover:bg-rose-600"
+              >
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center">
+                  <ArrowUpFromLine className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-[11px] font-black text-white">Retirer</span>
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); onOpenWallet?.(); }}
+                className="flex flex-col items-center gap-1.5 py-3.5 rounded-2xl bg-violet-600 shadow-lg shadow-violet-200/70 active:scale-95 transition-all hover:bg-violet-700"
+              >
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center">
+                  <Send className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-[11px] font-black text-white">Transférer</span>
+              </button>
+            </div>
+
+            {/* ── Recent transactions ── */}
+            {recentTx.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-gray-50 flex items-center justify-between">
+                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">Transactions récentes</span>
+                  <button
+                    onClick={onOpenWallet}
+                    className="flex items-center gap-0.5 text-[10px] font-black text-violet-600 hover:text-violet-700 transition-colors"
+                  >
+                    Voir tout <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="divide-y divide-gray-50">
                   {recentTx.map(tx => {
                     const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
                     const usdAmt = tx.usdAmount ?? tx.amount;
+                    const label = tx.type === 'deposit' ? 'Dépôt'
+                      : tx.type === 'withdrawal' ? 'Retrait'
+                      : tx.type === 'purchase' ? 'Achat'
+                      : tx.type === 'transfer_received' ? 'Reçu'
+                      : 'Transfert';
                     return (
-                      <div key={tx.id} className="flex items-center gap-1.5 shrink-0 bg-white/[0.07] rounded-xl px-3 py-1.5 border border-white/10">
-                        <span className={`text-[10px] font-black ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>{isCredit ? '▲' : '▼'}</span>
-                        <span className="text-[10px] font-bold text-white/80">${usdAmt.toFixed(2)}</span>
-                        <span className="text-[9px] text-white/35">{tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat' : 'Reçu'}</span>
+                      <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
+                        <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                          {isCredit
+                            ? <ArrowDownToLine className="h-3.5 w-3.5 text-emerald-600" />
+                            : <ArrowUpFromLine className="h-3.5 w-3.5 text-rose-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-gray-800 leading-tight">{label}</p>
+                          {tx.method && <p className="text-[10px] text-gray-400 truncate">{tx.method}</p>}
+                        </div>
+                        <p className={`text-sm font-black tabular-nums ${isCredit ? 'text-emerald-600' : 'text-rose-500'}`}>
+                          {isCredit ? '+' : '-'}${usdAmt.toFixed(2)}
+                        </p>
                       </div>
                     );
                   })}
                 </div>
-              )}
-              {recentTx.length === 0 && <div className="h-1" />}
-            </div>
+              </div>
+            )}
           </motion.section>
         ) : (
           <motion.section
