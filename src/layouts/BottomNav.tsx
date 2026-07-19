@@ -140,10 +140,10 @@ export default function BottomNav({
           {/* Wallet / Connexion */}
           <TabButton
             label={isLoggedIn ? 'Wallet' : 'Connexion'}
-            active={false}
+            active={currentView === 'wallet'}
             rise={RISE}
             ringSize={RING_SZ}
-            onClick={isLoggedIn ? onOpenWallet : onRequestAuth}
+            onClick={isLoggedIn ? () => onViewChange('wallet') : onRequestAuth}
             walletStyle={isLoggedIn ? 'logged' : 'guest'}
           >
             {isLoggedIn

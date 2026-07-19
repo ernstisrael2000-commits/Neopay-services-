@@ -39,8 +39,8 @@ import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 function AppInner() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet')[]>(['home']);
   // Direction for page slide: 1 = left (new page comes from right), -1 = right (back)
   const navDirection = useRef<1 | -1>(1);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
@@ -49,7 +49,7 @@ function AppInner() {
   const { settings } = useSettingsCtx();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
-  const [showClientDashboard, setShowClientDashboard] = useState(false);
+  // Wallet is now a view — no separate modal state needed
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsInPlayer, setFormationsInPlayer] = useState(false);
@@ -212,7 +212,7 @@ function AppInner() {
   const handleClientLogout = () => {
     setLoggedClient(null);
     localStorage.removeItem('rena_client');
-    setShowClientDashboard(false);
+    if (view === 'wallet') setView('home');
   };
 
   // Sync loggedClient with Firestore in real-time so balance stays up-to-date
@@ -244,7 +244,7 @@ function AppInner() {
             loggedClient={loggedClient}
             onClientLogin={handleClientLogin}
             onClientLogout={handleClientLogout}
-            onOpenWallet={() => setShowClientDashboard(true)}
+            onOpenWallet={() => handleViewChange('wallet')}
             onAdminLogin={(admin) => {
               handleAdminLogin(admin);
               handleViewChange('admin');
@@ -259,7 +259,7 @@ function AppInner() {
           <FormationsNavbar
             onGoHome={() => { handleViewChange('home'); setFormationsSearch(''); }}
             loggedClient={loggedClient}
-            onOpenWallet={() => setShowClientDashboard(true)}
+            onOpenWallet={() => handleViewChange('wallet')}
             onRequestAuth={() => setShowAuthModal(true)}
             activeTab={formationsTab}
             onTabChange={setFormationsTab}
@@ -344,7 +344,7 @@ function AppInner() {
             currentView={view}
             onViewChange={handleViewChange}
             loggedClient={loggedClient}
-            onOpenWallet={() => setShowClientDashboard(true)}
+            onOpenWallet={() => handleViewChange('wallet')}
             onRequestAuth={() => setShowAuthModal(true)}
             formationsTab={formationsTab}
             onFormationsTabChange={setFormationsTab}
@@ -355,118 +355,130 @@ function AppInner() {
           className={`${
             view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
           } flex-grow relative ${
-            !['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[64px]' : ''
+            !['admin', 'affiliate', 'formations', 'wallet'].includes(view) ? 'pb-[64px]' : ''
           }`}
           style={{ overflowX: 'hidden' }}
         >
           <Suspense fallback={<div className="flex items-center justify-center min-h-[40vh]"><div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+            {/* Wallet page — full-screen, rendered outside AnimatePresence for clean layout */}
+            {view === 'wallet' && loggedClient && (
+              <ClientDashboard
+                clientId={loggedClient.id!}
+                onLogout={handleClientLogout}
+                asPage
+                onBack={handleBack}
+              />
+            )}
+
             <AnimatePresence mode="popLayout" initial={false} custom={navDirection.current}>
-              <motion.div
-                key={view}
-                custom={navDirection.current}
-                variants={{
-                  initial:  (dir: number) => ({ opacity: 0, x: dir * 24, willChange: 'transform, opacity' }),
-                  animate:  { opacity: 1, x: 0,      willChange: 'transform, opacity' },
-                  exit:     (dir: number) => ({ opacity: 0, x: dir * -18, willChange: 'transform, opacity' }),
-                }}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={{ type: 'spring', stiffness: 310, damping: 32, mass: 0.9 }}
-                className="min-h-full"
-              >
-                {['tracking', 'shipping'].includes(view) && (
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleBack}
-                      className="group flex items-center gap-1.5 text-subtext hover:text-primary hover:bg-accent-light/50 rounded-lg transition-all pl-2 pr-3"
-                    >
-                      <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                      <span className="text-xs font-semibold uppercase tracking-wider">Retour</span>
-                    </Button>
-                  </div>
-                )}
+              {view !== 'wallet' && (
+                <motion.div
+                  key={view}
+                  custom={navDirection.current}
+                  variants={{
+                    initial:  (dir: number) => ({ opacity: 0, x: dir * 24, willChange: 'transform, opacity' }),
+                    animate:  { opacity: 1, x: 0,      willChange: 'transform, opacity' },
+                    exit:     (dir: number) => ({ opacity: 0, x: dir * -18, willChange: 'transform, opacity' }),
+                  }}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  transition={{ type: 'spring', stiffness: 310, damping: 32, mass: 0.9 }}
+                  className="min-h-full"
+                >
+                  {['tracking', 'shipping'].includes(view) && (
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleBack}
+                        className="group flex items-center gap-1.5 text-subtext hover:text-primary hover:bg-accent-light/50 rounded-lg transition-all pl-2 pr-3"
+                      >
+                        <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Retour</span>
+                      </Button>
+                    </div>
+                  )}
 
-                {view === 'home' && (
-                  <HomeView
-                    onTrackingClick={() => handleViewChange('tracking')}
-                    onViewChange={handleViewChange}
-                    loggedClient={loggedClient}
-                    onOpenWallet={() => setShowClientDashboard(true)}
-                    onRequestAuth={() => setShowAuthModal(true)}
-                  />
-                )}
+                  {view === 'home' && (
+                    <HomeView
+                      onTrackingClick={() => handleViewChange('tracking')}
+                      onViewChange={handleViewChange}
+                      loggedClient={loggedClient}
+                      onOpenWallet={() => handleViewChange('wallet')}
+                      onRequestAuth={() => setShowAuthModal(true)}
+                    />
+                  )}
 
-                {view === 'products' && (
-                  <ProductsView
-                    loggedClient={loggedClient}
-                    onOpenWallet={() => setShowClientDashboard(true)}
-                    onViewChange={handleViewChange}
-                    onProductDetailChange={setIsProductDetailOpen}
-                  />
-                )}
+                  {view === 'products' && (
+                    <ProductsView
+                      loggedClient={loggedClient}
+                      onOpenWallet={() => handleViewChange('wallet')}
+                      onViewChange={handleViewChange}
+                      onProductDetailChange={setIsProductDetailOpen}
+                    />
+                  )}
 
-                {view === 'services' && (
-                  <ServicesView
-                    onTrackingClick={() => handleViewChange('tracking')}
-                    onViewChange={handleViewChange}
-                  />
-                )}
+                  {view === 'services' && (
+                    <ServicesView
+                      onTrackingClick={() => handleViewChange('tracking')}
+                      onViewChange={handleViewChange}
+                    />
+                  )}
 
-                {view === 'tracking' && <TrackingView />}
+                  {view === 'tracking' && <TrackingView />}
 
-                {view === 'shipping' && <ShippingView />}
+                  {view === 'shipping' && <ShippingView />}
 
-                {view === 'formations' && (
-                  <FormationsView
-                    loggedClient={loggedClient}
-                    onOpenWallet={() => setShowClientDashboard(true)}
-                    onClientLogin={handleClientLogin}
-                    activeTab={formationsTab}
-                    onTabChange={setFormationsTab}
-                    searchQuery={formationsSearch}
-                    onSearchChange={setFormationsSearch}
-                    onPlayerChange={setFormationsInPlayer}
-                  />
-                )}
+                  {view === 'formations' && (
+                    <FormationsView
+                      loggedClient={loggedClient}
+                      onOpenWallet={() => handleViewChange('wallet')}
+                      onClientLogin={handleClientLogin}
+                      activeTab={formationsTab}
+                      onTabChange={setFormationsTab}
+                      searchQuery={formationsSearch}
+                      onSearchChange={setFormationsSearch}
+                      onPlayerChange={setFormationsInPlayer}
+                    />
+                  )}
 
-                {view === 'admin' && (
-                  loggedAdmin
-                    ? <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-                    : <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('home')} />
-                )}
+                  {view === 'admin' && (
+                    loggedAdmin
+                      ? <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+                      : <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('home')} />
+                  )}
 
-                {view === 'teacher' && (
-                  loggedTeacher
-                    ? <TeacherDashboard teacher={loggedTeacher} onLogout={handleTeacherLogout} />
-                    : <TeacherLogin onLoginSuccess={handleTeacherLogin} onBack={() => handleViewChange('home')} />
-                )}
+                  {view === 'teacher' && (
+                    loggedTeacher
+                      ? <TeacherDashboard teacher={loggedTeacher} onLogout={handleTeacherLogout} />
+                      : <TeacherLogin onLoginSuccess={handleTeacherLogin} onBack={() => handleViewChange('home')} />
+                  )}
 
-                {view === 'affiliate' && (
-                  loggedAffiliate ? (
-                    <AffiliateDashboard affiliateId={loggedAffiliate.id!} onLogout={handleAffiliateLogout} />
-                  ) : loggedAgent ? (
-                    <AgentDashboard agentUid={loggedAgent.uid!} onLogout={handleAgentLogout} />
-                  ) : loggedAdmin ? (
-                    <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-                  ) : accessChoice === 'affiliate' ? (
-                    <AffiliateLogin onLogin={handleAffiliateLogin} />
-                  ) : accessChoice === 'agent' ? (
-                    <AgentLogin onLogin={handleAgentLogin} />
-                  ) : accessChoice === 'admin' ? (
-                    <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
-                  ) : (
-                    <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
-                  )
-                )}
-              </motion.div>
+                  {view === 'affiliate' && (
+                    loggedAffiliate ? (
+                      <AffiliateDashboard affiliateId={loggedAffiliate.id!} onLogout={handleAffiliateLogout} />
+                    ) : loggedAgent ? (
+                      <AgentDashboard agentUid={loggedAgent.uid!} onLogout={handleAgentLogout} />
+                    ) : loggedAdmin ? (
+                      <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+                    ) : accessChoice === 'affiliate' ? (
+                      <AffiliateLogin onLogin={handleAffiliateLogin} />
+                    ) : accessChoice === 'agent' ? (
+                      <AgentLogin onLogin={handleAgentLogin} />
+                    ) : accessChoice === 'admin' ? (
+                      <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
+                    ) : (
+                      <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
+                    )
+                  )}
+                </motion.div>
+              )}
             </AnimatePresence>
           </Suspense>
         </main>
 
-        {!['admin', 'affiliate', 'teacher', 'formations'].includes(view) && (
+        {!['admin', 'affiliate', 'teacher', 'formations', 'wallet'].includes(view) && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
@@ -491,21 +503,10 @@ function AppInner() {
 
         <Suspense fallback={null}>
           <AnimatePresence>
-            {showClientDashboard && loggedClient && (
-              <ClientDashboard
-                clientId={loggedClient.id!}
-                onLogout={handleClientLogout}
-                open={showClientDashboard}
-                onClose={() => setShowClientDashboard(false)}
-              />
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
             {moncashReturnRef && (
               <PaymentSuccessView
                 referenceId={moncashReturnRef}
-                onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
+                onClose={() => { setMoncashReturnRef(null); handleViewChange('wallet'); }}
               />
             )}
           </AnimatePresence>
@@ -513,7 +514,7 @@ function AppInner() {
           <AnimatePresence>
             {showPaymentSuccess && (
               <PaymentSuccessPage
-                onClose={() => { setShowPaymentSuccess(false); setShowClientDashboard(true); }}
+                onClose={() => { setShowPaymentSuccess(false); handleViewChange('wallet'); }}
               />
             )}
           </AnimatePresence>

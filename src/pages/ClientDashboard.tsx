@@ -4,7 +4,7 @@ import {
   LogOut, Loader2, X, Copy, CheckCircle2, AlertCircle,
   Clock, XCircle, Shield, Trash2,
   TrendingUp, Globe, Smartphone, CreditCard as CardIcon,
-  Building2, Bitcoin, Info, ChevronDown,
+  Building2, Bitcoin, Info, ChevronDown, ChevronLeft,
   Eye, EyeOff, Send, User, QrCode, Search, MapPin, Phone,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
@@ -30,8 +30,10 @@ import CryptoDepositFlow from '../components/CryptoDepositFlow';
 interface ClientDashboardProps {
   clientId: string;
   onLogout: () => void;
-  open: boolean;
-  onClose: () => void;
+  open?: boolean;
+  onClose?: () => void;
+  asPage?: boolean;
+  onBack?: () => void;
 }
 
 const WHATSAPP_NUMBER = '+50944813185';
@@ -170,7 +172,7 @@ function VirtualCard({
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function ClientDashboard({ clientId, onLogout, open, onClose }: ClientDashboardProps) {
+export default function ClientDashboard({ clientId, onLogout, open, onClose, asPage, onBack }: ClientDashboardProps) {
   const { client, loading } = useClientData(clientId);
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
   const { settings } = useSettingsCtx();
@@ -657,23 +659,25 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   const pendingCount = transactions.filter(t => t.status === 'pending').length;
 
-  if (!open) return null;
+  if (!asPage && !open) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-[58px] sm:inset-0 z-[200] flex items-end sm:items-center justify-center">
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-      />
+    <div className={asPage
+      ? 'flex flex-col min-h-full bg-white'
+      : 'fixed inset-x-0 top-0 bottom-[58px] sm:inset-0 z-[200] flex items-end sm:items-center justify-center'
+    }>
+      {!asPage && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
 
-      <motion.div
-        initial={{ opacity: 0, y: 80, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 80, scale: 0.96 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-        className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-full sm:max-h-[95vh] overflow-hidden flex flex-col shadow-2xl shadow-black/20"
-      >
+      <div className={asPage
+        ? 'flex flex-col flex-1 overflow-hidden w-full'
+        : 'relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-full sm:max-h-[95vh] overflow-hidden flex flex-col shadow-2xl shadow-black/20'
+      }>
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -683,10 +687,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             <span className="font-black text-gray-900 text-sm">Mon Wallet</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={asPage ? onBack : onClose}
             className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
           >
-            <X className="h-4 w-4 text-gray-500" />
+            {asPage
+              ? <ChevronLeft className="h-4 w-4 text-gray-500" />
+              : <X className="h-4 w-4 text-gray-500" />}
           </button>
         </div>
 
@@ -842,48 +848,40 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               ))}
             </AnimatePresence>
 
-            {/* ── Action buttons: Déposer + Retirer */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* ── Action buttons: 3 columns ── */}
+            <div className="grid grid-cols-3 gap-2.5">
               <button
                 onClick={() => { setDepositMethod(depositMethods[0] || null); setIsDepositOpen(true); }}
-                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-95"
+                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-95"
               >
-                <div className="absolute -right-4 -bottom-4 w-16 h-16 rounded-full bg-white/10" />
-                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
+                <div className="absolute -right-3 -bottom-3 w-12 h-12 rounded-full bg-white/10" />
+                <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
                   <ArrowDownToLine className="h-4 w-4 text-white" />
                 </div>
-                <p className="font-black text-white text-sm">Déposer</p>
-                <p className="text-white/70 text-[10px]">HTG → USD</p>
+                <p className="font-black text-white text-xs">Déposer</p>
               </button>
 
               <button
                 onClick={() => { setWithdrawMethod(withdrawalMethods[0] || null); setIsWithdrawOpen(true); }}
-                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-3 rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-200 hover:from-red-600 hover:to-rose-700 transition-all active:scale-95"
+                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-4 rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-200 hover:from-red-600 hover:to-rose-700 transition-all active:scale-95"
               >
-                <div className="absolute -right-4 -bottom-4 w-16 h-16 rounded-full bg-white/10" />
-                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
+                <div className="absolute -right-3 -bottom-3 w-12 h-12 rounded-full bg-white/10" />
+                <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
                   <ArrowUpFromLine className="h-4 w-4 text-white" />
                 </div>
-                <p className="font-black text-white text-sm">Retirer</p>
-                <p className="text-white/70 text-[10px]">En USD</p>
+                <p className="font-black text-white text-xs">Retirer</p>
               </button>
-            </div>
 
-            {/* ── Transfer + Agent buttons */}
-            <div className="grid grid-cols-1 gap-2">
               <button
                 onClick={() => { resetTransfer(); setIsTransferOpen(true); }}
-                className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:bg-violet-100 transition-all active:scale-95 group"
+                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-4 rounded-2xl bg-gradient-to-br from-violet-600 to-violet-700 shadow-lg shadow-violet-200 hover:from-violet-700 hover:to-violet-800 transition-all active:scale-95"
               >
-                <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center shadow shadow-violet-300 group-hover:shadow-md transition-shadow">
+                <div className="absolute -right-3 -bottom-3 w-12 h-12 rounded-full bg-white/10" />
+                <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
                   <Send className="h-4 w-4 text-white" />
                 </div>
-                <div className="text-left">
-                  <p className="font-black text-violet-700 text-sm leading-tight">Transfert Wallet</p>
-                  <p className="text-violet-400 text-[10px]">Envoyer des fonds à un autre utilisateur</p>
-                </div>
+                <p className="font-black text-white text-xs">Transférer</p>
               </button>
-
             </div>
 
             {/* Payment Methods */}
@@ -1039,7 +1037,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             <LogOut className="h-4 w-4 mr-2" /> Déconnexion
           </Button>
         </div>
-      </motion.div>
+      </div>
 
       {/* ── DEPOSIT MODAL ──────────────────────────────────────────────────────── */}
       <Dialog open={isDepositOpen} onOpenChange={v => { if (!v) resetDeposit(); setIsDepositOpen(v); }}>

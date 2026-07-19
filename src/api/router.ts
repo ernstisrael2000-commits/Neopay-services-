@@ -6714,16 +6714,6 @@ router.post('/api/crypto/create-payment', requireDb, async (req, res) => {
     if (!allowed.includes(currency))
       return res.status(400).json({ error: 'Cryptomonnaie non supportée.' });
 
-    // Anti-duplicate: reuse active payment if one already exists
-    const existing = await adminDb.collection('crypto_payments')
-      .where('clientId', '==', clientId)
-      .where('status', 'in', ['waiting', 'confirming'])
-      .limit(1).get();
-    if (!existing.empty) {
-      const d = existing.docs[0].data();
-      return res.json({ ...d, existing: true });
-    }
-
     // Build IPN callback URL from REPLIT_DEV_DOMAIN or APP_URL
     const domain = process.env.REPLIT_DEV_DOMAIN
       ? `https://${process.env.REPLIT_DEV_DOMAIN}`
