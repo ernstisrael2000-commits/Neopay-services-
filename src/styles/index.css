@@ -58,6 +58,24 @@
   50% { box-shadow: 0 0 0 8px rgba(109, 40, 217, 0); }
 }
 
+@keyframes search-border-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.search-border-wrap {
+  position: relative;
+  border-radius: 1rem;
+  padding: 1.5px;
+  background: linear-gradient(135deg, #2563EB, #818cf8, #c4b5fd, #2563EB);
+  background-size: 300% 300%;
+  animation: search-border-gradient 3s ease-in-out infinite;
+}
+@keyframes search-border-gradient {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 /* @fontsource-variable/geist supprimé — non utilisé (aucun --font-* ne le référence),

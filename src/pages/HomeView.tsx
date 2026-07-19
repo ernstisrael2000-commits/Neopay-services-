@@ -242,7 +242,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         </span>
                         <span className="text-white/40 text-sm font-bold">USD</span>
                       </div>
-                      <p className="text-white/25 text-[10px] font-semibold mt-1 tabular-nums">
+                      <p className="text-white text-[10px] font-semibold mt-1 tabular-nums">
                         ≈ {balanceHTG.toLocaleString()} HTG
                       </p>
                     </>
@@ -257,7 +257,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       onClick={copyWalletId}
                       className="flex items-center gap-1.5 group"
                     >
-                      <span className="text-white/25 text-[10px] font-mono tracking-[0.15em] group-hover:text-white/45 transition-colors">
+                      <span className="text-white/80 text-[10px] font-mono tracking-[0.15em] group-hover:text-white transition-colors">
                         {effectiveClient?.walletId || '—'}
                       </span>
                       {walletCopied
@@ -270,13 +270,15 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             </div>
 
             {/* ── Recharger button ── */}
-            <button
+            <motion.button
               onClick={onOpenWallet}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-[0.98] transition-all shadow-sm"
+              animate={{ y: [0, -6, 0] }}
+              transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-[0.98] transition-colors shadow-sm"
             >
               <Zap className="h-3.5 w-3.5 text-amber-500" />
               <span className="text-sm font-black text-gray-700 tracking-wide">Recharger</span>
-            </button>
+            </motion.button>
 
           </motion.section>
         ) : (
@@ -319,23 +321,25 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       </AnimatePresence>
 
       {/* ── Barre de recherche produits ── */}
-      <div className="relative w-full">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none z-10" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Rechercher un produit, jeu, carte..."
-          className="w-full h-12 pl-11 pr-10 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+      <div className="search-border-wrap shadow-sm">
+        <div className="relative w-full">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none z-10" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Rechercher un produit, jeu, carte..."
+            className="w-full h-12 pl-11 pr-10 rounded-[14px] bg-white text-sm font-medium text-dark placeholder:text-gray-400 focus:outline-none transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Nos Produits — real catalog preview ── */}
