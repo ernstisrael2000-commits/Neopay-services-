@@ -272,11 +272,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             {/* ── Recharger button ── */}
             <button
               onClick={onOpenWallet}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl active:scale-[0.98] transition-all"
-              style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.18)' }}
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-[0.98] transition-all shadow-sm"
             >
-              <Zap className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="text-sm font-black text-cyan-300 tracking-wide">Recharger</span>
+              <Zap className="h-3.5 w-3.5 text-amber-500" />
+              <span className="text-sm font-black text-gray-700 tracking-wide">Recharger</span>
             </button>
 
           </motion.section>
@@ -321,19 +320,18 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
       {/* ── Barre de recherche produits ── */}
       <div className="relative w-full">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 pointer-events-none z-10" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none z-10" />
         <input
           type="text"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Rechercher un produit, jeu, carte..."
-          className="w-full h-12 pl-11 pr-10 rounded-2xl text-sm font-medium text-dark placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          style={{ background: '#0C1525', border: '1px solid rgba(34,211,238,0.12)' }}
+          className="w-full h-12 pl-11 pr-10 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all"
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-dark transition-colors"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -360,7 +358,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         {(productsLoading || gamesLoading || cardsLoading) ? (
           <div className="grid grid-cols-2 gap-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-44 rounded-2xl bg-[#0C1525] animate-pulse" style={{ boxShadow: '0 0 0 1px rgba(34,211,238,0.07)' }} />
+              <div key={i} className="h-44 rounded-2xl bg-gray-100 animate-pulse" />
             ))}
           </div>
         ) : (
@@ -396,7 +394,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}
                     onClick={() => handleItemClick(item)}
-                    className="relative rounded-2xl overflow-hidden border border-[rgba(34,211,238,0.10)] shadow-sm hover:shadow-[0_0_24px_rgba(34,211,238,0.12)] hover:-translate-y-0.5 transition-all group bg-[#0C1525] text-left active:scale-[0.98]"
+                    className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all group bg-white text-left active:scale-[0.98]"
                   >
                     <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                       <img
@@ -425,7 +423,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       </div>
                     </div>
                     <div className="px-2.5 py-2 flex items-center justify-between">
-                      <p className="text-[9px] text-slate-500 capitalize">{item.type === 'game' ? 'Jeu' : item.type === 'card' ? 'Carte' : 'Produit'}</p>
+                      <p className="text-[9px] text-gray-400 capitalize">{item.type === 'game' ? 'Jeu' : item.type === 'card' ? 'Carte' : 'Produit'}</p>
                       <span className="flex items-center gap-0.5 text-[9px] text-primary font-black">
                         {loggedClient ? 'Voir' : 'Connexion'} <ArrowRight className="h-2.5 w-2.5" />
                       </span>
@@ -444,22 +442,22 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       </section>
 
       {/* ── Why Rena ── */}
-      <section className="rounded-3xl border border-[rgba(34,211,238,0.10)] p-6" style={{ background: '#0C1525', boxShadow: '0 0 40px rgba(34,211,238,0.04)' }}>
+      <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
         <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { icon: LucideIcons.Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', icon_color: 'text-amber-400', bg: 'rgba(251,191,36,0.08)' },
-            { icon: LucideIcons.ShieldCheck, label: 'Sécurisé', desc: 'Transactions protégées', icon_color: 'text-emerald-400', bg: 'rgba(52,211,153,0.08)' },
-            { icon: LucideIcons.Clock, label: '24/7', desc: 'Support disponible en tout temps', icon_color: 'text-cyan-400', bg: 'rgba(34,211,238,0.08)' },
-            { icon: LucideIcons.Star, label: 'Fiable', desc: 'Des milliers de clients satisfaits', icon_color: 'text-violet-400', bg: 'rgba(168,85,247,0.08)' },
+            { icon: LucideIcons.Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', color: 'text-amber-500 bg-amber-50' },
+            { icon: LucideIcons.ShieldCheck, label: 'Sécurisé', desc: 'Transactions protégées', color: 'text-emerald-500 bg-emerald-50' },
+            { icon: LucideIcons.Clock, label: '24/7', desc: 'Support disponible en tout temps', color: 'text-blue-500 bg-blue-50' },
+            { icon: LucideIcons.Star, label: 'Fiable', desc: 'Des milliers de clients satisfaits', color: 'text-purple-500 bg-purple-50' },
           ].map(item => (
-            <div key={item.label} className="flex flex-col items-center text-center gap-2 p-3 rounded-2xl border border-[rgba(255,255,255,0.04)]" style={{ background: item.bg }}>
-              <div className={`h-9 w-9 rounded-xl flex items-center justify-center`} style={{ background: 'rgba(255,255,255,0.05)' }}>
-                <item.icon className={`h-4 w-4 ${item.icon_color}`} />
+            <div key={item.label} className="flex flex-col items-center text-center gap-2 p-3 rounded-2xl bg-gray-50">
+              <div className={`h-9 w-9 rounded-xl ${item.color} flex items-center justify-center`}>
+                <item.icon className="h-4 w-4" />
               </div>
               <div>
                 <p className="font-black text-dark text-sm leading-none">{item.label}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{item.desc}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{item.desc}</p>
               </div>
             </div>
           ))}

@@ -92,8 +92,8 @@ export default function BottomNav({
         aria-label="Navigation principale"
         className="fixed bottom-0 left-0 right-0 z-[300]"
         style={{
-          /* solid dark all the way to screen edge — covers safe area */
-          background: '#060B14',
+          /* solid white all the way to screen edge — covers safe area */
+          background: 'white',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
@@ -103,10 +103,10 @@ export default function BottomNav({
           className="absolute inset-x-0 top-0 pointer-events-none"
           style={{
             height: BAR_H,
-            background: '#060B14',
+            background: 'white',
             WebkitMaskImage: maskImage,
             maskImage,
-            boxShadow: '0 -8px 30px rgba(0,0,0,0.6), 0 -1px 0 rgba(34,211,238,0.08)',
+            boxShadow: '0 -5px 22px rgba(0,0,0,0.07), 0 -1px 0 rgba(0,0,0,0.055)',
           }}
         />
 
@@ -130,7 +130,7 @@ export default function BottomNav({
               >
                 <Icon
                   style={{ width: 22, height: 22 }}
-                  className={`transition-colors duration-100 ${active ? 'text-[#060B14]' : 'text-slate-500'}`}
+                  className={`transition-colors duration-100 ${active ? 'text-white' : 'text-gray-500'}`}
                   strokeWidth={active ? 2.5 : 1.75}
                 />
               </TabButton>
@@ -154,7 +154,7 @@ export default function BottomNav({
             {isLoggedIn && balanceHTG > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[14px] px-0.5 bg-emerald-500 text-white text-[6.5px] font-black rounded-full flex items-center justify-center leading-none pointer-events-none"
-                style={{ border: '2px solid #060B14' }}
+                style={{ border: '2px solid white' }}
               >
                 {balanceLabel}
               </span>
@@ -201,8 +201,8 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
             layoutId="nav-ring"
             className="absolute inset-0 rounded-full"
             style={{
-              background: 'linear-gradient(135deg, #22D3EE 0%, #0891B2 100%)',
-              boxShadow: '0 8px 24px rgba(34,211,238,0.40), 0 0 0 3.5px #060B14, 0 0 0 4.5px rgba(34,211,238,0.12)',
+              background: 'linear-gradient(135deg, #2563EB 0%, #4f46e5 100%)',
+              boxShadow: '0 8px 22px rgba(79,70,229,0.44), 0 0 0 3.5px white, 0 0 0 4.5px rgba(0,0,0,0.05)',
             }}
             transition={SPRING}
           />
@@ -214,11 +214,11 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
             className="absolute inset-0 rounded-full"
             style={{
               background: walletStyle === 'logged'
-                ? 'linear-gradient(135deg, #A855F7, #7C3AED)'
-                : '#111C2D',
+                ? 'linear-gradient(135deg, #10b981, #059669)'
+                : '#f3f4f6',
               boxShadow: walletStyle === 'logged'
-                ? '0 4px 18px rgba(168,85,247,0.45), 0 0 0 3px #060B14, 0 0 0 4px rgba(168,85,247,0.12)'
-                : '0 0 0 3px #060B14, 0 0 0 4px rgba(255,255,255,0.04)',
+                ? '0 4px 14px rgba(16,185,129,0.35), 0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.05)'
+                : '0 0 0 3px white, 0 0 0 4px rgba(0,0,0,0.05)',
             }}
           />
         )}
@@ -237,7 +237,7 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
       <motion.span
         className="text-[9.5px] font-bold leading-none tracking-tight mt-0.5"
         animate={{
-          color: active ? '#22D3EE' : isWallet && walletStyle === 'logged' ? '#A855F7' : '#475569',
+          color: active ? '#2563EB' : isWallet && walletStyle === 'logged' ? '#059669' : '#9ca3af',
           opacity: active ? 1 : 0.65,
         }}
         transition={{ duration: 0.14 }}
