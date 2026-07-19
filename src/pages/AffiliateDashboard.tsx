@@ -732,8 +732,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
         {/* ═══ ACCUEIL ═══ */}
         {activeTab === 'accueil' && (
-          <div>
           <ContestPodium participantId={affiliateId} participantType="affiliate" />
+        )}
+        {activeTab === 'accueil' && (
           <div className="p-4 space-y-4">
 
             {/* ── Greeting ── */}

@@ -6622,6 +6622,195 @@ router.post('/api/admin/test-email', async (req, res) => {
   return res.status(500).json({ ok: false, error: result.error });
 });
 
+// ── NOWPayments — Crypto top-up ───────────────────────────────────────────────
+
+const NOWPAYMENTS_BASE = 'https://api.nowpayments.io/v1';
+
+function sortObjectRecursive(obj: unknown): unknown {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  if (Array.isArray(obj)) return obj.map(sortObjectRecursive);
+  return Object.keys(obj as Record<string, unknown>).sort().reduce<Record<string, unknown>>((acc, k) => {
+    acc[k] = sortObjectRecursive((obj as Record<string, unknown>)[k]);
+    return acc;
+  }, {});
+}
+
+async function nowPayFetch(path: string, method = 'GET', body?: object) {
+  const apiKey = process.env.NOWPAYMENTS_API_KEY;
+  if (!apiKey) throw new Error('NOWPAYMENTS_API_KEY non configurée côté serveur.');
+  const opts: Record<string, unknown> = {
+    method,
+    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(`${NOWPAYMENTS_BASE}${path}`, opts as RequestInit);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((data as { message?: string }).message || `NOWPayments error ${r.status}`);
+  return data;
+}
+
+async function creditCryptoPayment(
+  docRef: FirebaseFirestore.DocumentReference,
+  data: Record<string, unknown>
+) {
+  await adminDb.runTransaction(async (txn) => {
+    const fresh = await txn.get(docRef);
+    if (!fresh.exists || fresh.data()?.credited) return; // already credited — skip
+    const clientRef = adminDb.collection('clients').doc(data.clientId as string);
+    const txRef     = adminDb.collection('client_transactions').doc();
+    const amount    = data.amount as number;
+    txn.set(txRef, {
+      clientId:      data.clientId,
+      clientName:    data.clientName || '',
+      clientWalletId: data.clientWalletId || '',
+      type:          'deposit',
+      amount,
+      status:        'approved',
+      method:        'crypto',
+      currency:      data.currency,
+      txId:          String(data.paymentId),
+      description:   `Recharge crypto (${String(data.currency || '').toUpperCase()}) — ${amount.toFixed(2)} USD`,
+      createdAt:     FieldValue.serverTimestamp(),
+      updatedAt:     FieldValue.serverTimestamp(),
+    });
+    txn.update(clientRef, { balance: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() });
+    txn.update(docRef, { credited: true, creditedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  });
+  // Notify client
+  try {
+    await sendFcmToClient(
+      data.clientId as string,
+      '✅ Paiement crypto confirmé',
+      `Votre compte a été rechargé de ${(data.amount as number).toFixed(2)} USD.`,
+      { type: 'deposit', method: 'crypto' }
+    );
+  } catch { /* non-fatal */ }
+}
+
+// POST /api/crypto/create-payment
+router.post('/api/crypto/create-payment', requireDb, async (req, res) => {
+  try {
+    const { clientId, clientName, clientWalletId, amount, currency } = req.body;
+    if (!clientId || !amount || !currency)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (Number(amount) <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+    const allowed = ['usdttrc20', 'usdc', 'btc'];
+    if (!allowed.includes(currency))
+      return res.status(400).json({ error: 'Cryptomonnaie non supportée.' });
+
+    // Anti-duplicate: reuse active payment if one already exists
+    const existing = await adminDb.collection('crypto_payments')
+      .where('clientId', '==', clientId)
+      .where('status', 'in', ['waiting', 'confirming'])
+      .limit(1).get();
+    if (!existing.empty) {
+      const d = existing.docs[0].data();
+      return res.json({ ...d, existing: true });
+    }
+
+    // Build IPN callback URL from REPLIT_DEV_DOMAIN or APP_URL
+    const domain = process.env.REPLIT_DEV_DOMAIN
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : (process.env.APP_URL || '');
+    const ipnCallbackUrl = `${domain}/api/crypto/ipn`;
+    const orderId = `RENA-${String(clientId).slice(0, 8)}-${Date.now()}`;
+
+    const payment = await nowPayFetch('/payment', 'POST', {
+      price_amount:        Number(amount),
+      price_currency:      'usd',
+      pay_currency:        currency,
+      order_id:            orderId,
+      order_description:   `Recharge portefeuille — ${clientName || clientId}`,
+      ipn_callback_url:    ipnCallbackUrl,
+      is_fee_paid_by_user: true,
+    }) as Record<string, unknown>;
+
+    await adminDb.collection('crypto_payments').doc(String(payment.payment_id)).set({
+      paymentId:      String(payment.payment_id),
+      clientId,
+      clientName:     clientName || '',
+      clientWalletId: clientWalletId || '',
+      orderId,
+      amount:         Number(amount),
+      currency,
+      status:         payment.payment_status || 'waiting',
+      credited:       false,
+      payAddress:     payment.pay_address || '',
+      payAmount:      payment.pay_amount  || 0,
+      payCurrency:    payment.pay_currency || currency,
+      expirationDate: payment.expiration_estimate_date || null,
+      createdAt:      FieldValue.serverTimestamp(),
+      updatedAt:      FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[crypto] Payment ${payment.payment_id} created for ${clientId} — ${amount} → ${currency}`);
+    res.json(payment);
+  } catch (e: unknown) {
+    const err = e as Error;
+    console.error('[crypto/create-payment]', err.message);
+    res.status(500).json({ error: err.message || 'Erreur serveur.' });
+  }
+});
+
+// GET /api/crypto/payment-status/:paymentId
+router.get('/api/crypto/payment-status/:paymentId', requireDb, async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    const docRef  = adminDb.collection('crypto_payments').doc(paymentId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return res.status(404).json({ error: 'Paiement introuvable.' });
+    const data = docSnap.data()!;
+
+    const payment = await nowPayFetch(`/payment/${paymentId}`) as Record<string, unknown>;
+    const newStatus = payment.payment_status as string;
+    await docRef.update({ status: newStatus, updatedAt: FieldValue.serverTimestamp() });
+
+    if (newStatus === 'finished' && !data.credited) {
+      await creditCryptoPayment(docRef, data);
+    }
+
+    res.json({ ...payment, credited: newStatus === 'finished' });
+  } catch (e: unknown) {
+    const err = e as Error;
+    console.error('[crypto/payment-status]', err.message);
+    res.status(500).json({ error: err.message || 'Erreur serveur.' });
+  }
+});
+
+// POST /api/crypto/ipn  — NOWPayments webhook
+router.post('/api/crypto/ipn', async (req, res) => {
+  try {
+    const sig       = req.headers['x-nowpayments-sig'] as string | undefined;
+    const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
+    if (ipnSecret && sig) {
+      const sorted   = JSON.stringify(sortObjectRecursive(req.body));
+      const expected = createHmac('sha512', ipnSecret).update(sorted).digest('hex');
+      if (sig.toLowerCase() !== expected.toLowerCase()) {
+        console.warn('[crypto/ipn] Signature invalide — rejeté');
+        return res.status(401).json({ error: 'Signature invalide.' });
+      }
+    }
+    const { payment_id, payment_status } = req.body as { payment_id?: string; payment_status?: string };
+    if (!payment_id) return res.sendStatus(200);
+
+    const docRef  = adminDb.collection('crypto_payments').doc(String(payment_id));
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) return res.sendStatus(200);
+
+    const data = docSnap.data()!;
+    await docRef.update({ status: payment_status, updatedAt: FieldValue.serverTimestamp() });
+    if (payment_status === 'finished' && !data.credited) {
+      await creditCryptoPayment(docRef, data);
+    }
+    console.log(`[crypto/ipn] payment_id=${payment_id} status=${payment_status}`);
+    res.sendStatus(200); // Always 200 so NOWPayments doesn't retry
+  } catch (e: unknown) {
+    console.error('[crypto/ipn]', (e as Error).message);
+    res.sendStatus(200);
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

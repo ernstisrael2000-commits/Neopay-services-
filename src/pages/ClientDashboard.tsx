@@ -25,6 +25,7 @@ import {
 import { apiFetch } from '../lib/apiFetch';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { Client, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
+import CryptoDepositFlow from '../components/CryptoDepositFlow';
 
 interface ClientDashboardProps {
   clientId: string;
@@ -223,7 +224,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [lookupLoading,     setLookupLoading]     = useState(false);
 
   // Agent QR mode state
-  const [depositMode,    setDepositMode]    = useState<'standard' | 'agent-qr' | 'agent-request'>('standard');
+  const [depositMode,    setDepositMode]    = useState<'standard' | 'agent-qr' | 'agent-request' | 'crypto'>('standard');
   // Agent deposit request state (client requests deposit confirmation from agent)
   const [agentReqCode,   setAgentReqCode]   = useState('');
   const [agentReqAmount, setAgentReqAmount] = useState('');
@@ -1017,18 +1018,22 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           <form onSubmit={depositMode === 'agent-qr' ? (e: React.FormEvent) => e.preventDefault() : handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
 
             {/* ── Mode selector ── */}
-            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-2xl">
+            <div className="grid grid-cols-4 gap-1 p-1 bg-gray-100 rounded-2xl">
               <button type="button" onClick={() => { setDepositMode('standard'); setTxCode(null); setAgentQrAmount(''); }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black transition-all ${depositMode === 'standard' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                className={`flex items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${depositMode === 'standard' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
                 <Smartphone className="h-3 w-3" />Standard
               </button>
               <button type="button" onClick={() => { setDepositMode('agent-qr'); setDepositMethod(null); }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black transition-all ${depositMode === 'agent-qr' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                className={`flex items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${depositMode === 'agent-qr' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
                 <QrCode className="h-3 w-3" />QR Agent
               </button>
               <button type="button" onClick={() => { setDepositMode('agent-request'); setDepositMethod(null); setTxCode(null); }}
-                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-black transition-all ${depositMode === 'agent-request' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                className={`flex items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${depositMode === 'agent-request' ? 'bg-white shadow text-emerald-700' : 'text-gray-400 hover:text-gray-600'}`}>
                 <Send className="h-3 w-3" />Via Code
+              </button>
+              <button type="button" onClick={() => { setDepositMode('crypto'); setDepositMethod(null); setTxCode(null); }}
+                className={`flex items-center justify-center gap-1 py-2.5 rounded-xl text-[10px] font-black transition-all ${depositMode === 'crypto' ? 'bg-white shadow text-amber-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                <Bitcoin className="h-3 w-3" />Crypto
               </button>
             </div>
 
@@ -1161,6 +1166,19 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                   </>
                 )}
               </div>
+            )}
+
+            {/* ── Mode Crypto ── */}
+            {depositMode === 'crypto' && (
+              <CryptoDepositFlow
+                clientId={client!.id!}
+                clientName={client!.name || ''}
+                clientWalletId={client!.walletId || ''}
+                onSuccess={(amount) => {
+                  toast.success(`✅ Compte rechargé de ${amount.toFixed(2)} USD !`);
+                  setIsDepositOpen(false);
+                }}
+              />
             )}
 
             {depositMode === 'standard' && (<>
