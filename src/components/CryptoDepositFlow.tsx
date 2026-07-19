@@ -161,7 +161,7 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
 
   // ── Create payment ──
   const handleCreate = async () => {
-    if (!selected || usd <= 0) return;
+    if (!selected || usd < 15) return;
     setCreating(true);
     try {
       const data: CryptoPayment = await apiFetch('/api/crypto/create-payment', {
@@ -312,11 +312,11 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-black text-lg">$</span>
             <Input
               type="number"
-              min="1"
-              step="0.01"
+              min="15"
+              step="1"
               value={usdInput}
               onChange={e => setUsdInput(e.target.value)}
-              placeholder="Ex: 50"
+              placeholder="Min. $15"
               className="h-13 pl-8 rounded-xl text-lg font-black"
               autoFocus
             />
@@ -352,11 +352,17 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
           </p>
         </div>
 
+        {usd > 0 && usd < 15 && (
+          <p className="text-[11px] text-red-500 font-bold text-center -mt-1">
+            Montant minimum : $15 USD
+          </p>
+        )}
+
         <Button
           type="button"
           onClick={handleCreate}
-          disabled={creating || usd <= 0}
-          className="w-full h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black border-0"
+          disabled={creating || usd < 15}
+          className="w-full h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black border-0 disabled:opacity-40"
         >
           {creating
             ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Création en cours…</>
