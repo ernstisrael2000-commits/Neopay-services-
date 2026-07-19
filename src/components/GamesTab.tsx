@@ -54,11 +54,30 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
   const [selected, setSelected] = useState<FazerCategory | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Filter: keep only Free Fire LATAM (hide all other FF regions)
-  const isHiddenFFRegion = (c: FazerCategory) =>
-    c.name.toLowerCase().startsWith('free fire') && !c.name.toLowerCase().includes('latam');
+  // ── Filtre région Haïti ──────────────────────────────────────────
+  // On exclut les jeux dont le nom contient un indicateur de région
+  // incompatible avec Haïti (LATAM / Global / Amériques sont acceptés).
+  const HAITI_EXCLUDED: string[] = [
+    '(EU)', '(Europe)', '(CIS)',
+    '(ID)', '(Indonesia)',
+    '(TH)', '(Thailand)',
+    '(MY)', '(Malaysia)',
+    '(SG)', '(Singapore)', '(SG/MY)', '(MY/SG)',
+    '(SEA)',
+    '(PH)', '(Philippines)',
+    '(VN)', '(Vietnam)',
+    '(TW)', '(Taiwan)', '(HK)', '(HK/MO)', '(TW/HK/MO)',
+    '(MENA)',
+    '(BD)', '(PK)', '(IN)',
+    '(SA)', '(KZ)',
+    '(RU)', '(Russia)', '(Turkey)',
+    '(Asia)', '(Black Clover M (Asia))',
+    ' (KH)', ' VNG',
+  ];
+  const isAvailableInHaiti = (c: FazerCategory) =>
+    !HAITI_EXCLUDED.some(tag => c.name.includes(tag));
 
-  const visibleCategories = categories.filter(c => !isHiddenFFRegion(c));
+  const visibleCategories = categories.filter(isAvailableInHaiti);
 
   // Featured game: prefer Free Fire LATAM — always pinned first in grid
   const freefire =
@@ -380,10 +399,10 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
         exit={{ scale: 0.93, opacity: 0 }}
         transition={{ type: 'spring', damping: 26, stiffness: 300 }}
         className="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col"
-        style={{ maxHeight: 'min(90vh, 680px)' }}
+        style={{ maxWidth: 420 }}
       >
         {/* Header compact */}
-        <div className={`relative bg-gradient-to-br ${accent} shrink-0`} style={{ minHeight: 110 }}>
+        <div className={`relative bg-gradient-to-br ${accent} shrink-0`} style={{ minHeight: 88 }}>
           {category.imageurl && (
             <img
               src={category.imageurl}
@@ -398,7 +417,7 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
           >
             <X className="h-4 w-4" />
           </button>
-          <div className="relative p-4 pb-3 flex items-end justify-between h-full min-h-[110px]">
+          <div className="relative p-4 pb-3 flex items-end justify-between h-full min-h-[88px]">
             <div>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-widest mb-1.5">
                 <Zap className="h-2.5 w-2.5" /> Top-up
@@ -416,76 +435,72 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
           </div>
         </div>
 
-        {/* Body — scrollable */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Step 1 — Offers grid */}
-          <div className="p-4 space-y-3">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+        {/* Body — taille fixe, pas de scroll global */}
+        <div>
+          {/* Step 1 — Grille d'offres avec scroll interne limité */}
+          <div className="px-4 pt-3 pb-2">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
               1 · Choisissez votre offre
             </p>
 
             {offersLoading ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-6">
                 <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
               </div>
             ) : offers.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">Aucune offre disponible.</p>
+              <p className="text-sm text-gray-400 text-center py-6">Aucune offre disponible.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {offers.map((offer, i) => {
-                  const htg = offerHTG(offer);
-                  const isSelected = selectedOffer?.offer_id === offer.offer_id;
-                  const canAfford = !loggedClient || balanceUSD >= offer.price;
-                  return (
-                    <motion.button
-                      key={offer.offer_id}
-                      initial={{ opacity: 0, scale: 0.92 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.03 }}
-                      onClick={() => {
-                        setSelectedOffer(isSelected ? null : offer);
-                        // Reset ID validation when changing offer
-                        if (!isSelected) {
-                          setValidState('idle');
-                          setValidatedUsername(null);
-                        }
-                      }}
-                      className={`relative rounded-2xl p-3 text-left border-2 transition-all active:scale-95 ${
-                        isSelected
-                          ? 'border-purple-500 bg-purple-50 shadow-lg shadow-purple-100'
-                          : canAfford
-                          ? 'border-gray-100 bg-white hover:border-purple-200 hover:bg-purple-50/50'
-                          : 'border-gray-100 bg-gray-50 opacity-50'
-                      }`}
-                    >
-                      {isSelected && (
-                        <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-purple-600 flex items-center justify-center">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-                        </div>
-                      )}
-                      <p className="text-xs font-black text-gray-900 leading-tight pr-6">{offer.name}</p>
-                      <p className="text-base font-black text-purple-600 mt-1 leading-none">
-                        {htg.toLocaleString()} HTG
-                      </p>
-                      <p className="text-[10px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>
-                    </motion.button>
-                  );
-                })}
+              /* Scroll uniquement dans cette zone — hauteur fixe = 3 rangées visibles */
+              <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
+                <div className="grid grid-cols-2 gap-2 pr-1">
+                  {offers.map((offer, i) => {
+                    const htg = offerHTG(offer);
+                    const isSelected = selectedOffer?.offer_id === offer.offer_id;
+                    const canAfford = !loggedClient || balanceUSD >= offer.price;
+                    return (
+                      <button
+                        key={offer.offer_id}
+                        onClick={() => {
+                          setSelectedOffer(isSelected ? null : offer);
+                          if (!isSelected) { setValidState('idle'); setValidatedUsername(null); }
+                        }}
+                        className={`relative rounded-2xl p-3 text-left border-2 transition-all active:scale-95 ${
+                          isSelected
+                            ? 'border-purple-500 bg-purple-50 shadow-md shadow-purple-100'
+                            : canAfford
+                            ? 'border-gray-100 bg-white hover:border-purple-200 hover:bg-purple-50/50'
+                            : 'border-gray-100 bg-gray-50 opacity-50'
+                        }`}
+                      >
+                        {isSelected && (
+                          <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-purple-600 flex items-center justify-center">
+                            <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                          </div>
+                        )}
+                        <p className="text-[11px] font-black text-gray-900 leading-tight pr-5">{offer.name}</p>
+                        <p className="text-sm font-black text-purple-600 mt-1 leading-none">
+                          {htg.toLocaleString()} HTG
+                        </p>
+                        <p className="text-[9px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Step 2 — Player ID (appears only after selecting an offer, only if game requires it) */}
+          {/* Step 2 — ID joueur, apparaît après sélection */}
           <AnimatePresence>
             {selectedOffer && fields.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.22 }}
+                transition={{ duration: 0.2 }}
                 className="overflow-hidden"
               >
-                <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
+                <div className="px-4 pb-3 pt-3 space-y-2.5 border-t border-gray-100">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                     2 · {fields.length === 1 ? 'Votre ID Joueur' : 'Vos informations'}
                   </p>
@@ -500,7 +515,7 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
                           setValidatedUsername(null);
                         }}
                         placeholder={f.placeholder || f.label}
-                        className={`w-full h-12 px-4 pr-24 rounded-2xl border-2 text-sm font-bold focus:outline-none transition-all ${
+                        className={`w-full h-11 px-4 pr-24 rounded-2xl border-2 text-sm font-bold focus:outline-none transition-all ${
                           validState === 'ok' ? 'border-emerald-400 bg-emerald-50' :
                           validState === 'error' ? 'border-red-300 bg-red-50' :
                           'border-gray-200 bg-gray-50 focus:border-purple-300 focus:bg-white'
@@ -510,20 +525,19 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
                         type="button"
                         onClick={handleValidate}
                         disabled={validState === 'loading' || !(fieldValues[f.key] || '').trim()}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-3 rounded-xl bg-purple-600 text-white text-xs font-black disabled:opacity-40 hover:bg-purple-700 transition-colors flex items-center gap-1"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 px-3 rounded-xl bg-purple-600 text-white text-xs font-black disabled:opacity-40 hover:bg-purple-700 transition-colors flex items-center gap-1"
                       >
                         {validState === 'loading' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Vérifier'}
                       </button>
                     </div>
                   ))}
-
                   <AnimatePresence>
                     {validState === 'ok' && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200"
                       >
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                         <p className="text-xs font-black text-emerald-700">
                           {validatedUsername ? `✅ ${validatedUsername}` : 'ID validé avec succès'}
                         </p>
@@ -532,9 +546,9 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
                     {validState === 'error' && (
                       <motion.div
                         initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200"
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200"
                       >
-                        <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                        <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
                         <p className="text-xs font-bold text-red-600">ID introuvable. Vérifiez et réessayez.</p>
                       </motion.div>
                     )}
