@@ -6884,16 +6884,49 @@ router.get('/api/fazer/topups/validate-id', async (_req, res) => {
 });
 
 // POST /api/fazer/topups/validate-id — validate a player ID
+// FazerCards only supports validation for 3 base IDs: free_fire, pubg_mobile, mobile_legends
+// Map any variant (free_fire_latam, mobile_legends_global, etc.) to the canonical ID.
+const VALIDATE_ID_MAP: Record<string, string> = {
+  // Free Fire variants → free_fire
+  free_fire_latam: 'free_fire', free_fire_br: 'free_fire', free_fire_eu: 'free_fire',
+  free_fire_id: 'free_fire', free_fire_th: 'free_fire', free_fire_vn: 'free_fire',
+  free_fire_my_sg: 'free_fire', free_fire_sg: 'free_fire', free_fire_ph: 'free_fire',
+  free_fire_bd: 'free_fire', free_fire_pk: 'free_fire', free_fire_tw: 'free_fire',
+  free_fire_cis: 'free_fire', free_fire_mena: 'free_fire',
+  // Mobile Legends variants → mobile_legends
+  mobile_legends_global: 'mobile_legends', mobile_legends_brazil: 'mobile_legends',
+  mobile_legends_indonesia: 'mobile_legends', mobile_legends_philippines: 'mobile_legends',
+  mobile_legends_malaysia: 'mobile_legends', mobile_legends_singapore: 'mobile_legends',
+  mobile_legends_united_states: 'mobile_legends', mobile_legends_exclusive: 'mobile_legends',
+  mobile_legends_special: 'mobile_legends', mobile_legends_promo: 'mobile_legends',
+  // PUBG variants → pubg_mobile
+  pubg_mobile_global: 'pubg_mobile',
+};
+
 router.post('/api/fazer/topups/validate-id', async (req, res) => {
   try {
+    const body = { ...req.body };
+    // Remap category_id to a validatable one if needed
+    if (body.category_id && VALIDATE_ID_MAP[body.category_id]) {
+      body.category_id = VALIDATE_ID_MAP[body.category_id];
+    }
     const r = await fazerFetch('/topups/validate-id', {
       method: 'POST',
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(body),
     });
-    const data = await r.json();
-    res.status(r.ok ? 200 : r.status).json(data);
+    const data = await r.json() as any;
+    if (!r.ok) {
+      return res.status(r.status).json({ error: data.error || 'Validation impossible pour ce jeu.' });
+    }
+    // Normalise response for the frontend
+    res.json({
+      ok: true,
+      valid: data.valid ?? true,
+      username: data.player_name || data.username || data.name || null,
+      player_id: data.player_id || body.fields?.player_id || null,
+    });
   } catch (e: any) {
-    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+    res.status(500).json({ error: 'Erreur serveur lors de la validation.' });
   }
 });
 

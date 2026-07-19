@@ -323,13 +323,19 @@ function GameDialog({ category, priceOverrides, loggedClient, exchangeRate, onCl
         body: JSON.stringify({ category_id: category.category_id, fields: playerFields }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Validation échouée.');
+      if (!res.ok) throw new Error(data.error || 'Impossible de valider cet identifiant.');
+      if (data.valid === false) {
+        // ID not found in the game's database
+        setValidState('error');
+        toast.error('Identifiant introuvable. Vérifiez votre ID dans le jeu et réessayez.');
+        return;
+      }
       setValidState('ok');
-      setValidatedUsername(data.username || data.name || data.player_name || null);
-      toast.success(`✅ ID validé${data.username ? ` — ${data.username}` : ''}`);
+      setValidatedUsername(data.username || null);
+      toast.success(data.username ? `✅ Compte trouvé : ${data.username}` : '✅ Identifiant validé avec succès');
     } catch (e: any) {
       setValidState('error');
-      toast.error(e.message || 'ID invalide, vérifiez et réessayez.');
+      toast.error(e.message || 'Erreur de validation. Veuillez réessayer.');
     }
   }, [fields, fieldValues, category.category_id]);
 
