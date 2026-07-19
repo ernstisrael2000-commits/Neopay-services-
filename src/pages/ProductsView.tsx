@@ -15,7 +15,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter, DialogClose,
 } from '../components/ui/dialog';
-import { useProducts, useGames, useCardTopups } from '../services/parcelService';
+import { useProducts, useCardTopups } from '../services/parcelService';
+import GamesTab from '../components/GamesTab';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';
@@ -88,7 +89,6 @@ type TabKey = 'cards' | 'games' | 'products';
 
 export default function ProductsView({ loggedClient, onOpenWallet, onViewChange, onProductDetailChange }: ProductsViewProps) {
   const { products, loading: productsLoading } = useProducts();
-  const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
   const { settings } = useSettingsCtx();
   const exchangeRate = settings?.exchangeRate || 146;
@@ -121,20 +121,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
     onProductDetailChange?.(isProductDetailOpen);
   }, [isProductDetailOpen]);
 
-  // Game catalog
-  const [selectedGame, setSelectedGame] = useState<any>(null);
-  const [isGameCatalogOpen, setIsGameCatalogOpen] = useState(false);
-  const [gamePlayerId, setGamePlayerId] = useState('');
-  const [payingItemKey, setPayingItemKey] = useState<string | null>(null);
-  const [itemPurchaseLoading, setItemPurchaseLoading] = useState(false);
-
-  const handleGameClick = (game: any) => {
-    setSelectedGame(game);
-    setGamePlayerId('');
-    setPayingItemKey(null);
-    setIsGameCatalogOpen(true);
-  };
-
   // Payment modal (for games + products via WhatsApp)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<{ name: string; price: string; type: string } | null>(null);
@@ -155,12 +141,10 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
   const handleFinalPaymentSubmit = () => {
     if (!paymentTarget || !selectedPaymentMethod) return;
     const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
-    const playerIdLine = (paymentTarget.type === 'game' && gamePlayerId.trim()) ? `\n🎮 ID Joueur : *${gamePlayerId.trim()}*` : '';
-    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*${playerIdLine}\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
+    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
     openWhatsApp(message);
     setIsPaymentModalOpen(false);
     setPaymentTransactionInfo('');
-    setGamePlayerId('');
   };
 
   const handleCardClick = (card: any) => {
@@ -307,70 +291,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
           {/* ── JEUX TAB ── */}
           {activeTab === 'games' && (
             <motion.div key="games" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28 }}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-9 w-9 rounded-xl bg-purple-100 flex items-center justify-center">
-                  <Gamepad2 className="h-4 w-4 text-purple-600" />
-                </div>
-                <div>
-                  <h2 className="font-black text-dark text-base leading-none">Top-up Jeux</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Cliquez sur un jeu pour voir le catalogue</p>
-                </div>
-              </div>
-              {gamesLoading ? (
-                <div className="flex justify-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                </div>
-              ) : games.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
-                  <Gamepad2 className="h-10 w-10 text-gray-200 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm">Aucun jeu disponible pour le moment.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {games.map((game, i) => (
-                    <motion.button
-                      key={game.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.05 }}
-                      onClick={() => handleGameClick(game)}
-                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all text-left group w-full"
-                    >
-                      <div className="relative aspect-square overflow-hidden bg-gray-100">
-                        <img
-                          src={game.image}
-                          alt={game.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400'; }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                        {(game.catalog?.length > 0) && (
-                          <div className="absolute top-2 right-2 bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
-                            {game.catalog.length} offres
-                          </div>
-                        )}
-                        <div className="absolute bottom-2 left-2 right-2">
-                          <p className="text-white font-black text-xs leading-tight line-clamp-2 drop-shadow">{game.name}</p>
-                        </div>
-                      </div>
-                      <div className="p-2.5">
-                        {game.priceRange && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[9px] font-black">
-                            <Star className="h-2.5 w-2.5 fill-current" />
-                            {game.priceRange}
-                          </span>
-                        )}
-                        <div className="flex items-center gap-1 mt-1.5 text-[9px] text-purple-600 font-black">
-                          <ArrowRight className="h-3 w-3" />
-                          Voir catalogue
-                        </div>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              )}
+              <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
             </motion.div>
           )}
 
@@ -444,225 +365,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
 
         </AnimatePresence>
       </div>
-
-      {/* ── Game Catalog Dialog ── */}
-      <Dialog open={isGameCatalogOpen} onOpenChange={setIsGameCatalogOpen}>
-        <DialogContent className="sm:max-w-lg border-0 bg-white shadow-2xl flex flex-col overflow-hidden p-0 max-h-[90vh]" showCloseButton={false}>
-          {selectedGame && (
-            <>
-              {/* Header with game image */}
-              <div className="relative h-44 shrink-0 overflow-hidden bg-gray-900">
-                <img
-                  src={selectedGame.image}
-                  alt={selectedGame.name}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover opacity-80"
-                  onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/600/300'; }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/30 to-transparent" />
-                <button
-                  onClick={() => setIsGameCatalogOpen(false)}
-                  className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-colors border border-white/10"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                <div className="absolute bottom-4 left-4 right-14">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[9px] font-black uppercase tracking-wider">
-                      {selectedGame.catalog?.length > 0 ? `${selectedGame.catalog.length} offres` : 'Top-up'}
-                    </span>
-                  </div>
-                  <h2 className="text-xl font-black text-white leading-tight">{selectedGame.name}</h2>
-                  {selectedGame.description && (
-                    <p className="text-white/60 text-xs mt-0.5 line-clamp-1">{selectedGame.description}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Catalogue body */}
-              <div className="flex-1 overflow-y-auto">
-                {/* Votre ID */}
-                <div className="px-4 pt-4 pb-2">
-                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                    Votre ID
-                  </label>
-                  <div className="relative">
-                    <LucideIcons.Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
-                    <input
-                      type="text"
-                      value={gamePlayerId}
-                      onChange={e => setGamePlayerId(e.target.value)}
-                      placeholder="Entrez votre ID de joueur"
-                      className="w-full pl-10 pr-4 h-11 rounded-2xl border border-gray-200 bg-gray-50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 transition-all"
-                    />
-                  </div>
-                </div>
-
-                {selectedGame.catalog && selectedGame.catalog.length > 0 ? (
-                  <div className="p-4 space-y-3">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez votre offre</p>
-                    <div className="grid grid-cols-1 gap-2.5">
-                      {selectedGame.catalog.map((item: any, idx: number) => {
-                        const itemKey = item.id || String(idx);
-                        const isExpanded = payingItemKey === itemKey;
-                        return (
-                        <motion.div
-                          key={item.id || idx}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.04 }}
-                          className="rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden transition-all"
-                        >
-                          <div className="flex items-center justify-between p-4">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
-                                <Gamepad2 className="h-5 w-5 text-purple-600" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-black text-gray-900 leading-tight">{item.name}</p>
-                                <p className="text-base font-black text-purple-600 mt-0.5">{item.price}</p>
-                              </div>
-                            </div>
-                            {isExpanded ? (
-                              <button onClick={() => setPayingItemKey(null)} className="text-xs text-gray-400 hover:text-gray-600 font-semibold ml-3 shrink-0">Annuler</button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                onClick={() => setPayingItemKey(itemKey)}
-                                className="h-9 px-4 text-xs font-black bg-purple-600 text-white hover:bg-purple-700 rounded-xl border-0 shadow-md shadow-purple-200 shrink-0 ml-3 transition-all"
-                              >
-                                Payer
-                              </Button>
-                            )}
-                          </div>
-                          <AnimatePresence>
-                            {isExpanded && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="overflow-hidden"
-                              >
-                                <div className="px-4 pb-4 grid grid-cols-2 gap-2">
-                                  {loggedClient ? (
-                                    <button
-                                      disabled={itemPurchaseLoading}
-                                      onClick={async () => {
-                                        const price = parseFloat(String(item.price).replace(/[^\d.]/g, ''));
-                                        const balHTG = Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate);
-                                        if (!gamePlayerId.trim()) { toast.error('Entrez votre ID de joueur.'); return; }
-                                        if (isNaN(price) || price <= 0 || balHTG < price) { toast.error(`Solde insuffisant. Vous avez ${balHTG.toLocaleString()} HTG`); return; }
-                                        setItemPurchaseLoading(true);
-                                        const priceUSD = price / exchangeRate;
-                                        try {
-                                          await submitClientPurchase(loggedClient, `${selectedGame.name} — ${item.name}`, item.price, priceUSD);
-                                          toast.success(`✅ ${price.toLocaleString()} HTG débité.`);
-                                          setIsGameCatalogOpen(false); setPayingItemKey(null);
-                                          const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
-                                          const msg = `🎮 *TOP-UP JEUX — Rena*\n\n👤 Client: *${loggedClient.name}*\n🔑 Wallet: *#${loggedClient.walletId || '—'}*\n🎮 Jeu: *${selectedGame.name}*\n📦 Offre: *${item.name}*\n🎯 ID Joueur: *${gamePlayerId.trim()}*\n💰 Montant: *${price.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n\n✅ Paiement auto. Veuillez activer.`;
-                                          window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
-                                        } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
-                                        finally { setItemPurchaseLoading(false); }
-                                      }}
-                                      className="h-14 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex flex-col items-center justify-center gap-0.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-                                    >
-                                      <span className="flex items-center gap-1">
-                                        {itemPurchaseLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
-                                        Solde Wallet
-                                      </span>
-                                      <span className="text-[9px] font-normal text-emerald-600 opacity-80">
-                                        {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG
-                                      </span>
-                                    </button>
-                                  ) : (
-                                    <button onClick={() => { setPayingItemKey(null); setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition-colors">
-                                      <Wallet className="h-3.5 w-3.5" /> Se connecter
-                                    </button>
-                                  )}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </motion.div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Wallet pay note if logged in */}
-                    {loggedClient && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                        <Wallet className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <p className="text-[10px] text-emerald-700 font-bold">
-                          Solde disponible : {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-6 space-y-4">
-                    <p className="text-sm text-gray-500 text-center">Choisissez votre méthode de paiement.</p>
-                    {payingItemKey === '__nocatalog' ? (
-                      <div className="flex flex-col gap-3">
-                        {loggedClient ? (
-                          <button
-                            disabled={itemPurchaseLoading}
-                            onClick={async () => {
-                              if (!gamePlayerId.trim()) { toast.error('Entrez votre ID de joueur.'); return; }
-                              const price = parseFloat(String(selectedGame.priceRange).replace(/[^\d.]/g, ''));
-                              if (isNaN(price) || price <= 0) { toast.error('Prix invalide pour le paiement wallet.'); return; }
-                              const balHTG = Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate);
-                              if (balHTG < price) { toast.error(`Solde insuffisant. Vous avez ${balHTG.toLocaleString()} HTG`); return; }
-                              setItemPurchaseLoading(true);
-                              const priceUSD = price / exchangeRate;
-                              try {
-                                await submitClientPurchase(loggedClient, selectedGame.name, String(price), priceUSD);
-                                toast.success(`✅ Achat effectué !`);
-                                setIsGameCatalogOpen(false); setPayingItemKey(null);
-                              } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
-                              finally { setItemPurchaseLoading(false); }
-                            }}
-                            className="w-full h-14 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex flex-col items-center justify-center gap-0.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-                          >
-                            <span className="flex items-center gap-2">
-                              {itemPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                              Payer avec mon Solde
-                            </span>
-                            <span className="text-[10px] font-normal text-emerald-600 opacity-80">
-                              {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG disponible
-                            </span>
-                          </button>
-                        ) : (
-                          <button onClick={() => { setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="w-full h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors">
-                            <Wallet className="h-4 w-4" /> Se connecter pour payer
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => setPayingItemKey('__nocatalog')}
-                        className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl border-0 flex items-center justify-center gap-2"
-                      >
-                        <DollarSign className="h-5 w-5" />
-                        Payer
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Footer note */}
-              <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 shrink-0">
-                <p className="text-[10px] text-gray-400 text-center font-bold flex items-center justify-center gap-1.5">
-                  <ShieldCheck className="h-3 w-3 text-primary" />
-                  Paiement sécurisé · Livraison rapide · Support 24/7
-                </p>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* ── Card Recharge — Step 1 ── */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>

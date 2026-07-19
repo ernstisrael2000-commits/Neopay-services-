@@ -6822,6 +6822,133 @@ router.post('/api/crypto/ipn', async (req, res) => {
   }
 });
 
+// ── FazerCards API proxy ──────────────────────────────────────────────────────
+const FAZER_BASE = 'https://api.fzr.cards/api/v2';
+function fazerFetch(path: string, opts: RequestInit = {}) {
+  const key = process.env.FAZER_CARDS_API_KEY;
+  if (!key) throw new Error('FAZER_CARDS_API_KEY non configurée.');
+  return fetch(`${FAZER_BASE}${path}`, {
+    ...opts,
+    headers: { 'X-API-Key': key, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+}
+
+// GET /api/fazer/topups — list game categories (with cover images)
+router.get('/api/fazer/topups', async (_req, res) => {
+  try {
+    const r = await fazerFetch('/topups?include_ui=1&limit=100');
+    if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
+    const data = await r.json() as any;
+    // Normalise: FazerCards returns { items: [...] } or array
+    const items = Array.isArray(data) ? data : (data.items || data.data || []);
+    res.json({ items });
+  } catch (e: any) {
+    console.error('[fazer/topups]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// GET /api/fazer/topups/offers?category_id=X
+router.get('/api/fazer/topups/offers', async (req, res) => {
+  try {
+    const { category_id } = req.query as { category_id?: string };
+    if (!category_id) return res.status(400).json({ error: 'category_id requis.' });
+    const r = await fazerFetch(`/topups/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
+    if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
+    const data = await r.json() as any;
+    const items = Array.isArray(data) ? data : (data.items || data.offers || data.data || []);
+    res.json({ items });
+  } catch (e: any) {
+    console.error('[fazer/topups/offers]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// GET /api/fazer/topups/validate-id — list games that support ID validation
+router.get('/api/fazer/topups/validate-id', async (_req, res) => {
+  try {
+    const r = await fazerFetch('/topups/validate-id');
+    if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
+    const data = await r.json();
+    res.json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// POST /api/fazer/topups/validate-id — validate a player ID
+router.post('/api/fazer/topups/validate-id', async (req, res) => {
+  try {
+    const r = await fazerFetch('/topups/validate-id', {
+      method: 'POST',
+      body: JSON.stringify(req.body),
+    });
+    const data = await r.json();
+    res.status(r.ok ? 200 : r.status).json(data);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// POST /api/fazer/topups/order — place order, deduct wallet
+router.post('/api/fazer/topups/order', requireDb, async (req, res) => {
+  try {
+    const { clientId, category_id, offer_id, fields, priceUSD } = req.body as {
+      clientId: string; category_id: string; offer_id: string;
+      fields: Record<string, string>; priceUSD: number;
+    };
+    if (!clientId || !category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    // 1. Check client balance
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+    const price = Number(priceUSD) || 0;
+    if (price > 0 && (clientData.balance || 0) < price)
+      return res.status(400).json({ error: `Solde insuffisant. Disponible: ${clientData.balance?.toFixed(2)} USD.` });
+
+    // 2. Place order with FazerCards
+    const idempotencyKey = `rena-${clientId}-${Date.now()}`;
+    const fazerRes = await fazerFetch('/topups/order', {
+      method: 'POST',
+      headers: { 'idempotency-key': idempotencyKey } as any,
+      body: JSON.stringify({ category_id, offer_id, fields }),
+    });
+    const fazerData = await fazerRes.json() as any;
+    if (!fazerRes.ok) {
+      console.error('[fazer/order] FazerCards error:', fazerData);
+      return res.status(fazerRes.status).json({ error: fazerData.message || fazerData.error || 'Erreur FazerCards.' });
+    }
+
+    // 3. Deduct wallet (batch: balance update + transaction log)
+    const batch = adminDb.batch();
+    if (price > 0) {
+      batch.update(clientRef, {
+        balance: Math.max(0, (clientData.balance || 0) - price),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    const txRef = adminDb.collection('client_transactions').doc();
+    batch.set(txRef, {
+      clientId, clientName: clientData.name || '',
+      type: 'purchase', amount: price, status: 'completed',
+      productName: fazerData.category_name || category_id,
+      productPrice: `${price} USD`,
+      description: `Top-up jeu: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
+      fazerOrderId: fazerData.order_id || null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    res.json({ success: true, order: fazerData, transactionId: txRef.id });
+  } catch (e: any) {
+    console.error('[fazer/order]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });
