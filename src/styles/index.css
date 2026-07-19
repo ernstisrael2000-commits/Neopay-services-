@@ -65,10 +65,24 @@
 .search-border-wrap {
   position: relative;
   border-radius: 1rem;
-  padding: 1.5px;
-  background: linear-gradient(135deg, #2563EB, #818cf8, #c4b5fd, #2563EB);
-  background-size: 300% 300%;
-  animation: search-border-gradient 3s ease-in-out infinite;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--angle, 0deg),
+    #2563EB 0%,
+    #818cf8 25%,
+    #e879f9 50%,
+    #818cf8 75%,
+    #2563EB 100%
+  );
+  animation: search-border-rotate 2.4s linear infinite;
+}
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes search-border-rotate {
+  to { --angle: 360deg; }
 }
 @keyframes search-border-gradient {
   0%   { background-position: 0% 50%; }

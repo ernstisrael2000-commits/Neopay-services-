@@ -130,7 +130,7 @@ export default function BottomNav({
               >
                 <Icon
                   style={{ width: 22, height: 22 }}
-                  className={`transition-colors duration-100 ${active ? 'text-white' : 'text-gray-500'}`}
+                  className={`transition-colors duration-100 ${active ? 'text-white' : 'text-gray-900'}`}
                   strokeWidth={active ? 2.5 : 1.75}
                 />
               </TabButton>
@@ -226,7 +226,7 @@ function TabButton({ label, active, rise, ringSize, onClick, walletStyle, childr
         {/* Icon (and optional badge slot) */}
         <motion.span
           className="relative z-10 flex items-center justify-center"
-          animate={{ opacity: (active || isWallet) ? 1 : 0.42 }}
+          animate={{ opacity: (active || isWallet) ? 1 : 0.72 }}
           transition={{ duration: 0.15 }}
         >
           {children}
