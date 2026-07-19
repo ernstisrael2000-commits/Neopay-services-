@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Gamepad2, Zap, Loader2, X, CheckCircle2, AlertCircle,
@@ -385,12 +386,12 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
   const primaryField = fields[0];
   const primaryValue = primaryField ? fieldValues[primaryField.key] || '' : '';
 
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[500] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div
@@ -594,6 +595,7 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
           </p>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }
