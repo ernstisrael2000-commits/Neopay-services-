@@ -24,6 +24,8 @@ The workflow **Start application** runs `npm run dev` and exposes port 5000.
 | Secret | Purpose |
 |--------|---------|
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK (Firestore, Auth) — JSON from Firebase Console → Service Accounts |
+| `GROQ_API_KEY` | Groq AI API key (console.groq.com) |
+| `RESEND_API_KEY` | Transactional email via Resend (resend.com) |
 | `SESSION_SECRET` | Express session signing |
 
 ## Optional env vars (already set)
