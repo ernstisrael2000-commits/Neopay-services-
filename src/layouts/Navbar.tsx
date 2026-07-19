@@ -93,17 +93,17 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
     return (
       <button
         onClick={() => handleNav(item.key)}
-        className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group ${active ? 'bg-primary/10' : 'hover:bg-gray-100'}`}
+        className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group ${active ? 'bg-[rgba(34,211,238,0.10)]' : 'hover:bg-[rgba(34,211,238,0.06)]'}`}
       >
-        <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-gray-400 group-hover:text-primary'}`} />
-        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-gray-400/70 group-hover:text-primary/80'}`}>{item.label}</span>
+        <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-slate-500 group-hover:text-primary'}`} />
+        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-slate-500/70 group-hover:text-primary/80'}`}>{item.label}</span>
       </button>
     );
   };
 
   return (
     <>
-      <nav className="border-b bg-white fixed top-0 left-0 right-0 z-50 shadow-sm">
+      <nav className="border-b border-[rgba(34,211,238,0.08)] bg-background fixed top-0 left-0 right-0 z-50" style={{ boxShadow: '0 1px 30px rgba(0,0,0,0.5)' }}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 items-center gap-2">
 
@@ -120,7 +120,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               ) : (
                 <RenaLogo size={28} />
               )}
-              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Rena</span>
+              <span className="text-lg font-black tracking-tight text-foreground hidden sm:block">Rena</span>
             </div>
 
             {/* Desktop nav — always visible on md+ */}
@@ -191,12 +191,12 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 <>
                   <button
                     onClick={() => setShowNotifPanel(true)}
-                    className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+                    className="relative p-2 rounded-xl hover:bg-[rgba(34,211,238,0.06)] transition-colors"
                     aria-label="Notifications"
                   >
                     <Bell className={`h-5 w-5 ${clientUnreadCount > 0 ? 'text-primary' : 'text-gray-400'}`} />
                     {clientUnreadCount > 0 && (
-                      <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
+                      <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-background">
                         {clientUnreadCount > 9 ? '9+' : clientUnreadCount}
                       </span>
                     )}

@@ -5,10 +5,10 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "DM Sans", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --color-subtext: #6b7280;
-  --color-primary: #2563EB;
-  --color-dark: #1a1f3c;
-  --color-accent-light: #EFF6FF;
+  --color-subtext: #94A3B8;
+  --color-primary: #22D3EE;
+  --color-dark: #E2E8F0;
+  --color-accent-light: rgba(34,211,238,0.10);
 }
 
 @utility custom-scrollbar {
@@ -109,38 +109,38 @@
 }
 
 :root {
-    --background: #ffffff;
-    --foreground: #1a1f3c;
-    --card: #ffffff;
-    --card-foreground: #1a1f3c;
-    --popover: #ffffff;
-    --popover-foreground: #1a1f3c;
-    --primary: #2563EB;
-    --primary-foreground: #ffffff;
-    --secondary: #EFF6FF;
-    --secondary-foreground: #2563EB;
-    --muted: #f3f4f6;
-    --muted-foreground: #6b7280;
-    --accent: #EFF6FF;
-    --accent-foreground: #2563EB;
-    --destructive: #ef4444;
-    --border: #e5e7eb;
-    --input: #e5e7eb;
-    --ring: #2563EB;
-    --chart-1: #2563EB;
-    --chart-2: #1a1f3c;
-    --chart-3: #6b7280;
-    --chart-4: #EFF6FF;
-    --chart-5: #e5e7eb;
+    --background: #060B14;
+    --foreground: #E2E8F0;
+    --card: #0C1525;
+    --card-foreground: #E2E8F0;
+    --popover: #0C1525;
+    --popover-foreground: #E2E8F0;
+    --primary: #22D3EE;
+    --primary-foreground: #060B14;
+    --secondary: #111C2D;
+    --secondary-foreground: #94A3B8;
+    --muted: #111C2D;
+    --muted-foreground: #64748B;
+    --accent: #111C2D;
+    --accent-foreground: #E2E8F0;
+    --destructive: #F43F5E;
+    --border: rgba(34,211,238,0.10);
+    --input: rgba(34,211,238,0.08);
+    --ring: #22D3EE;
+    --chart-1: #22D3EE;
+    --chart-2: #A855F7;
+    --chart-3: #94A3B8;
+    --chart-4: rgba(34,211,238,0.10);
+    --chart-5: #111C2D;
     --radius: 0.625rem;
-    --sidebar: #ffffff;
-    --sidebar-foreground: #1a1f3c;
-    --sidebar-primary: #2563EB;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #EFF6FF;
-    --sidebar-accent-foreground: #1a1f3c;
-    --sidebar-border: #e5e7eb;
-    --sidebar-ring: #2563EB;
+    --sidebar: #060B14;
+    --sidebar-foreground: #E2E8F0;
+    --sidebar-primary: #22D3EE;
+    --sidebar-primary-foreground: #060B14;
+    --sidebar-accent: #111C2D;
+    --sidebar-accent-foreground: #E2E8F0;
+    --sidebar-border: rgba(34,211,238,0.10);
+    --sidebar-ring: #22D3EE;
 }
 
 .dark {
@@ -229,8 +229,8 @@
   /* CARTE PRODUIT */
   .product-card {
     border-radius: 12px !important;
-    background: white !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.10) !important;
+    background: #0C1525 !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(34,211,238,0.08) !important;
     overflow: hidden !important;
     margin: 0 !important;
     border: none !important;
