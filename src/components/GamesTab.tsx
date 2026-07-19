@@ -371,18 +371,19 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
+      className="fixed inset-0 z-[500] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <motion.div
-        initial={{ y: 60, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 60, opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-        className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[92vh]"
+        initial={{ scale: 0.93, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.93, opacity: 0 }}
+        transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+        className="bg-white w-full max-w-md rounded-3xl overflow-hidden flex flex-col"
+        style={{ maxHeight: 'min(90vh, 680px)' }}
       >
-        {/* Hero header */}
-        <div className={`relative bg-gradient-to-br ${accent} shrink-0`} style={{ minHeight: 160 }}>
+        {/* Header compact */}
+        <div className={`relative bg-gradient-to-br ${accent} shrink-0`} style={{ minHeight: 110 }}>
           {category.imageurl && (
             <img
               src={category.imageurl}
@@ -393,91 +394,35 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 h-9 w-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors border border-white/20"
+            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors border border-white/20"
           >
             <X className="h-4 w-4" />
           </button>
-          <div className="relative p-5 pt-6 pb-5">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-widest mb-2">
-              <Zap className="h-2.5 w-2.5" /> Top-up
-            </span>
-            <h2 className="text-2xl font-black text-white drop-shadow-lg">{category.name}</h2>
+          <div className="relative p-4 pb-3 flex items-end justify-between h-full min-h-[110px]">
+            <div>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-widest mb-1.5">
+                <Zap className="h-2.5 w-2.5" /> Top-up
+              </span>
+              <h2 className="text-xl font-black text-white drop-shadow-lg leading-tight">{category.name}</h2>
+            </div>
             {loggedClient && (
-              <div className="flex items-center gap-1.5 mt-2">
-                <Wallet className="h-3.5 w-3.5 text-white/70" />
-                <span className="text-white/80 text-xs font-bold">
-                  Solde : {balanceHTG.toLocaleString()} HTG
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/20 backdrop-blur-sm">
+                <Wallet className="h-3 w-3 text-white/80" />
+                <span className="text-white/90 text-[11px] font-black">
+                  {balanceHTG.toLocaleString()} HTG
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Body */}
+        {/* Body — scrollable */}
         <div className="flex-1 overflow-y-auto">
-          {/* Player ID section */}
-          {fields.length > 0 && (
-            <div className="px-4 pt-4 space-y-3">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                {fields.length === 1 ? 'Votre ID Joueur' : 'Vos informations'}
-              </p>
-              {fields.map(f => (
-                <div key={f.key} className="relative">
-                  <input
-                    type={f.type === 'number' ? 'number' : 'text'}
-                    value={fieldValues[f.key] || ''}
-                    onChange={e => {
-                      setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }));
-                      setValidState('idle');
-                      setValidatedUsername(null);
-                    }}
-                    placeholder={f.placeholder || f.label}
-                    className={`w-full h-12 px-4 pr-24 rounded-2xl border-2 text-sm font-bold focus:outline-none transition-all ${
-                      validState === 'ok' ? 'border-emerald-400 bg-emerald-50' :
-                      validState === 'error' ? 'border-red-300 bg-red-50' :
-                      'border-gray-200 bg-gray-50 focus:border-purple-300 focus:bg-white'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleValidate}
-                    disabled={validState === 'loading' || !(fieldValues[f.key] || '').trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-3 rounded-xl bg-purple-600 text-white text-xs font-black disabled:opacity-40 hover:bg-purple-700 transition-colors flex items-center gap-1"
-                  >
-                    {validState === 'loading' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Vérifier'}
-                  </button>
-                </div>
-              ))}
-
-              {/* Validation feedback */}
-              <AnimatePresence>
-                {validState === 'ok' && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200"
-                  >
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <p className="text-xs font-black text-emerald-700">
-                      {validatedUsername ? `✅ ${validatedUsername}` : 'ID validé avec succès'}
-                    </p>
-                  </motion.div>
-                )}
-                {validState === 'error' && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200"
-                  >
-                    <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
-                    <p className="text-xs font-bold text-red-600">ID introuvable. Vérifiez et réessayez.</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-
-          {/* Offers */}
+          {/* Step 1 — Offers grid */}
           <div className="p-4 space-y-3">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez votre offre</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              1 · Choisissez votre offre
+            </p>
 
             {offersLoading ? (
               <div className="flex justify-center py-8">
@@ -497,8 +442,15 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
                       initial={{ opacity: 0, scale: 0.92 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: i * 0.03 }}
-                      onClick={() => setSelectedOffer(isSelected ? null : offer)}
-                      className={`relative rounded-2xl p-3.5 text-left border-2 transition-all active:scale-95 ${
+                      onClick={() => {
+                        setSelectedOffer(isSelected ? null : offer);
+                        // Reset ID validation when changing offer
+                        if (!isSelected) {
+                          setValidState('idle');
+                          setValidatedUsername(null);
+                        }
+                      }}
+                      className={`relative rounded-2xl p-3 text-left border-2 transition-all active:scale-95 ${
                         isSelected
                           ? 'border-purple-500 bg-purple-50 shadow-lg shadow-purple-100'
                           : canAfford
@@ -512,7 +464,7 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
                         </div>
                       )}
                       <p className="text-xs font-black text-gray-900 leading-tight pr-6">{offer.name}</p>
-                      <p className="text-lg font-black text-purple-600 mt-1 leading-none">
+                      <p className="text-base font-black text-purple-600 mt-1 leading-none">
                         {htg.toLocaleString()} HTG
                       </p>
                       <p className="text-[10px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>
@@ -522,15 +474,84 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
               </div>
             )}
           </div>
+
+          {/* Step 2 — Player ID (appears only after selecting an offer, only if game requires it) */}
+          <AnimatePresence>
+            {selectedOffer && fields.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22 }}
+                className="overflow-hidden"
+              >
+                <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    2 · {fields.length === 1 ? 'Votre ID Joueur' : 'Vos informations'}
+                  </p>
+                  {fields.map(f => (
+                    <div key={f.key} className="relative">
+                      <input
+                        type={f.type === 'number' ? 'number' : 'text'}
+                        value={fieldValues[f.key] || ''}
+                        onChange={e => {
+                          setFieldValues(prev => ({ ...prev, [f.key]: e.target.value }));
+                          setValidState('idle');
+                          setValidatedUsername(null);
+                        }}
+                        placeholder={f.placeholder || f.label}
+                        className={`w-full h-12 px-4 pr-24 rounded-2xl border-2 text-sm font-bold focus:outline-none transition-all ${
+                          validState === 'ok' ? 'border-emerald-400 bg-emerald-50' :
+                          validState === 'error' ? 'border-red-300 bg-red-50' :
+                          'border-gray-200 bg-gray-50 focus:border-purple-300 focus:bg-white'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleValidate}
+                        disabled={validState === 'loading' || !(fieldValues[f.key] || '').trim()}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-3 rounded-xl bg-purple-600 text-white text-xs font-black disabled:opacity-40 hover:bg-purple-700 transition-colors flex items-center gap-1"
+                      >
+                        {validState === 'loading' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Vérifier'}
+                      </button>
+                    </div>
+                  ))}
+
+                  <AnimatePresence>
+                    {validState === 'ok' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200"
+                      >
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <p className="text-xs font-black text-emerald-700">
+                          {validatedUsername ? `✅ ${validatedUsername}` : 'ID validé avec succès'}
+                        </p>
+                      </motion.div>
+                    )}
+                    {validState === 'error' && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200"
+                      >
+                        <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                        <p className="text-xs font-bold text-red-600">ID introuvable. Vérifiez et réessayez.</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Footer CTA */}
-        <div className="px-4 pb-6 pt-3 border-t border-gray-100 bg-white shrink-0 space-y-2.5">
+        <div className="px-4 pb-5 pt-3 border-t border-gray-100 bg-white shrink-0 space-y-2">
           {loggedClient ? (
             <button
               onClick={handleOrder}
               disabled={!selectedOffer || orderLoading || (fields.length > 0 && validState !== 'ok')}
-              className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2.5 transition-all ${
+              className={`w-full h-13 rounded-2xl font-black text-base flex items-center justify-center gap-2.5 transition-all py-4 ${
                 selectedOffer && (fields.length === 0 || validState === 'ok')
                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-200 hover:shadow-xl hover:shadow-purple-300 active:scale-[0.98]'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -538,6 +559,8 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
             >
               {orderLoading
                 ? <><Loader2 className="h-5 w-5 animate-spin" /> Traitement…</>
+                : selectedOffer && fields.length > 0 && validState !== 'ok'
+                ? <><AlertCircle className="h-5 w-5" /> Validez votre ID joueur</>
                 : selectedOffer
                 ? <><Zap className="h-5 w-5" /> Payer {offerHTG(selectedOffer).toLocaleString()} HTG</>
                 : <><Gamepad2 className="h-5 w-5" /> Sélectionnez une offre</>
@@ -546,7 +569,7 @@ function GameDialog({ category, validatableGames, priceOverrides, loggedClient, 
           ) : (
             <button
               onClick={() => { onClose(); onOpenWallet?.(); }}
-              className="w-full h-14 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-base flex items-center justify-center gap-2.5 shadow-lg shadow-purple-200 active:scale-[0.98]"
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-base flex items-center justify-center gap-2.5 shadow-lg shadow-purple-200 active:scale-[0.98]"
             >
               <Wallet className="h-5 w-5" /> Se connecter pour payer
             </button>
