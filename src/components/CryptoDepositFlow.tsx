@@ -166,6 +166,7 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
     try {
       const data: CryptoPayment = await apiFetch('/api/crypto/create-payment', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, clientName, clientWalletId, amount: usd, currency: selected.id }),
       });
       if ((data as any).error) throw new Error((data as any).error);
