@@ -6653,35 +6653,50 @@ async function creditCryptoPayment(
   docRef: FirebaseFirestore.DocumentReference,
   data: Record<string, unknown>
 ) {
+  // Read deposit fee from settings (authoritative server-side calculation)
+  let feePercent = 0;
+  try {
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    feePercent = Number(settingsSnap.data()?.depositFeePercent || 0);
+  } catch { /* non-fatal — apply no fee if settings unreadable */ }
+
   await adminDb.runTransaction(async (txn) => {
     const fresh = await txn.get(docRef);
     if (!fresh.exists || fresh.data()?.credited) return; // already credited — skip
     const clientRef = adminDb.collection('clients').doc(data.clientId as string);
     const txRef     = adminDb.collection('client_transactions').doc();
-    const amount    = data.amount as number;
+    const grossAmount = data.amount as number;
+    const feeAmount   = feePercent > 0 ? parseFloat((grossAmount * feePercent / 100).toFixed(4)) : 0;
+    const netAmount   = parseFloat((grossAmount - feeAmount).toFixed(4));
     txn.set(txRef, {
-      clientId:      data.clientId,
-      clientName:    data.clientName || '',
+      clientId:       data.clientId,
+      clientName:     data.clientName || '',
       clientWalletId: data.clientWalletId || '',
-      type:          'deposit',
-      amount,
-      status:        'approved',
-      method:        'crypto',
-      currency:      data.currency,
-      txId:          String(data.paymentId),
-      description:   `Recharge crypto (${String(data.currency || '').toUpperCase()}) — ${amount.toFixed(2)} USD`,
-      createdAt:     FieldValue.serverTimestamp(),
-      updatedAt:     FieldValue.serverTimestamp(),
+      type:           'deposit',
+      amount:         netAmount,
+      grossAmount,
+      feeAmount,
+      feePercent,
+      status:         'approved',
+      method:         'crypto',
+      currency:       data.currency,
+      txId:           String(data.paymentId),
+      description:    `Recharge crypto (${String(data.currency || '').toUpperCase()}) — ${netAmount.toFixed(2)} USD${feeAmount > 0 ? ` (frais: ${feeAmount.toFixed(2)} USD)` : ''}`,
+      createdAt:      FieldValue.serverTimestamp(),
+      updatedAt:      FieldValue.serverTimestamp(),
     });
-    txn.update(clientRef, { balance: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() });
+    txn.update(clientRef, { balance: FieldValue.increment(netAmount), updatedAt: FieldValue.serverTimestamp() });
     txn.update(docRef, { credited: true, creditedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   });
   // Notify client
+  const grossAmount = data.amount as number;
+  const feeAmount   = feePercent > 0 ? parseFloat((grossAmount * feePercent / 100).toFixed(4)) : 0;
+  const netAmount   = parseFloat((grossAmount - feeAmount).toFixed(4));
   try {
     await sendFcmToClient(
       data.clientId as string,
       '✅ Paiement crypto confirmé',
-      `Votre compte a été rechargé de ${(data.amount as number).toFixed(2)} USD.`,
+      `Votre compte a été rechargé de ${netAmount.toFixed(2)} USD.`,
       { type: 'deposit', method: 'crypto' }
     );
   } catch { /* non-fatal */ }
@@ -6749,7 +6764,13 @@ router.post('/api/crypto/create-payment', requireDb, async (req, res) => {
   } catch (e: unknown) {
     const err = e as Error;
     console.error('[crypto/create-payment]', err.message);
-    res.status(500).json({ error: err.message || 'Erreur serveur.' });
+    // Give a clear user-facing message for NOWPayments minimum-amount rejection
+    const msg = err.message || '';
+    const isAmountTooSmall = /too small|minimum|amount/i.test(msg);
+    const userMessage = isAmountTooSmall
+      ? 'Montant trop faible pour cette cryptomonnaie. Veuillez augmenter le montant et réessayer.'
+      : (msg || 'Erreur serveur.');
+    res.status(isAmountTooSmall ? 400 : 500).json({ error: userMessage });
   }
 });
 

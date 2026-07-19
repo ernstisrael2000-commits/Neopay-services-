@@ -101,9 +101,11 @@ interface Props {
   clientWalletId: string;
   onSuccess: (amount: number) => void;
   onBack?: () => void;
+  feePercent?: number;
+  minAmountUSD?: number;
 }
 
-export default function CryptoDepositFlow({ clientId, clientName, clientWalletId, onSuccess, onBack }: Props) {
+export default function CryptoDepositFlow({ clientId, clientName, clientWalletId, onSuccess, onBack, feePercent = 0, minAmountUSD = 15 }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selected, setSelected] = useState<CryptoDef | null>(null);
   const [usdInput, setUsdInput] = useState('');
@@ -116,6 +118,8 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const usd = parseFloat(usdInput) || 0;
+  const feeAmount = usd > 0 && feePercent > 0 ? parseFloat((usd * feePercent / 100).toFixed(4)) : 0;
+  const netAmount = usd > 0 ? parseFloat((usd - feeAmount).toFixed(4)) : 0;
 
   // ── Countdown timer ──
   useEffect(() => {
@@ -161,7 +165,7 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
 
   // ── Create payment ──
   const handleCreate = async () => {
-    if (!selected || usd < 15) return;
+    if (!selected || usd < minAmountUSD) return;
     setCreating(true);
     try {
       const data: CryptoPayment = await apiFetch('/api/crypto/create-payment', {
@@ -317,7 +321,7 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
               step="1"
               value={usdInput}
               onChange={e => setUsdInput(e.target.value)}
-              placeholder="Min. $15"
+              placeholder={`Min. ${minAmountUSD}`}
               className="h-13 pl-8 rounded-xl text-lg font-black"
               autoFocus
             />
@@ -332,16 +336,22 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
             className="rounded-2xl border border-gray-100 overflow-hidden"
           >
             <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-gray-50">
-              <span className="text-[11px] text-gray-500 font-medium">Montant de recharge</span>
+              <span className="text-[11px] text-gray-500 font-medium">Montant envoyé</span>
               <span className="text-sm font-black text-gray-800">${usd.toFixed(2)} USD</span>
             </div>
-            <div className="flex justify-between items-center px-3.5 py-2.5 bg-amber-50">
-              <span className="text-[11px] text-amber-700 font-medium">Frais réseau</span>
+            <div className="flex justify-between items-center px-3.5 py-2.5 bg-amber-50 border-b border-amber-100">
+              <span className="text-[11px] text-amber-700 font-medium">Frais réseau blockchain</span>
               <span className="text-[11px] text-amber-700 font-bold">Inclus dans le montant {selected!.symbol}</span>
             </div>
+            {feePercent > 0 && (
+              <div className="flex justify-between items-center px-3.5 py-2.5 bg-orange-50 border-b border-orange-100">
+                <span className="text-[11px] text-orange-700 font-medium">Frais de service ({feePercent}%)</span>
+                <span className="text-[11px] text-orange-700 font-bold">−${feeAmount.toFixed(2)} USD</span>
+              </div>
+            )}
             <div className="flex justify-between items-center px-3.5 py-2.5 bg-emerald-50">
               <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wide">Vous recevrez</span>
-              <span className="text-base font-black text-emerald-700">${usd.toFixed(2)} USD</span>
+              <span className="text-base font-black text-emerald-700">${netAmount.toFixed(2)} USD</span>
             </div>
           </motion.div>
         )}
@@ -353,16 +363,16 @@ export default function CryptoDepositFlow({ clientId, clientName, clientWalletId
           </p>
         </div>
 
-        {usd > 0 && usd < 15 && (
+        {usd > 0 && usd < minAmountUSD && (
           <p className="text-[11px] text-red-500 font-bold text-center -mt-1">
-            Montant minimum : $15 USD
+            Montant minimum : ${minAmountUSD} USD
           </p>
         )}
 
         <Button
           type="button"
           onClick={handleCreate}
-          disabled={creating || usd < 15}
+          disabled={creating || usd < minAmountUSD}
           className="w-full h-12 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black border-0 disabled:opacity-40"
         >
           {creating
