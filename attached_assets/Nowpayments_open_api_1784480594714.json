@@ -1,0 +1,3434 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "NP OPEN API",
+    "version": "1.0.0",
+    "description": "NOWPayments is a non-custodial cryptocurrency payment processing platform. Accept payments in a wide range of cryptos and get them instantly converted into a coin of your choice and sent to your wallet. Keeping it simple – no excess.\n\n# Authentication\n\nTo use the NOWPayments API you should do the following:\n\n- Sign up at [nowpayments.io](https://nowpayments.io);\n    \n- Specify your payout wallet;\n    \n- Generate an API key and IPN secret key;  \n    Please note: IPN secret key may be shown fully only upon creation. Make sure to save it after generation.\n    \n\n# **NOWPayments Integration Guide**\n\nFor more detailed information on how to integrate and use the NOWPayments API, please refer to our comprehensive [NOWPayments Integration Guide.](https://nowpayments.notion.site/NOWPayments-Integration-Guide-40c516d0d940489d903b61efc002ba47) This guide provides step-by-step instructions on setting up and managing payouts, API requests, and other features to help you get started quickly and effectively.\n\n# **Integration Scenarios**\n\nFor a deeper understanding of different integration possibilities, check out our [Integration Scenarios Guide](https://nowpayments.notion.site/NOWPayments-2-Integration-Scenarios-for-Developers-313b318f4ddb80f28297f3839bc8b911). This guide outlines possible integration methods, providing practical examples and insights to help you implement the best solution for your business needs.\n\n# Standard e-commerce flow for NOWPayments API:\n\n1. API - Check API availability with the [\"GET API status\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#0316fd95-ad58-4d36-82c0-d94455d019ac) method. If required, check the list of available payment currencies with the [\"GET available currencies\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#7bfbe4fb-440f-4e46-966b-2f452a70013c) method;\n    \n2. UI - Ask a customer to select item/items for purchase to determine the total sum;\n    \n3. UI - Ask a customer to select payment currency;\n    \n4. API - Get the minimum payment amount for the selected currency pair (payment currency to your payout wallet currency) with the [\"GET Minimum payment amount\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#ce3fe3a3-00cd-4df2-bfba-641fde741da7) method;\n    \n5. API - Get the estimate of the total amount in crypto with [\"GET Estimated price\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#3c86a16e-94ad-4230-a470-4e833766a4c7) and check that it is larger than the minimum payment amount from step 4;\n    \n6. API - Call the [\"POST Create payment\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#74c91a83-da39-4e39-b3db-1ed4c5c233f8) method to create a payment and get the deposit address (in our example, the generated BTC wallet address is returned from this method);\n    \n7. UI - Ask a customer to send the payment to the generated deposit address (in our example, user has to send BTC coins);\n    \n8. UI - A customer sends coins, NOWPayments processes and exchanges them (if required), and settles the payment to your payout wallet (in our example, to your ETH address);\n    \n9. API - You can get the payment status either via our IPN callbacks or manually, using [\"GET Payment Status\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#62a6d281-478d-4927-8cd0-f96d677b8de6) and display it to a customer so that they know when their payment has been processed;\n    \n10. API - you call the list of payments made to your account via the [\"GET List of payments\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#c38d2410-1523-4313-8764-0043ba1cb24f) method;\n    \n11. Additionally, you can see all of this information in your [Account](https://account.nowpayments.io/payments) on NOWPayments website;\n    \n\n## Alternative flow\n\n1. API - Check API availability with the [\"GET API status\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#0316fd95-ad58-4d36-82c0-d94455d019ac) method. If required, check the list of available payment currencies with the [\"GET available currencies\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#7bfbe4fb-440f-4e46-966b-2f452a70013c) method;\n    \n2. UI - Ask a customer to select item/items for purchase to determine the total sum;\n    \n3. UI - Ask a customer to select payment currency;\n    \n4. API - Get the minimum payment amount for the selected currency pair (payment currency to your payout wallet currency) with the [\"GET Minimum payment amount\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#ce3fe3a3-00cd-4df2-bfba-641fde741da7) method;\n    \n5. API - Get the estimate of the total amount in crypto with [\"GET Estimated price\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#3c86a16e-94ad-4230-a470-4e833766a4c7) and check that it is larger than the minimum payment amount from step 4;\n    \n6. API - Call the [\"POST Create Invoice](https://documenter.getpostman.com/view/7907941/2s93JusNJt#f5e4e645-dce2-4b06-b2ca-2a29aaa5e845) method to create an invoice. Set \"success_url\" - parameter so that the user will be redirected to your website after successful payment;\n    \n7. UI - display the invoice url or redirect the user to the generated link;\n    \n8. NOWPayments - the customer completes the payment and is redirected back to your website (only if \"success_url\" parameter is configured correctly!);\n    \n9. API - You can get the payment status either via our IPN callbacks or manually, using [\"GET Payment Status\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#62a6d281-478d-4927-8cd0-f96d677b8de6) and display it to a customer so that they know when their payment has been processed;\n    \n10. API - you call the list of payments made to your account via the [\"GET List of payments\"](https://documenter.getpostman.com/view/7907941/2s93JusNJt#c38d2410-1523-4313-8764-0043ba1cb24f) method;\n    \n11. Additionally, you can see all of this information in your [Account](https://account.nowpayments.io/invoices) on NOWPayments website;\n    \n\n# API Documentation\n\n## Instant Payments Notifications\n\nIPN (Instant payment notifications, or callbacks) are used to notify you when transaction status is changed.  \nTo use them, you should complete the following steps:\n\n1. Generate and save the IPN Secret key in Payment Settings tab at the Dashboard;\n    \n2. Insert your URL address where you want to get callbacks in create_payment request. The parameter name is ipn_callback_url. You will receive payment updates (statuses) to this URL address.**  \n    Please, take note that we cannot send callbacks to your localhost unless it has dedicated IP address.**\n    \n3. **important** Please make sure that firewall software on your server (i.e. Cloudflare) does allow our requests to come through. It may be required to whitelist our IP addresses on your side to get it. The list of these IP addresses can be requested at [partners@nowpayments.io](https://mailto:partners@nowpayments.io);\n    \n4. You will receive all the parameters at the URL address you specified in (2) by POST request;  \n    The POST request will contain the _x-nowpayments-sig_ parameter in the header.  \n    The body of the request is similiar to a [get payment status](https://documenter.getpostman.com/view/7907941/2s93JusNJt#62a6d281-478d-4927-8cd0-f96d677b8de6) response body.  \n    You can see examples in \"Webhook examples\" section.\n    \n5. Sort the POST request by keys and convert it to string using  \n    [JSON.stringify](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify) (params, Object.keys(params).sort()) or the same function;\n    \n6. Sign a string with an IPN-secret key with HMAC and sha-512 key;\n    \n7. Compare the signed string from the previous step with the x-nowpayments-sig , which is stored in the header of the callback request;  \n    If these strings are similar, it is a success.  \n    Otherwise, contact us on [support@nowpayments.io](https://mailto:support@nowpayments.io) to solve the problem.\n    \n\nExample of creating a signed string at Node.JS\n\n```\nfunction sortObject(obj) {\n  return Object.keys(obj).sort().reduce(\n    (result, key) => {\n      result[key] = (obj[key] && typeof obj[key] === 'object') ? sortObject(obj[key]) : obj[key]\n      return result\n    },\n    {}\n  )\n}\nconst hmac = crypto.createHmac('sha512', notificationsKey);\nhmac.update(JSON.stringify(sortObject(params)));\nconst signature = hmac.digest('hex');\n\n ```\n\nExample of comparing signed strings in PHP\n\n```\nfunction tksort(&$array)\n  {\n  ksort($array);\n  foreach(array_keys($array) as $k)\n    {\n    if(gettype($array[$k])==\"array\")\n      {\n      tksort($array[$k]);\n      }\n    }\n  }\nfunction check_ipn_request_is_valid()\n    {\n        $error_msg = \"Unknown error\";\n        $auth_ok = false;\n        $request_data = null;\n        if (isset($_SERVER['HTTP_X_NOWPAYMENTS_SIG']) && !empty($_SERVER['HTTP_X_NOWPAYMENTS_SIG'])) {\n            $recived_hmac = $_SERVER['HTTP_X_NOWPAYMENTS_SIG'];\n            $request_json = file_get_contents('php://input');\n            $request_data = json_decode($request_json, true);\n            tksort($request_data);\n            $sorted_request_json = json_encode($request_data, JSON_UNESCAPED_SLASHES);\n            if ($request_json !== false && !empty($request_json)) {\n                $hmac = hash_hmac(\"sha512\", $sorted_request_json, trim($this->ipn_secret));\n                if ($hmac == $recived_hmac) {\n                    $auth_ok = true;\n                } else {\n                    $error_msg = 'HMAC signature does not match';\n                }\n            } else {\n                $error_msg = 'Error reading POST data';\n            }\n        } else {\n            $error_msg = 'No HMAC signature sent.';\n        }\n    }\n\n ```\n\nExample comparing signed signatures in Python\n\n``` python\nimport json \nimport hmac \nimport hashlib\ndef np_signature_check(np_secret_key, np_x_signature, message):\n    sorted_msg = json.dumps(message, separators=(',', ':'), sort_keys=True)\n    digest = hmac.new(\n    str(np_secret_key).encode(), \n    f'{sorted_msg}'.encode(),\n    hashlib.sha512)\n    signature = digest.hexdigest()\n    if signature == np_x_signature:\n        return\n    else:\n        print(\"HMAC signature does not match\")\n\n ```\n\nUsually you will get a notification per each step of processing payments, withdrawals, or transfers, related to custodial recurring payments.\n\nThe webhook is being sent automatically once the transaction status is changed.\n\nYou also can request an additional IPN notification using your NOWPayments dashboard.\n\nPlease note that you should set up an endpoint which can receive POST requests from our server.\n\nBefore going production we strongly recommend to make a test request to this endpoint to ensure it works properly.\n\n## Recurrent payment notifications\n\nIf an error is detected, the payment will be flagged and will receive additional recurrent notifications (number of recurrent notifications can be changed in your Payment Settings-> Instant Payment Notifications).\n\nIf an error is received again during the payment processing, recurrent notifications will be initiated again.\n\nExample: \"Timeout\" is set to 1 minute and \"Number of recurrent notifications\" is set to 3.\n\nOnce an error is detected, you will receive 3 notifications at 1 minute intervals.\n\n## **Webhooks Examples:**\n\nPayments:\n\n``` json\n{\n\"payment_id\":123456789,\n\"parent_payment_id\":987654321,\n\"invoice_id\":null,\n\"payment_status\":\"finished\",\n\"pay_address\":\"address\",\n\"payin_extra_id\":null,\n\"price_amount\":1,\n\"price_currency\":\"usd\",\n\"pay_amount\":15,\n\"actually_paid\":15,\n\"actually_paid_at_fiat\":0,\n\"pay_currency\":\"trx\",\n\"order_id\":null,\n\"order_description\":null,\n\"purchase_id\":\"123456789\",\n\"outcome_amount\":14.8106,\n\"outcome_currency\":\"trx\",\n\"payment_extra_ids\":null\n\"fee\": {\n\"currency\":\"btc\",\n\"depositFee\":0.09853637216235617,\n\"withdrawalFee\":0,\n\"serviceFee\":0\n}\n}\n\n ```\n\nWithdrawals:\n\n``` json\n{\n\"id\":\"123456789\",\n\"batch_withdrawal_id\":\"987654321\",\n\"status\":\"CREATING\",\n\"error\":null,\n\"currency\":\"usdttrc20\",\n\"amount\":\"50\",\n\"address\":\"address\",\n\"fee\":null,\n\"extra_id\":null,\n\"hash\":null,\n\"ipn_callback_url\":\"callback_url\",\n\"created_at\":\"2023-07-27T15:29:40.803Z\",\n\"requested_at\":null,\n\"updated_at\":null\n}\n\n ```\n\nCustodial recurring payments:\n\n``` json\n{\n\"id\":\"1234567890\",\n\"status\":\"FINISHED\",\n\"currency\":\"trx\",\n\"amount\":\"12.171365564140688\",\n\"ipn_callback_url\":\"callback_url\",\n\"created_at\":\"2023-07-26T14:20:11.531Z\",\n\"updated_at\":\"2023-07-26T14:20:21.079Z\"\n}\n\n ```\n\n## **Repeated Deposits and Wrong-Asset Deposits**\n\nThis section explains how we handle two specific types of deposits: **repeated deposits (re-deposits)** and **wrong-asset deposits**. These deposits may require special processing or manual intervention, and understanding how they work will help you manage your payments more effectively.\n\n1. **Repeated Deposits**\n    \n\n**Repeated deposits** are additional payments sent to the same deposit address that was previously used by a customer to fully or partially pay an invoice. These deposits are processed at the current exchange rate at the time they are received. They are marked with either the \"Partially paid\" or \"Finished\" status. If you need to clarify your current repeated-deposit settings, please check with your payment provider regarding the default status.\n\nIn the **Payments History** section of the personal account, these payments are labeled as **\"Re-deposit\"**. Additionally, in the payment details, the **Original payment ID** field will display the ID of the original transaction.\n\n**Recommendation**:\n\nRecommendation: When integrating, we recommend tracking the **'parent_payment_id' parameter** in **Instant Payment Notifications** and being aware that the **total amount of repeated deposits may differ from the expected payment amount**. This helps avoid the risk of providing services in cases of underpayment.  \nWe do not recommend configuring your system to automatically provide services or ship goods based on any repeated-deposit status. If you choose to configure it this way, you should be aware of the risk of providing services in cases of underpayment. **For additional risk acceptance please refer to section 6 of our Terms of Service**.\n\n**NB**: Repeated deposits are always converted to the same asset as the original payment.  \n**Note:** To review the current flow or change the default status of repeated payments to \"Finished\" or \"Partially paid\", please contact us at [support@nowpayments.io](https://mailto:support@nowpayments.io).\n\n**2\\. Wrong-Asset Deposits**\n\nWrong-asset deposits occur when a payment is sent using the wrong network or asset (e.g. a user may mistakenly send **USDTERC20** instead of **ETH)**, and this network and asset are supported by our service.\n\nThese payments will appear in the **Payments History** section with the label **\"Wrong Asset\"** and, by default, will require manual intervention to resolve.\n\n**Recommendation**: When integrating, we recommend configuring your system to check the **amount, asset type** and the '**parent_payment_id' param in Instant Payment Notifications** of the incoming deposit to avoid the risks of providing services in case of insufficient funds.\n\nIf you want wrong-asset deposits to be processed automatically, you can enable the **Wrong-Asset Deposits Auto-Processing** option in your account settings (Settings -> Payment -> Payment details). Before enabling this option, please take into account that **the final sum of the sent deposit may differ from the expected payment amount and by default** these payments always receive \"Finished\" status.\n\nIf needed, we can also provide an option to assign a **\"partially paid\"** status to deposits processed through this feature. For more details, please contact [<b>support@nowpayments.io</b>](https://mailto:support@nowpayments.io)\n\n## Packages\n\nPlease find our out-of-the box packages for easy integration below:\n\n[JavaScript package](https://www.npmjs.com/package/@nowpaymentsio/nowpayments-api-js)\n\n\\[PHP package\\]  \n([https://packagist.org/packages/nowpayments/nowpayments-api-php](https://packagist.org/packages/nowpayments/nowpayments-api-php))\n\nMore coming soon!\n\n## Payments"
+  },
+  "servers": [
+    {
+      "url": "https://api.nowpayments.io"
+    }
+  ],
+  "paths": {
+    "/v1/status": {
+      "get": {
+        "summary": "Get API status",
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Thu, 18 Apr 2019 13:37:08 GMT"
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 16
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "4c97081ce9509700-FRA"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "OK"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth and API status"
+        ],
+        "description": "This is a method to get information about the current state of the API. If everything is OK, you will receive an \"OK\" message. Otherwise, you'll see some error.\n\n#### SUCCESSFUL RESPONSE FIELDS\n\n| **Name** | **Type** | **Description** |\n| --- | --- | --- |\n| message | String | Current status of our API. |"
+      }
+    },
+    "/v1/auth": {
+      "post": {
+        "summary": "Authentication",
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Fri, 13 Nov 2020 17:26:24 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "__cfduid=d100179a7e095065cf498b0371b423b7d1605288381; expires=Sun, 13-Dec-20 17:26:21 GMT; path=/; domain=.nowpayments.io; HttpOnly; SameSite=Lax"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "06643de5b900000022542c9000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=%2BQThCuj3D5DwqKzV%2FPRt15xNxPJ2KeOa0YwY8JeNLCpOzK7WTa%2FAv1csNcLl2Q2ZUnQEt4ITZdXfizJUafHl1f9G3F%2BENJmd%2FOe3NKxoFmN5Cjo%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "5f1a3282cac70022-DME"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjU4MjYyNTkxMTUiLCJpYXQiOjE2MDUyODgzODQsImV4cCI6MTYwNTI4ODY4NH0.bk8B5AjoTt8Qfm1zHJxutAtgaTGW-2j67waGQ2DUHUI"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth and API status"
+        ],
+        "description": "Authentication method for obtaining a JWT token. You should specify your email and password which you are using for signing in into dashboard.  \nJWT token will be required for using 'Get list of payments' and 'Create payout' endpoints. For security reasons, JWT tokens expire in 5 minutes.\n\n**Please note** that email and password fields in this request are case-sensitive. [test@gmail.com](https://mailto:test@gmail.com) does not equal to [Test@gmail.com](https://mailto:Test@gmail.com)\n\n#### SUCCESSFUL RESPONSE FIELDS\n\n| **Name** | **Type** | **Description** |\n| --- | --- | --- |\n| token | String | Token that is required to execute certain commands via API. |",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "email": "<enter_your_email>",
+                "password": "<enter_your_password>"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/currencies": {
+      "get": {
+        "summary": "Get available currencies",
+        "parameters": [
+          {
+            "name": "fixed_rate",
+            "in": "query",
+            "description": "(Optional) Returns avaliable currencies with minimum and maximum amount of the exchange.",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": true
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:04:03 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "x-dns-prefetch-control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "x-frame-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "strict-transport-security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "x-download-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "x-content-type-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "x-xss-protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c9386e7000016693802b000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=njJG9MjxLKmoJsxN0xqpdp0MNZJmkCFhw4c9sIQz%2B97S%2FqQTBHWVp28uW4Hx3i1fWSQdR6w48evOdfYoN6u4o6MrXcV%2FZ5sLPQOQJ9ONwKuu4us%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abb84abee1669-ARN"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currencies": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "currencies": [
+                    "btg",
+                    "eth",
+                    "xmr",
+                    "zec",
+                    "xvg",
+                    "ada",
+                    "ltc",
+                    "bch",
+                    "qtum",
+                    "dash",
+                    "xlm",
+                    "xrp",
+                    "xem",
+                    "dgb",
+                    "lsk",
+                    "doge",
+                    "trx",
+                    "kmd",
+                    "rep",
+                    "bat",
+                    "ark",
+                    "waves",
+                    "bnb",
+                    "xzc",
+                    "nano",
+                    "tusd",
+                    "vet",
+                    "zen",
+                    "grs",
+                    "fun",
+                    "neo",
+                    "gas",
+                    "pax",
+                    "usdc",
+                    "ont",
+                    "xtz",
+                    "link",
+                    "rvn",
+                    "bnbmainnet",
+                    "zil",
+                    "bcd",
+                    "usdt",
+                    "usdterc20",
+                    "cro",
+                    "dai",
+                    "ht",
+                    "wabi",
+                    "busd",
+                    "algo",
+                    "usdttrc20",
+                    "gt",
+                    "stpt",
+                    "ava",
+                    "sxp",
+                    "uni",
+                    "okb",
+                    "btc"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Currencies"
+        ],
+        "description": "This is a method for obtaining information about all cryptocurrencies available for payments for your current setup of payout wallets."
+      }
+    },
+    "/v1/full-currencies": {
+      "get": {
+        "summary": "Get available currencies (2nd method)",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:04:03 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "x-dns-prefetch-control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "x-frame-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "strict-transport-security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "x-download-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "x-content-type-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "x-xss-protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c9386e7000016693802b000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=njJG9MjxLKmoJsxN0xqpdp0MNZJmkCFhw4c9sIQz%2B97S%2FqQTBHWVp28uW4Hx3i1fWSQdR6w48evOdfYoN6u4o6MrXcV%2FZ5sLPQOQJ9ONwKuu4us%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abb84abee1669-ARN"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": "\"currencies\": [\n {\n \"id\": 121,\n \"code\": \"AAVE\",\n \"name\": \"Aave\",\n \"enable\": true,\n \"wallet_regex\": \"^(0x)[0-9A-Fa-f]{40}$\",\n \"priority\": 127,\n \"extra_id_exists\": false,\n \"extra_id_regex\": null,\n \"logo_url\": \"/images/coins/aave.svg\",\n \"track\": true,\n \"cg_id\": \"aave\",\n \"is_maxlimit\": false,\n \"network\": \"eth\",\n \"smart_contract\": null,\n \"network_precision\": null\n }\n]"
+              }
+            }
+          }
+        },
+        "tags": [
+          "Currencies"
+        ],
+        "description": "This is a method to obtain detailed information about all cryptocurrencies available for payments."
+      }
+    },
+    "/v1/merchant/coins": {
+      "get": {
+        "summary": "Get available checked currencies",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:04:03 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "x-dns-prefetch-control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "x-frame-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "strict-transport-security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "x-download-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "x-content-type-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "x-xss-protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c9386e7000016693802b000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=njJG9MjxLKmoJsxN0xqpdp0MNZJmkCFhw4c9sIQz%2B97S%2FqQTBHWVp28uW4Hx3i1fWSQdR6w48evOdfYoN6u4o6MrXcV%2FZ5sLPQOQJ9ONwKuu4us%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abb84abee1669-ARN"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currencies": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "currencies": [
+                    "btg",
+                    "eth",
+                    "xmr",
+                    "zec",
+                    "xvg",
+                    "ada",
+                    "ltc",
+                    "bch",
+                    "qtum",
+                    "dash",
+                    "xlm",
+                    "xrp",
+                    "xem",
+                    "dgb",
+                    "lsk",
+                    "doge",
+                    "trx",
+                    "kmd",
+                    "rep",
+                    "bat",
+                    "ark",
+                    "waves",
+                    "bnb",
+                    "xzc",
+                    "nano",
+                    "tusd",
+                    "vet",
+                    "zen",
+                    "grs",
+                    "fun",
+                    "neo",
+                    "gas",
+                    "pax",
+                    "usdc",
+                    "ont",
+                    "xtz",
+                    "link",
+                    "rvn",
+                    "bnbmainnet",
+                    "zil",
+                    "bcd",
+                    "usdt",
+                    "usdterc20",
+                    "cro",
+                    "dai",
+                    "ht",
+                    "wabi",
+                    "busd",
+                    "algo",
+                    "usdttrc20",
+                    "gt",
+                    "stpt",
+                    "ava",
+                    "sxp",
+                    "uni",
+                    "okb",
+                    "btc"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Currencies"
+        ],
+        "description": "This is a method for obtaining information about the cryptocurrencies available for payments. Shows the coins you set as available for payments in the \"coins settings\" tab on your personal account."
+      }
+    },
+    "/v1/min-amount": {
+      "get": {
+        "summary": "Get the minimum payment amount",
+        "parameters": [
+          {
+            "name": "currency_from",
+            "in": "query",
+            "description": "(Required) Payin currency ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "eth"
+          },
+          {
+            "name": "currency_to",
+            "in": "query",
+            "description": "(Required) Outcome currency     ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "trx"
+          },
+          {
+            "name": "fiat_equivalent",
+            "in": "query",
+            "description": "(Optional) Mentioning ticker of any supported fiat currency you can get fiat equivalent of calculated minimal amount\n       ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "usd"
+          },
+          {
+            "name": "is_fixed_rate",
+            "in": "query",
+            "description": "(Optional) Set this as true if you're using fixed rate flow",
+            "schema": {
+              "type": "string"
+            },
+            "example": "False"
+          },
+          {
+            "name": "is_fee_paid_by_user",
+            "in": "query",
+            "description": "(Optional) Set this as true if you're using fee paid by user flow ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "False"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:05:09 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c94a16a0000166954256000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=JE3EB5TyT0ppi%2B%2FTPlGcGUDcr2ry9EL%2BhHtpB8%2BYtZMjD087RoOl6UD9284JzS7VANH4ZivF8A7jHMl42n8GLxJL1u7fyKvugNSiViphSjgmGKc%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abd48af901669-ARN"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currency_from": {
+                      "type": "string"
+                    },
+                    "currency_to": {
+                      "type": "string"
+                    },
+                    "min_amount": {
+                      "type": "number"
+                    },
+                    "fiat_equivalent": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "example": {
+                  "currency_from": "eth",
+                  "currency_to": "trx",
+                  "min_amount": 0.0078999,
+                  "fiat_equivalent": 35.40626584
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "Get the minimum payment amount for a specific pair.\n\nYou can provide both currencies in the pair or just currency_from, and we will calculate the minimum payment amount for currency_from and currency which you have specified as the outcome in the Payment Settings.\n\nYou can also specify one of the fiat currencies in the currency_from. In this case, the minimum payment will be calculated in this fiat currency.\n\nYou can also add field fiat_equivalent (optional field) to get the fiat equivalent of the minimum amount.\n\n\"is_fixed_rate\", and \"is_fee_paid_by_user\" parameters allows you to see current minimum amounts for corresponsing flows (it may differ from the standard flow!)\n\nIn the case of several outcome wallets we will calculate the minimum amount in the same way we route your payment to a specific wallet.\n\n#### SUCCESSFUL RESPONSE FIELDS\n\n| **Name** | **Type** | **Description** |\n| --- | --- | --- |\n| currency_from | String | Payin currency |\n| currency_to | String | Outcome currency |\n| min_amount | Float | Minimal amount for payment using mentioned currencies |\n| fiat_equivalent | Float | (Optional) Get the fiat equivalent for calculated minimal amount |"
+      }
+    },
+    "/v1/invoice": {
+      "post": {
+        "summary": "Create invoice",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "201",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:05:58 GMT"
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 422
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c95609700001669e701b000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=9SJf%2BQ6vPJTM6MU5pyIOel%2BScU5QnxikJpVEzC0czH%2BlC0v9WX0itLuzODGT568VHmkGP9zIqpOVX7OcDEDI94aEZMDWmEkjO3YFJOnjut46qrU%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abe7a8ddc1669-ARN"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "order_id": {
+                      "type": "string"
+                    },
+                    "order_description": {
+                      "type": "string"
+                    },
+                    "price_amount": {
+                      "type": "string"
+                    },
+                    "price_currency": {
+                      "type": "string"
+                    },
+                    "ipn_callback_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "invoice_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "success_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "cancel_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "4522625843",
+                  "order_id": "RGDBP-21314",
+                  "order_description": "Apple Macbook Pro 2019 x 1",
+                  "price_amount": "1000",
+                  "price_currency": "usd",
+                  "pay_currency": null,
+                  "ipn_callback_url": "https://nowpayments.io",
+                  "invoice_url": "https://nowpayments.io/payment/?iid=4522625843",
+                  "success_url": "https://nowpayments.io",
+                  "cancel_url": "https://nowpayments.io",
+                  "created_at": "2020-12-22T15:05:58.290Z",
+                  "updated_at": "2020-12-22T15:05:58.290Z"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "Creates a payment link. With this method, the customer is required to follow the generated url to complete the payment. **Data must be sent as a JSON-object payload.**\n\nRequest fields:\n\n- price_amount (required) - the amount that users have to pay for the order stated in fiat currency. In case you do not indicate the price in crypto, our system will automatically convert this fiat amount into its crypto equivalent. **NOTE: Some of the assets (KISHU, NWC, FTT, CHR, XYM, SRK, KLV, SUPER, OM, XCUR, NOW, SHIB, SAND, MATIC, CTSI, MANA, FRONT, FTM, DAO, LGCY), have a maximum price limit of \\~$2000;**\n    \n- price_currency (required) - the fiat currency in which the price_amount is specified (usd, eur, etc);\n    \n- pay_currency (optional) - the specified crypto currency (btc, eth, etc), or one of available fiat currencies if it's enabled for your account (USD, EUR, ILS, GBP, AUD, RON);  \n    If not specified, can be chosen on the invoice_url\n    \n- ipn_callback_url (optional) - url to receive callbacks, should contain \"http\" or \"https\", eg. \"[https://nowpayments.io\"](https://nowpayments.io);\n    \n- order_id (optional) - internal store order ID, e.g. \"RGDBP-21314\";\n    \n- order_description (optional) - internal store order description, e.g. \"Apple Macbook Pro 2019 x 1\";\n    \n- success_url(optional) - url where the customer will be redirected after successful payment;\n    \n- cancel_url(optional) - url where the customer will be redirected after failed payment;\n    \n- is_fixed_rate(optional) - boolean, can be **true** or **false**. Required for fixed-rate exchanges;  \n    NOTE: the rate of exchange will be frozen for 10 minutes. If there are no incoming payments during this period, the payment status changes to \"expired\";\n    \n- is_fee_paid_by_user(optional) - boolean, can be **true** or **false**. Required for fixed-rate exchanges with all fees paid by users;  \n    NOTE: the rate of exchange will be frozen for 10 minutes. If there are no incoming payments during this period, the payment status changes to \"expired\";\n    \n\n#### SUCCESSFUL RESPONSE FIELDS\n\n| **Name** | **Type** | **Description** |\n| --- | --- | --- |\n| id | String | Invoice ID |\n| token_id | String | Internal identifier |\n| order_id | String | Order ID specified in request |\n| order_description | String | Order description specified in request |\n| price_amount | String | Base price in fiat |\n| price_currency | String | Ticker of base fiat currency |\n| pay_currency | String | Currency your customer will pay with. If it's 'null' your customer can choose currency in web interface. |\n| ipn_callback_url | String | Link to your endpoint for IPN notifications catching |\n| invoice_url | String | Link to the payment page that you can share with your customer |\n| success_url | String | Customer will be redirected to this link once the payment is finished |\n| cancel_url | String | Customer will be redirected to this link if the payment fails |\n| partially_paid_url | String | Customer will be redirected to this link if the payment gets partially paid status |\n| payout_currency | String | Ticker of payout currency |\n| created_at | String | Time of invoice creation |\n| updated_at | String | Time of latest invoice information update |\n| is_fixed_rate | Boolean | This parameter is 'True' if Fixed Rate option is enabled and 'false' if it's disabled |\n| is_fee_paid_by_user | Boolean | This parameter is 'True' if Fee Paid By User option is enabled and 'false' if it's disabled |",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "price_amount": {
+                    "type": "integer"
+                  },
+                  "price_currency": {
+                    "type": "string"
+                  },
+                  "order_id": {
+                    "type": "string"
+                  },
+                  "order_description": {
+                    "type": "string"
+                  },
+                  "ipn_callback_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "success_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "cancel_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "partially_paid_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "is_fixed_rate": {
+                    "type": "boolean"
+                  },
+                  "is_fee_paid_by_user": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "price_amount": 1000,
+                "price_currency": "usd",
+                "order_id": "RGDBP-21314",
+                "order_description": "Apple Macbook Pro 2019 x 1",
+                "ipn_callback_url": "https://nowpayments.io",
+                "success_url": "https://nowpayments.io",
+                "cancel_url": "https://nowpayments.io",
+                "partially_paid_url": "https://nowpayments.io",
+                "is_fixed_rate": true,
+                "is_fee_paid_by_user": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment/{id}/update-merchant-estimate": {
+      "post": {
+        "summary": "Get/Update payment estimate",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Fri, 12 Aug 2022 12:54:43 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "x-dns-prefetch-control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "x-frame-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "strict-transport-security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "x-download-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "x-content-type-options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "x-xss-protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin, Accept-Encoding"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report\\/v3?s=UlD77RlowCWTg1qTZ2LeHmo1PgG3zxPObaiXYfhalA0YMLx%2BN07RVybi%2BZ%2BM4TkZr5jAjyQN5IMEcOW88%2FFqbuIQhrYnNXIBWUq6QwBFc4nG3FZMlvkLybT0QbYxAutJE4b1rL8%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"success_fraction\":0,\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "73995c778c69c2e1-VIE"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              },
+              "alt-svc": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "h3=\":443\"; ma=86400, h3-29=\":443\"; ma=86400"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "token_id": {
+                      "type": "string"
+                    },
+                    "pay_amount": {
+                      "type": "number"
+                    },
+                    "expiration_estimate_date": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "4455667788",
+                  "token_id": "5566778899",
+                  "pay_amount": 0.04671013,
+                  "expiration_estimate_date": "2022-08-12T13:14:28.536Z"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "This endpoint is required to get the current estimate on the payment and update the current estimate.  \nPlease note! Calling this estimate before `expiration_estimate_date` will return the current estimate, it won’t be updated.\n\n`:id` - payment ID, for which you want to get the estimate\n\nResponse:  \n`id` - payment ID  \n`token_id` - id of api key used to create this payment (please discard this parameter)  \n`pay_amount` - payment estimate, the exact amount the user will have to send to complete the payment  \n`expiration_estimate_date` - expiration date of this estimate"
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "Payment ID, for which you want to get the estimate ",
+          "schema": {
+            "type": "string"
+          },
+          "example": "string"
+        }
+      ]
+    },
+    "/v1/payment/{payment_id}": {
+      "get": {
+        "summary": "Get payment status",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Wed, 16 Dec 2020 15:04:13 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "070dad9e670000fe402dae0000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=zEbhqHJbg3q36U8j53OXNXd%2Bko6cS9sMgMStn1FBVWWkPsG8UrIRJyCEhmY1qK%2FXx3U%2FGPx54%2BOtE2Btl8ZwU9i9wZ%2BJkAo8q7FqZydfMMQgcb4%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "60294baa3828fe40-HEL"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": "    \"payment_id\": 6249365965,\n    \"invoice_id\": null,\n    \"payment_status\": \"finished\",\n    \"pay_address\": \"address\",\n    \"payin_extra_id\": null,\n    \"price_amount\": 1,\n    \"price_currency\": \"usd\",\n    \"pay_amount\": 11.8,\n    \"actually_paid\": 12,\n    \"pay_currency\": \"trx\",\n    \"order_id\": null,\n    \"order_description\": null,\n    \"purchase_id\": 5312822613,\n    \"outcome_amount\": 11.8405,\n    \"outcome_currency\": \"trx\",\n    \"payout_hash\": \"hash\",\n    \"payin_hash\": \"hash\",\n    \"created_at\": \"2023-07-28T15:06:09.932Z\",\n    \"updated_at\": \"2023-07-28T15:09:40.535Z\",\n    \"burning_percent\": \"null\",\n    \"type\": \"crypto2crypto\",\n    \"payment_extra_ids\": [\n        5513339153\n    ]"
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "Get the actual information about the payment. You need to provide the ID of the payment in the request.\n\nNOTE! You should make the get payment status request with the same API key that you used in the create payment request.  \nHere is the list of available statuses:\n\n- waiting - waiting for the customer to send the payment. The initial status of each payment;\n- confirming - the transaction is being processed on the blockchain. Appears when NOWPayments detect the funds from the user on the blockchain;\n- confirmed - the process is confirmed by the blockchain. Customer’s funds have accumulated enough confirmations;\n- sending - the funds are being sent to your personal wallet. We are in the process of sending the funds to you;\n- partially_paid - it shows that the customer sent the less than the actual price. Appears when the funds have arrived in your wallet;\n- finished - the funds have reached your personal address and the payment is finished;\n- failed - the payment wasn't completed due to the error of some kind;\n- refunded - the funds were refunded back to the user;\n- expired - the user didn't send the funds to the specified address in the 7 days time window;\n    \n\nAdditional info:\n\n- outcome_amount - this parameter shows the amount that will be (or is already) received on your Outcome Wallet once the transaction is settled;\n- outcome_currency - this parameter shows the currency in which the transaction will be settled;\n- invoice_id - this parameter shows invoice ID from which the payment was created;"
+      },
+      "parameters": [
+        {
+          "name": "payment_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "example": "string"
+        }
+      ]
+    },
+    "/v1/payment": {
+      "post": {
+        "summary": "Create payment",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "201",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:00:22 GMT"
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 420
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c902abd00001669e7327000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=ZJgfL2UQDRGgSZ4oOb6wMDBAfE53D6i5EQUx1dsRP0skDMWeUwY4g6iPdUE3URPLtCLNaFtySv1gbsGjyPmspIwsl42xacCDk%2BjSGee%2F6JIAqfQ%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605ab6246ee71669-ARN"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payment_id": {
+                      "type": "string"
+                    },
+                    "payment_status": {
+                      "type": "string"
+                    },
+                    "pay_address": {
+                      "type": "string"
+                    },
+                    "price_amount": {
+                      "type": "number"
+                    },
+                    "price_currency": {
+                      "type": "string"
+                    },
+                    "pay_amount": {
+                      "type": "number"
+                    },
+                    "pay_currency": {
+                      "type": "string"
+                    },
+                    "order_id": {
+                      "type": "string"
+                    },
+                    "order_description": {
+                      "type": "string"
+                    },
+                    "ipn_callback_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "purchase_id": {
+                      "type": "string"
+                    },
+                    "smart_contract": {
+                      "type": "string"
+                    },
+                    "network": {
+                      "type": "string"
+                    },
+                    "network_precision": {
+                      "type": "integer"
+                    },
+                    "expiration_estimate_date": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "example": {
+                  "payment_id": "5745459419",
+                  "payment_status": "waiting",
+                  "pay_address": "3EZ2uTdVDAMFXTfc6uLDDKR6o8qKBZXVkj",
+                  "price_amount": 3999.5,
+                  "price_currency": "usd",
+                  "pay_amount": 0.17070286,
+                  "pay_currency": "btc",
+                  "order_id": "RGDBP-21314",
+                  "order_description": "Apple Macbook Pro 2019 x 1",
+                  "ipn_callback_url": "https://nowpayments.io",
+                  "created_at": "2020-12-22T15:00:22.742Z",
+                  "updated_at": "2020-12-22T15:00:22.742Z",
+                  "purchase_id": "5837122679",
+                  "amount_received": null,
+                  "payin_extra_id": null,
+                  "smart_contract": "",
+                  "network": "btc",
+                  "network_precision": 8,
+                  "time_limit": null,
+                  "burning_percent": null,
+                  "expiration_estimate_date": "2020-12-23T15:00:22.742Z"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "Creates payment. With this method, your customer will be able to complete the payment without leaving your website.\n\nBe sure to consider the details of **repeated and wrong-asset deposits from 'Repeated Deposits and Wrong-Asset Deposits' section** when processing payments.\n\n**Data must be sent as a JSON-object payload.**  \nRequired request fields:\n\n- price_amount (required) - the fiat equivalent of the price to be paid in crypto. If the pay_amount parameter is left empty, our system will automatically convert this fiat price into its crypto equivalent. Please note that this does not enable fiat payments, only provides a fiat price for yours and the customer’s convenience and information. **NOTE: Some of the assets (KISHU, NWC, FTT, CHR, XYM, SRK, KLV, SUPER, OM, XCUR, NOW, SHIB, SAND, MATIC, CTSI, MANA, FRONT, FTM, DAO, LGCY), have a maximum price amount of \\~$2000;**\n    \n- price_currency (required) - the fiat currency in which the price_amount is specified (usd, eur, etc);\n    \n- pay_amount (optional) - the amount that users have to pay for the order stated in crypto. You can either specify it yourself, or we will automatically convert the amount you indicated in price_amount;\n    \n- pay_currency (required) - the crypto currency in which the pay_amount is specified (btc, eth, etc), or one of available fiat currencies if it's enabled for your account (USD, EUR, ILS, GBP, AUD, RON);  \n    **NOTE: some of the currencies require a Memo, Destination Tag, etc., to complete a payment (AVA, EOS, BNBMAINNET, XLM, XRP). This is unique for each payment. This ID is received in “payin_extra_id” parameter of the response. Payments made without \"payin_extra_id\" cannot be detected automatically;**\n    \n- ipn_callback_url (optional) - url to receive callbacks, should contain \"http\" or \"https\", eg. \"[https://nowpayments.io\"](https://nowpayments.io);\n    \n- order_id (optional) - inner store order ID, e.g. \"RGDBP-21314\";\n    \n- order_description (optional) - inner store order description, e.g. \"Apple Macbook Pro 2019 x 1\";\n    \n- payout_address (optional) - usually the funds will go to the address you specify in your Personal account. In case you want to receive funds on another address, you can specify it in this parameter;\n    \n- payout_currency (optional) - currency of your external payout_address, required when payout_adress is specified;\n    \n- payout_extra_id(optional) - extra id or memo or tag for external payout_address;\n    \n- is_fixed_rate(optional) - boolean, can be **true** or **false**. Required for fixed-rate exchanges;  \n    NOTE: the rate of exchange will be frozen for 10 minutes. If there are no incoming payments during this period, the payment status changes to \"expired\".\n    \n- is_fee_paid_by_user(optional) - boolean, can be **true** or **false**. Required for fixed-rate exchanges with all fees paid by users;  \n    NOTE: the rate of exchange will be frozen for 10 minutes. If there are no incoming payments during this period, the payment status changes to \"expired\". The fee paid by user payment can be only fixed rate. If you disable fixed rate during payment creation process, this flag would enforce fixed_rate to be true;\n    \n\nHere the list of available statuses of payment:\n\n- waiting - waiting for the customer to send the payment. The initial status of each payment;\n    \n- confirming - the transaction is being processed on the blockchain. Appears when NOWPayments detect the funds from the user on the blockchain;  \n    **Please note:** each currency has its own amount of confirmations required to start the processing.\n    \n- confirmed - the process is confirmed by the blockchain. Customer’s funds have accumulated enough confirmations;\n    \n- sending - the funds are being sent to your personal wallet. We are in the process of sending the funds to you;\n    \n- partially_paid - it shows that the customer sent less than the actual price. Appears when the funds have arrived in your wallet;  \n    **Please note: we advise against automatically providing goods or services when the payment status is \"Partially paid\",** if it's critical for your business to receive the full amount.\n    \n- finished - the funds have reached your personal address and the payment is finished;\n    \n- failed - the payment wasn't completed due to the error of some kind;\n    \n- expired - the user didn't send the funds to the specified address in the 7 days time window;\n    \n\n**Please note: when you're creating a fiat2crypto payment you also should include additional header to your request - \"origin-ip : xxx\", where xxx is your customer IP address.**\n\n#### SUCCESSFUL RESPONSE FIELDS\n\n| **Name** | **Type** | **Description** |\n| --- | --- | --- |\n| payment_id | String | Payment ID you can refer to |\n| payment_status | String | Current status of the payment. On creation it supposed to be 'waiting' |\n| pay_address | String | Address which is meant for customer to make a deposit to. |\n| price_amount | Float | The amount you set as a price, |\n| price_currency | String | Ticker of base currency |\n| pay_amount | Float | Amount customer is meant to pay. |\n| pay_currency | String | Deposit currency. |\n| order_id | String | Order ID is a string for your internal identifier you can enter upon payment creation. |\n| order_description | String | Order description is a string for your convenience to describe anything about the payment for your own reference. |\n| ipn_callback_url | String | Link to your endpoint for IPN notifications catching |\n| created_at | String | Time of payment creation |\n| updated_at | String | Time of latest payment information update |\n| purchase_id | String | Special identifier for handling partially_paid payments |\n| amount_received | Float | Estimate for amount you're intended to receive if customer would deposit full amount. |\n| payin_extra_id | String | (Optional) Deposit address' memo, if applied |\n| smart_contract | String |  |\n| network | String | Network of deposit |\n| network_precision | String |  |\n| time_limit | String |  |\n| expiration_estimate_date | String |  |\n| is_fixed_rate | String | This parameter is 'True' if Fixed Rate option is enabled and 'false' if it's disabled |\n| is_fee_paid_by_user | String | This parameter is 'True' if Fee Paid By User option is enabled and 'false' if it's disabled |\n| valid_until | String | This parameter indicated when payment go expired. |\n| type | String | Type of payment. It can be either crypto2crypto or fiat2crypto |\n| redirectData: redirect_url | String | (Optional) If you're using fiat2crypto flow, this parameter will appear with link to our fiat2crypto processing provider web interface. |",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "price_amount": {
+                    "type": "number"
+                  },
+                  "price_currency": {
+                    "type": "string"
+                  },
+                  "pay_currency": {
+                    "type": "string"
+                  },
+                  "ipn_callback_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "order_id": {
+                    "type": "string"
+                  },
+                  "order_description": {
+                    "type": "string"
+                  },
+                  "is_fixed_rate": {
+                    "type": "boolean"
+                  },
+                  "is_fee_paid_by_user": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "example": {
+                "price_amount": 3999.5,
+                "price_currency": "usd",
+                "pay_currency": "btc",
+                "ipn_callback_url": "https://nowpayments.io",
+                "order_id": "RGDBP-21314",
+                "order_description": "Apple Macbook Pro 2019 x 1",
+                "is_fixed_rate": true,
+                "is_fee_paid_by_user": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payment/": {
+      "get": {
+        "summary": "Get list of payments",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The limit of items listed in one page of response body. Possible values: from 1 to 500     ",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 10
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "If amount of items is more than specified in 'limit' parameter, you can switch pages with this one. Possible values: from 0 to last existing page number digit.    ",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 0
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sorting  by a certain parameter value ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "created_at"
+          },
+          {
+            "name": "orderBy",
+            "in": "query",
+            "description": "Set the order of listed items. It can be 'asc' or 'desc'   ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "asc"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Parameters for filtering items by  certain dates    ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2020-01-01"
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "Parameters for filtering items by certain dates",
+            "schema": {
+              "type": "string"
+            },
+            "example": "2021-01-01"
+          },
+          {
+            "name": "invoiceId",
+            "in": "query",
+            "description": "Filtering items by certain invoice ID",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 6200264890
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:05:33 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c94fe6c00001669e783e000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=4Sj25uNN8wdCtby0RbHx%2FbSLll68tMBpk%2FVG%2BQxVvo3wGnCf6Zu1DPFpwjsTBVasLRcoOsZVemVR6eVlvGP3HF9uJ1VOuaj%2Be9TCiwikq16Y5Vg%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abddd7db41669-ARN"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": "\"data\": [\n        {\n            \"payment_id\": 5592161154,\n            \"invoice_id\": 6200264890,\n            \"payment_status\": \"partially_paid\",\n            \"pay_address\": \"address\",\n            \"payin_extra_id\": null,\n            \"price_amount\": 1,\n            \"price_currency\": \"usd\",\n            \"pay_amount\": 12.5,\n            \"actually_paid\": 10,\n            \"pay_currency\": \"trx\",\n            \"order_id\": null,\n            \"order_description\": null,\n            \"purchase_id\": 5392971146,\n            \"outcome_amount\": 9.8505,\n            \"outcome_currency\": \"trx\",\n            \"payout_hash\": \"hash\",\n            \"payin_hash\": \"hash\",\n            \"created_at\": \"2023-07-19T15:22:15.807Z\",\n            \"updated_at\": \"2023-07-19T15:27:10.477Z\",\n            \"type\": \"crypto2crypto\",\n            \"payment_extra_ids\": [ //array of child payments for this payment\n                4526424492\n            ]\n        },\n        {\n            \"payment_id\": 4526424492,\n            \"invoice_id\": 6200264890,\n            \"payment_status\": \"finished\",\n            \"pay_address\": \"address\",\n            \"payin_extra_id\": null,\n            \"price_amount\": 1,\n            \"price_currency\": \"usd\",\n            \"pay_amount\": 12.5,\n            \"actually_paid\": 12.5,\n            \"pay_currency\": \"trx\",\n            \"order_id\": null,\n            \"order_description\": null,\n            \"purchase_id\": 5392971146,\n            \"outcome_amount\": 12.338,\n            \"outcome_currency\": \"trx\",\n            \"payout_hash\": \"hash\",\n            \"payin_hash\": \"hash\",\n            \"created_at\": \"2023-07-19T15:22:15.754Z\",\n            \"updated_at\": \"2023-07-19T15:25:56.280Z\",\n            \"type\": \"crypto2crypto\",\n            \"parent_payment_id\": 5592161154,  //Payment ID of parent payment. \n            \"origin_type\": \"REPEATED\"\n        }\n    ],\n    \"limit\": 10,\n    \"page\": 0,\n    \"pagesCount\": 582,\n    \"total\": 5815\n}"
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Returns the entire list of all transactions created with certain API key.  \nThe list of optional parameters:\n\n- limit - number of records in one page. (possible values: from 1 to 500);\n- page - the page number you want to get (possible values: from 0 to **page count - 1**);\n- invoiceId - filtering payments by certain invoice ID;\n- sortBy - sort the received list by a paramenter. Set to **created_at** by default (possible values: payment_id, payment_status, pay_address, price_amount, price_currency, pay_amount, actually_paid, pay_currency, order_id, order_description, purchase_id, outcome_amount, outcome_currency);\n- orderBy - display the list in ascending or descending order. Set to **asc** by default (possible values: asc, desc);\n- dateFrom - select the displayed period start date (date format: YYYY-MM-DD or yy-MM-ddTHH:mm:ss.SSSZ);\n- dateTo - select the displayed period end date (date format: YYYY-MM-DD or yy-MM-ddTHH:mm:ss.SSSZ);"
+      }
+    },
+    "/v1/invoice-payment": {
+      "post": {
+        "summary": "Create payment by invoice",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "201",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:00:22 GMT"
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "integer"
+                },
+                "example": 420
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c902abd00001669e7327000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=ZJgfL2UQDRGgSZ4oOb6wMDBAfE53D6i5EQUx1dsRP0skDMWeUwY4g6iPdUE3URPLtCLNaFtySv1gbsGjyPmspIwsl42xacCDk%2BjSGee%2F6JIAqfQ%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605ab6246ee71669-ARN"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payment_id": {
+                      "type": "string"
+                    },
+                    "payment_status": {
+                      "type": "string"
+                    },
+                    "pay_address": {
+                      "type": "string"
+                    },
+                    "price_amount": {
+                      "type": "number"
+                    },
+                    "price_currency": {
+                      "type": "string"
+                    },
+                    "pay_amount": {
+                      "type": "number"
+                    },
+                    "pay_currency": {
+                      "type": "string"
+                    },
+                    "order_id": {
+                      "type": "string"
+                    },
+                    "order_description": {
+                      "type": "string"
+                    },
+                    "ipn_callback_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "purchase_id": {
+                      "type": "string"
+                    },
+                    "smart_contract": {
+                      "type": "string"
+                    },
+                    "network": {
+                      "type": "string"
+                    },
+                    "network_precision": {
+                      "type": "integer"
+                    },
+                    "expiration_estimate_date": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                },
+                "example": {
+                  "payment_id": "5745459419",
+                  "payment_status": "waiting",
+                  "pay_address": "3EZ2uTdVDAMFXTfc6uLDDKR6o8qKBZXVkj",
+                  "price_amount": 3999.5,
+                  "price_currency": "usd",
+                  "pay_amount": 0.17070286,
+                  "pay_currency": "btc",
+                  "order_id": "RGDBP-21314",
+                  "order_description": "Apple Macbook Pro 2019 x 1",
+                  "ipn_callback_url": "https://nowpayments.io",
+                  "created_at": "2020-12-22T15:00:22.742Z",
+                  "updated_at": "2020-12-22T15:00:22.742Z",
+                  "purchase_id": "5837122679",
+                  "amount_received": null,
+                  "payin_extra_id": null,
+                  "smart_contract": "",
+                  "network": "btc",
+                  "network_precision": 8,
+                  "time_limit": null,
+                  "burning_percent": null,
+                  "expiration_estimate_date": "2020-12-23T15:00:22.742Z"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "Creates payment by invoice. With this method, your customer will be able to complete the payment without leaving your website.\n\nBe sure to consider the details of **repeated and wrong-asset deposits from 'Repeated Deposits and Wrong-Asset Deposits' section** when processing payments.\n\n**Data must be sent as a JSON-object payload.**  \nRequired request fields:\n\n- iid (required) - invoice id. You can get invoice ID in response of **POST Create_invoice** method;\n    \n- pay_currency (required) - the crypto currency in which the pay_amount is specified (btc, eth, etc). **NOTE: some of the currencies require a Memo, Destination Tag, etc., to complete a payment (AVA, EOS, BNBMAINNET, XLM, XRP). This is unique for each payment. This ID is received in “payin_extra_id” parameter of the response. Payments made without \"payin_extra_id\" cannot be detected automatically;**\n    \n- order_description (optional) - inner store order description, e.g. \"Apple Macbook Pro 2019 x 1\";\n    \n- customer_email (optional) - user email to which a notification about the successful completion of the payment will be sent;\n    \n- payout_address (optional) - usually the funds will go to the address you specify in your Personal account. In case you want to receive funds on another address, you can specify it in this parameter;\n    \n- payout_extra_id(optional) - extra id or memo or tag for external payout_address;\n    \n- payout_currency (optional) - currency of your external payout_address, required when payout_adress is specified;\n    \n\nHere the list of available statuses of payment:\n\n- waiting - waiting for the customer to send the payment. The initial status of each payment;\n    \n- confirming - the transaction is being processed on the blockchain. Appears when NOWPayments detect the funds from the user on the blockchain;\n    \n- confirmed - the process is confirmed by the blockchain. Customer’s funds have accumulated enough confirmations;\n    \n- sending - the funds are being sent to your personal wallet. We are in the process of sending the funds to you;\n    \n- partially_paid - it shows that the customer sent the less than the actual price. Appears when the funds have arrived in your wallet;\n    \n- finished - the funds have reached your personal address and the payment is finished;\n    \n- failed - the payment wasn't completed due to the error of some kind;\n    \n- refunded - the funds were refunded back to the user;\n    \n- expired - the user didn't send the funds to the specified address in the 7 days time window;\n    \n\n**Please note: when you're creating a fiat2crypto payment you also should include additional header to your request - \"origin-ip : xxx\", where xxx is your customer IP address.**",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "iid": {
+                    "type": "string"
+                  },
+                  "pay_currency": {
+                    "type": "string"
+                  },
+                  "purchase_id": {
+                    "type": "string"
+                  },
+                  "order_description": {
+                    "type": "string"
+                  },
+                  "customer_email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "payout_address": {
+                    "type": "string"
+                  },
+                  "payout_currency": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "iid": "{{invoice_id}}",
+                "pay_currency": "btc",
+                "purchase_id": "{{purchase_id}}",
+                "order_description": "Apple Macbook Pro 2019 x 1",
+                "customer_email": "test@gmail.com",
+                "payout_address": "0x...",
+                "payout_extra_id": null,
+                "payout_currency": "usdttrc20"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/estimate": {
+      "get": {
+        "summary": "Get estimated price",
+        "parameters": [
+          {
+            "name": "amount",
+            "in": "query",
+            "description": "Set the amount for calculations",
+            "schema": {
+              "type": "number"
+            },
+            "example": 3999.5
+          },
+          {
+            "name": "currency_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "usd"
+          },
+          {
+            "name": "currency_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "btc"
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "headers": {
+              "Date": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Tue, 22 Dec 2020 15:03:37 GMT"
+              },
+              "Transfer-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "chunked"
+              },
+              "Connection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "keep-alive"
+              },
+              "X-DNS-Prefetch-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "off"
+              },
+              "X-Frame-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "SAMEORIGIN"
+              },
+              "Strict-Transport-Security": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=15768000"
+              },
+              "X-Download-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "noopen"
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "nosniff"
+              },
+              "X-XSS-Protection": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "1; mode=block"
+              },
+              "Vary": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Origin"
+              },
+              "CF-Cache-Status": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "DYNAMIC"
+              },
+              "cf-request-id": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "072c9339110000166928295000000001"
+              },
+              "Expect-CT": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "max-age=604800, report-uri=\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\""
+              },
+              "Report-To": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report?s=Be6PnrVenND3qBzQJTWszI2slyEd9pXNhEyFMkukSYUC1m3om7zFPg%2BQq%2F6xT2ridpvoQiRE5q8CWGblOvjJ7%2Bup%2B3ZwGuN7TNvHk04WYiWIlRk%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "NEL": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{\"report_to\":\"cf-nel\",\"max_age\":604800}"
+              },
+              "Server": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "cloudflare"
+              },
+              "CF-RAY": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "605abb081ca11669-ARN"
+              },
+              "Content-Encoding": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "br"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currency_from": {
+                      "type": "string"
+                    },
+                    "amount_from": {
+                      "type": "number"
+                    },
+                    "currency_to": {
+                      "type": "string"
+                    },
+                    "estimated_amount": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "example": {
+                  "currency_from": "usd",
+                  "amount_from": 3999.5,
+                  "currency_to": "btc",
+                  "estimated_amount": 0.17061637
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Payments"
+        ],
+        "description": "This is a method for calculating the approximate price in cryptocurrency for a given value in Fiat currency. You will need to provide the initial cost in the Fiat currency (amount, currency_from) and the necessary cryptocurrency (currency_to)  \nCurrently following fiat currencies are available: USD, EUR, CAD, GBP, AUD, ILS, RON.\n\nPlease note that this method allows you to get estimates for crypto pairs as well."
+      }
+    },
+    "/v1/balance": {
+      "get": {
+        "summary": "Get balance",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "eth": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "pendingAmount": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "trx": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "integer"
+                        },
+                        "pendingAmount": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "xmr": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "integer"
+                        },
+                        "pendingAmount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "eth": {
+                    "amount": 0.0001817185463659148,
+                    "pendingAmount": 0
+                  },
+                  "trx": {
+                    "amount": 0,
+                    "pendingAmount": 0
+                  },
+                  "xmr": {
+                    "amount": 0,
+                    "pendingAmount": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This method returns your balance in different currencies.\n\nThe response contains a list of currencies with two parameters:\n\n- amount - avaliable currency amount;\n- pendingAmount - currently processing currency amount;"
+      }
+    },
+    "/v1/payout/validate-address": {
+      "post": {
+        "summary": "Validate address",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200"
+          },
+          "400": {
+            "description": "400"
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This endpoint allows you to check if your payout address is valid and funds can be received there.\n\nAvailable parameters:\n\n- address - the payout address;\n- currency - the ticker of payout currency;\n- (optional) extra_id - memo or destination tag, if applicable;",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "extra_id": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "address": "0xce810cc51e5da46cd615fa95eb6cf21b78bb7f5c",
+                "currency": "eth",
+                "extra_id": null
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/payout/{batch-withdrawal-id}/verify": {
+      "post": {
+        "summary": "Verify payout",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200"
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This method is required to verify payouts by using your 2FA code.  \nYou’ll have 10 attempts to verify the payout. If it is not verified after 10 attempts, the payout will remain in ‘creating’ status.  \nPayout will be processed only when it is verified.\n\nIf you have 2FA app enabled in your dashboard, payouts will accept 2FA code from your app. Otherwise the code for payouts validation will be sent to your registration email.\n\nPlease take a note that unverified payouts will be automatically rejected in an hour after creation.\n\nNext is a description of the required request fields:\n\n- :batch-withdrawal-id - payout id you received in `2. Create payout` method;\n    \n- verification_code - 2fa code you received with your Google Auth app or via email;\n    \n\nIn order to establish an automatic verification of payouts, you should switch 2FA through the application.  \nThere are several libraries for different frameworks aimed on generating 2FA codes based on a secret key from your account settings, for example, Speakeasy for JavaScript.  \nWe do not recommend to change any default settings.\n\n```\nconst 2faVerificationCode = speakeasy.totp({\n      your_2fa_secret_key,\n      encoding: 'base32',\n})\n\n ```",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "verification_code": {
+                    "type": "string"
+                  }
+                }
+              },
+              "example": {
+                "verification_code": "123456"
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "batch-withdrawal-id",
+          "in": "path",
+          "required": true,
+          "description": "Batch withdrawal ID of the batch you want to verify ",
+          "schema": {
+            "type": "string"
+          },
+          "example": "string"
+        }
+      ]
+    },
+    "/v1/payout/{payout_id}/cancel": {
+      "post": {
+        "summary": "Cancel a scheduled/recurring payout",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Cancel a scheduled payout"
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This method allows you to **cancel a scheduled/recurring payout** that was previously created with the **`execute_at`** parameter. Only payouts that are scheduled in advance can be canceled using this endpoint. Once canceled, the payout will receive the status **`cancelled`**.\n\nPlease note: You must specify the **payout id** of the individual payout you wish to cancel, not the batch id.\n\n**Params:**\n\n- payout_id - the unique identifier of the planned payout you want to cancel. This should be the ID of the **individual payout**, not the batch ID."
+      },
+      "parameters": [
+        {
+          "name": "payout_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "example": ""
+        }
+      ]
+    },
+    "/v1/payout/{payout_id}": {
+      "get": {
+        "summary": "Get payout status",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "address": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string"
+                      },
+                      "batch_withdrawal_id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "is_request_payouts": {
+                        "type": "boolean"
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                },
+                "example": [
+                  {
+                    "id": "<payout_id>",
+                    "address": "<payout_address>",
+                    "currency": "trx",
+                    "amount": "200",
+                    "batch_withdrawal_id": "<batchWithdrawalId>",
+                    "status": "WAITING",
+                    "extra_id": null,
+                    "hash": null,
+                    "error": null,
+                    "is_request_payouts": false,
+                    "ipn_callback_url": null,
+                    "unique_external_id": null,
+                    "payout_description": null,
+                    "created_at": "2020-11-12T17:06:12.791Z",
+                    "requested_at": null,
+                    "updated_at": null
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "Get the actual information about the payout. You need to provide the ID of the payout in the request.\n\nNOTE! You should make the get payout status request with the same API key that you used in the creat_payout request.\n\nHere is the list of available statuses:\n\n- creating;\n- processing;\n- sending;\n- finished;\n- failed;\n- rejected;"
+      },
+      "parameters": [
+        {
+          "name": "payout_id",
+          "in": "path",
+          "required": true,
+          "description": "Id of payout you want to request details for.",
+          "schema": {
+            "type": "string"
+          },
+          "example": "string"
+        }
+      ]
+    },
+    "/v1/payout/fee": {
+      "get": {
+        "summary": "Get withdrawal fee estimate",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "query",
+            "description": "The coin ticker of your payout ",
+            "schema": {
+              "type": "string"
+            },
+            "example": "USDTTRC20"
+          },
+          {
+            "name": "amount",
+            "in": "query",
+            "description": "The desired amount of your payout ",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 500
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "currency": {
+                      "type": "string"
+                    },
+                    "fee": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "example": {
+                  "currency": "USDTTRC20",
+                  "fee": 1.32765969
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This endpoint will show you the estimated amount of network fee for payout.\n\nPlease note that:\n\n- This endpoint will show you the fee estimate for the moment of the request is done. Fee itself is dynamic and may change over a brief moment of time.\n    \n- The fee depends on the blockchain itself and its congestion. We cannot affect it in any way nor control or hold it.\n    \n- The actual fee will be calcualated at the moment of payout processing. Please be aware that it can differ from estimate."
+      }
+    },
+    "/v1/payout/{batch_id}/cancel-batch": {
+      "post": {
+        "summary": "Cancel a scheduled/recurring batch",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "200"
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This endpoint allows you to cancel an entire recurring payout batch.\n\nOnce canceled:\n\n- No new payouts will be generated within the batch\n    \n- Existing payouts that have not yet been processed will be canceled\n    \n- The batch status will be updated accordingly\n    \n\n**Params:**\n\n**batch_id** (required) - the unique identifier of the payout batch you want to cancel."
+      },
+      "parameters": [
+        {
+          "name": "batch_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "example": ""
+        }
+      ]
+    },
+    "/v1/payout": {
+      "post": {
+        "summary": "Create payout",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "withdrawals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "is_request_payouts": {
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "batch_withdrawal_id": {
+                            "type": "string"
+                          },
+                          "ipn_callback_url": {
+                            "type": "string",
+                            "format": "uri"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "id": "5000000713",
+                  "withdrawals": [
+                    {
+                      "is_request_payouts": false,
+                      "id": "5000000000",
+                      "address": "TEmGwPeRTPiLFLVfBxXkSP91yc5GMNQhfS",
+                      "currency": "trx",
+                      "amount": "200",
+                      "batch_withdrawal_id": "5000000000",
+                      "ipn_callback_url": "https://nowpayments.io",
+                      "status": "WAITING",
+                      "extra_id": null,
+                      "hash": null,
+                      "error": null,
+                      "payout_description": null,
+                      "unique_external_id": null,
+                      "created_at": "2020-11-12T17:06:12.791Z",
+                      "requested_at": null,
+                      "updated_at": null
+                    },
+                    {
+                      "is_request_payouts": false,
+                      "id": "5000000001",
+                      "address": "0x1EBAeF7Bee7B3a7B2EEfC72e86593Bf15ED37522",
+                      "currency": "eth",
+                      "amount": "0.1",
+                      "batch_withdrawal_id": "5000000000",
+                      "ipn_callback_url": "https://nowpayments.io",
+                      "status": "WAITING",
+                      "extra_id": null,
+                      "hash": null,
+                      "error": null,
+                      "payout_description": null,
+                      "unique_external_id": null,
+                      "createdAt": "2020-11-12T17:06:12.791Z",
+                      "requestedAt": null,
+                      "updatedAt": null
+                    },
+                    {
+                      "is_request_payouts": false,
+                      "id": "5000000002",
+                      "address": "0x1EBAeF7Bee7B3a7B2EEfC72e86593Bf15ED37522",
+                      "currency": "usdc",
+                      "amount": "99.84449793",
+                      "fiat_amount": "100",
+                      "fiat_currency": "usd",
+                      "batch_withdrawal_id": "5000000000",
+                      "ipn_callback_url": "https://nowpayments.io",
+                      "status": "WAITING",
+                      "extra_id": null,
+                      "hash": null,
+                      "error": null,
+                      "payout_description": null,
+                      "unique_external_id": null,
+                      "createdAt": "2020-11-12T17:06:12.791Z",
+                      "requestedAt": null,
+                      "updatedAt": null
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "This method is used for crypto payouts only. Please note that payouts can be requested only using a whitelisted IP address, and to whitelisted wallet addresses. It's a security measure enabled for each partner account by default.\n\nYou can whitelist both of these anytime in your NOWPayments personal account by visiting 'Whitelist' section in 'Settings'.\n\nYou need to provide your data as a JSON-object payload. Next is a description of the required request fields:\n\n- execute_at (required for scheduled/recurring payouts only) – the date and time when the payout(s) should be executed. Format: `YYYY-MM-DDTHH:mm:ss.sssZ`;\n    \n- interval (required for scheduled/recurring payouts only) – defines how the payout should be executed:\n    \n\n`ONETIME` – payout is executed once;  \n`DAILY` – payouts are created every day;  \n`WEEKLY` – payouts are created every 7 days;  \n`MONTHLY_BY_DAY_OF_MONTH` – payouts are created monthly on the same calendar date;  \n`MONTHLY_BY_DAY_OF_WEEK` – payouts are created monthly on the same weekday pattern;\n\n- interval_value (optional; for scheduled/recurring payouts only) – defines how often payouts should be created within the selected interval (default is `1`).  \n    Example: `interval = DAILY`, `interval_value = 3` → payout every 3 days;\n    \n- execute_until (optional; for scheduled/recurring payouts only**)** – the date and time after which new payouts should no longer be created for the batch. Format: `YYYY-MM-DDTHH:mm:ss.sssZ`;\n    \n- address (required) - the address where you want to send funds;\n    \n- currency (required) - payout currency;\n    \n- amount (required) - amount of the payout. **Must not exceed 6 decimals** (i.e. 0.123456);\n    \n- extra_id (optional) - memo, destination tag, etc.\n    \n- ipn_callback_url(optional) - url to receive callbacks, should contain \"http\" or \"https\", eg. \"[https://nowpayments.io\"](https://nowpayments.io). Please note: you can either set ipn_callback_url for each individual payout, or for all payouts in a batch (see example). **In both cases IPNs will be sent for each payout separately;**\n    \n- payout_description(optional) - a description of the payout. You can set it for all payouts in a batch;\n    \n- unique_external_id(optional) - a unique external identifier;\n    \n- fiat_amount(optional) - used for setting the payout amount in fiat equivalent. **Overrides \"amount\" parameter;**\n    \n- fiat_currency (optional) - used for determining fiat currency to get the fiat equivalent for. **Required for \"fiat_amount\" parameter to work. DOES NOT override \"currency\" parameter. Payouts are made in crypto only, no fiat payouts are available unless you have a fiat off-ramp provider activated for your account;**\n    \n\nHere is the list of the available payout statuses:\n\n- creating;\n    \n- waiting;\n    \n- processing;\n    \n- sending;\n    \n- finished;\n    \n- failed;\n    \n- rejected;\n    \n\nPlease note that in some cases 'Failed' payouts may be processed after your confirmation, so please check this possibility with the support team beforer recreating the payout.\n\nPlease, take note that you may request a single payout, but it still should be formatted as an array with the single element.\n\n### How to schedule a payout\n\nScheduled Payouts allow you to define a specific time when the payout should be executed. This is useful when you need to ensure that funds are sent at a precise moment.  \nPlease ensure that your IP address and wallet addresses are whitelisted. Payouts can only be requested from whitelisted IPs and sent to whitelisted addresses by default.\n\n**Step 1: Define the Parameters for Scheduled Payout**\n\nTo create a scheduled payout, you need to provide two key parameters before the regular payout details:\n\n- **execute_at** (required):  \n    Specify the exact date and time when the payout should be processed. Use the format `YYYY-MM-DDTHH:mm:ss.sssZ`.  \n    Example: `\"2026-02-29T10:35:00.000Z\"`\n    \n- **interval** (required):  \n    Set the frequency for the payout. **Currently, only** **`ONETIME`** **is supported, meaning the payout will occur once at the specified time.**\n    \n\n**Step 2: Add Payout Details**\n\nNext, provide the details of the payout, such as the amount, currency, and address where the funds should be sent. You can find all the required fields in the description above.\n\n**Step 3: Create the Payout**\n\nOnce you have defined the `execute_at` and `interval` parameters, and added the payout details, send the request. Make sure to verify it with 2fa using **POST Verify payout endpoint.**\n\n#### **How to cancel a scheduled payout**\n\nIf you need to cancel a scheduled payout, you can use the `POST /v1/payout/w_id/cancel` endpoint. You need to provide the ID of the payout in the request.  \nThe payout will receive the status `cancelled` after being successfully canceled.\n\n### How to create recurring payout(s)\n\n1. specify the exact date and time **when the first payout(s) should be executed**, in the format: `YYYY-MM-DDTHH:mm:ss.sssZ`. with the **`execute_at`** param (required for this flow). For example: `\"2026-02-29T10:35:00.000Z\"`\n    \n2. specify the desired `interval` (required) which defines how often payouts should be created:\n    \n\n- **`DAILY`** — payouts are created every day\n    \n- **`WEEKLY`** — payouts are created every 7 days\n    \n- **`MONTHLY_BY_DAY_OF_MONTH`** — payouts are created monthly on the same date\n    \n- **`MONTHLY_BY_DAY_OF_WEEK`** — payouts are created monthly on the same weekday pattern (e.g., second Monday)\n    \n\n3\\. specify an `interval_value` (optional) which defines how frequently the interval repeats:\n\n**Examples:**\n\n- `DAILY` + `interval_value = 3` → every 3 days\n    \n- `WEEKLY` + `interval_value = 2` → every 2 weeks\n    \n\nDefault value: `1`\n\nMaximum value: 365 for `DAILY` / 52 for `WEEKLY` / 12 for `MONTHLY`\n\n4\\. specify `execute_until` param (optional) if you want the system to stop creating new payouts after a specific date and time. For example: `\"2026-05-29T10:35:00.000Z\"`\n\nAfter this date/time, no new payouts will be generated.\n\n5\\. specify other payout details like amount, currency, and address in the request payload and send the request using **POST /v1/payout** method.\n\n#### How recurring payouts work:\n\n- A **batch** (which contains one or more payouts) is created automatically when using recurring intervals\n    \n- The first payout date is scheduled using `execute_at`\n    \n- Future payouts are generated automatically based on:\n    \n    - `interval`\n        \n    - `interval_value`\n        \n- Payouts continue to be created until:\n    \n    - `execute_until` is reached, or\n        \n    - the batch is canceled\n        \n\n#### Canceling recurring payouts\n\n1. Cancel a single payout: **POST /v1/payout/:payout_id/cancel**\n    \n\n- Cancels **only the selected payout**\n    \n- Does **not** stop other payouts in the batch\n    \n\n2\\. Cancel an entire batch: **POST /v1/payout/:batch_id/cancel-batch**\n\n- Cancels all the **payouts this particular batch contains**\n    \n- Stops all the payouts in the batch from future creation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ipn_callback_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "withdrawals": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "extra_id": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "integer"
+                        },
+                        "ipn_callback_url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "payout_description": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "example": {
+                "ipn_callback_url": "https://nowpayments.io",
+                "withdrawals": [
+                  {
+                    "address": "TEmGwPeRTPiLFLVfBxXkSP91yc5GMNQhfS",
+                    "currency": "trx",
+                    "extra_id": null,
+                    "amount": 200,
+                    "ipn_callback_url": "https://nowpayments.io",
+                    "payout_description": "description"
+                  },
+                  {
+                    "address": "0x1EBAeF7Bee7B3a7B2EEfC72e86593Bf15ED37522",
+                    "currency": "eth",
+                    "extra_id": null,
+                    "amount": 0.1,
+                    "ipn_callback_url": "https://nowpayments.io",
+                    "payout_description": "description"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List of payouts",
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 123456789
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "sending"
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "id"
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "asc"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 20
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 0
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of payouts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payouts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "batch_withdrawal_id": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "amount": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          },
+                          "hash": {
+                            "type": "string"
+                          },
+                          "is_request_payouts": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "requested_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "payouts": [
+                    {
+                      "id": "5000248325",
+                      "batch_withdrawal_id": "5000145498",
+                      "status": "FINISHED",
+                      "error": null,
+                      "currency": "trx",
+                      "amount": "94.088939",
+                      "address": "[payout address]",
+                      "extra_id": null,
+                      "hash": "[hash]",
+                      "ipn_callback_url": null,
+                      "payout_description": null,
+                      "is_request_payouts": true,
+                      "unique_external_id": null,
+                      "created_at": "2023-04-06T14:44:59.684Z",
+                      "requested_at": "2023-04-06T14:45:55.505Z",
+                      "updated_at": "2023-04-06T14:49:08.031Z"
+                    },
+                    {
+                      "id": "5000247307",
+                      "batch_withdrawal_id": "5000144539",
+                      "status": "FINISHED",
+                      "error": null,
+                      "currency": "trx",
+                      "amount": "10.000000",
+                      "address": "[payout address]",
+                      "extra_id": null,
+                      "hash": "[hash]",
+                      "ipn_callback_url": null,
+                      "payout_description": null,
+                      "is_request_payouts": true,
+                      "unique_external_id": null,
+                      "created_at": "2023-04-05T19:21:40.836Z",
+                      "requested_at": "2023-04-05T19:23:17.111Z",
+                      "updated_at": "2023-04-05T19:27:30.895Z"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This endpoint allows you to get a list of your payouts.\n\nThe list of available parameters:\n\n- batch_id: batch ID of enlisted payouts;\n    \n- status: the statuses of enlisted payouts;\n    \n- order_by: can be id, batchId, dateCreated, dateRequested, dateUpdated, currency, status;\n    \n- order: 'asc' or 'desc' order;\n    \n- date_from: beginning date of the requested payouts;\n    \n- date_to: ending date of the requested payouts;\n    \n- limit: a number of results to show;\n    \n- page: the current page;"
+      }
+    },
+    "/v1/payout-withdrawal/min-amount/{coin}": {
+      "get": {
+        "summary": "Get minimal amount for withdrawal",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "description": "(Required)  Your NOWPayments API key",
+            "schema": {
+              "type": "string"
+            },
+            "example": "{{api-key}}"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "result": 0.00002496
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Mass payouts"
+        ],
+        "description": "This endpoint shows you current minimal amount for withdrawals.\n\nParameters:\n\n:coin - ticker of the coin."
+      },
+      "parameters": [
+        {
+          "name": "coin",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "example": "string"
+        }
+      ]
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
