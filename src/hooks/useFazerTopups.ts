@@ -87,3 +87,16 @@ export function useFazerValidatableGames() {
   }, []);
   return games;
 }
+
+// ── Hook: custom HTG price overrides (set by admin) ───────────────
+// Returns { [offerId]: customPriceHTG }
+export function useFazerPriceOverrides() {
+  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  useEffect(() => {
+    fetch('/api/fazer/price-overrides')
+      .then(r => r.json())
+      .then(data => setOverrides(data.overrides || {}))
+      .catch(() => {});
+  }, []);
+  return overrides;
+}

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Client } from '../types';
-import { useFazerTopups, useFazerOffers, useFazerValidatableGames, FazerCategory, FazerOffer } from '../hooks/useFazerTopups';
+import { useFazerTopups, useFazerOffers, useFazerValidatableGames, useFazerPriceOverrides, FazerCategory, FazerOffer } from '../hooks/useFazerTopups';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
 
@@ -44,6 +44,7 @@ interface Props {
 export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
   const { categories, loading, error } = useFazerTopups();
   const validatableGames = useFazerValidatableGames();
+  const priceOverrides = useFazerPriceOverrides();
   const { settings } = useSettingsCtx();
   const exchangeRate = settings?.exchangeRate || 146;
   const { client: liveClient } = useClientData(loggedClient?.id || null);
@@ -244,6 +245,7 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
           <GameDialog
             category={selected}
             validatableGames={validatableGames}
+            priceOverrides={priceOverrides}
             loggedClient={effectiveClient || null}
             exchangeRate={exchangeRate}
             onClose={() => { setIsDialogOpen(false); setSelected(null); }}
@@ -259,14 +261,21 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
 interface DialogProps {
   category: FazerCategory;
   validatableGames: ReturnType<typeof useFazerValidatableGames>;
+  priceOverrides: Record<string, number>;
   loggedClient: Client | null;
   exchangeRate: number;
   onClose: () => void;
   onOpenWallet?: () => void;
 }
 
-function GameDialog({ category, validatableGames, loggedClient, exchangeRate, onClose, onOpenWallet }: DialogProps) {
+function GameDialog({ category, validatableGames, priceOverrides, loggedClient, exchangeRate, onClose, onOpenWallet }: DialogProps) {
   const { offers, loading: offersLoading } = useFazerOffers(category.category_id);
+
+  // Apply custom price override if set by admin, otherwise use USD × exchangeRate
+  const offerHTG = (offer: FazerOffer) =>
+    offer.offer_id in priceOverrides
+      ? priceOverrides[offer.offer_id]
+      : Math.round(offer.price * exchangeRate);
 
   // Find validation config for this game
   const validGame = validatableGames.find(g => g.category_id === category.category_id);
@@ -479,7 +488,7 @@ function GameDialog({ category, validatableGames, loggedClient, exchangeRate, on
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {offers.map((offer, i) => {
-                  const htg = Math.round(offer.price * exchangeRate);
+                  const htg = offerHTG(offer);
                   const isSelected = selectedOffer?.offer_id === offer.offer_id;
                   const canAfford = !loggedClient || balanceUSD >= offer.price;
                   return (
@@ -530,7 +539,7 @@ function GameDialog({ category, validatableGames, loggedClient, exchangeRate, on
               {orderLoading
                 ? <><Loader2 className="h-5 w-5 animate-spin" /> Traitement…</>
                 : selectedOffer
-                ? <><Zap className="h-5 w-5" /> Payer {Math.round(selectedOffer.price * exchangeRate).toLocaleString()} HTG</>
+                ? <><Zap className="h-5 w-5" /> Payer {offerHTG(selectedOffer).toLocaleString()} HTG</>
                 : <><Gamepad2 className="h-5 w-5" /> Sélectionnez une offre</>
               }
             </button>

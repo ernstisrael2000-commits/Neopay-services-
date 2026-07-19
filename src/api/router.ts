@@ -6825,8 +6825,8 @@ router.post('/api/crypto/ipn', async (req, res) => {
 // ── FazerCards API proxy ──────────────────────────────────────────────────────
 const FAZER_BASE = 'https://api.fzr.cards/api/v2';
 function fazerFetch(path: string, opts: RequestInit = {}) {
-  const key = process.env.FAZER_CARDS_API_KEY;
-  if (!key) throw new Error('FAZER_CARDS_API_KEY non configurée.');
+  const key = process.env.FAZERCARDS_API_KEY || process.env.FAZER_CARDS_API_KEY;
+  if (!key) throw new Error('FAZERCARDS_API_KEY non configurée.');
   return fetch(`${FAZER_BASE}${path}`, {
     ...opts,
     headers: { 'X-API-Key': key, 'Content-Type': 'application/json', ...(opts.headers || {}) },
@@ -6951,6 +6951,36 @@ router.post('/api/fazer/topups/order', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[fazer/order]', e.message);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── FazerCards price overrides (admin) ───────────────────────────────────────
+// GET /api/fazer/price-overrides — returns { overrides: { [offerId]: number (HTG) } }
+router.get('/api/fazer/price-overrides', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('fazerPriceOverrides').get();
+    const overrides: Record<string, number> = {};
+    snap.forEach(doc => { overrides[doc.id] = doc.data().customPriceHTG; });
+    res.json({ overrides });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/fazer/price-overrides — save or delete a custom HTG price
+router.post('/api/fazer/price-overrides', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { offerId, customPriceHTG } = req.body as { offerId: string; customPriceHTG: number | null };
+    if (!offerId) return res.status(400).json({ error: 'offerId requis.' });
+    const ref = adminDb.collection('fazerPriceOverrides').doc(offerId);
+    if (customPriceHTG === null || customPriceHTG === undefined) {
+      await ref.delete();
+    } else {
+      await ref.set({ customPriceHTG: Number(customPriceHTG), updatedAt: FieldValue.serverTimestamp() });
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

@@ -33,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Checkbox } from '../components/ui/checkbox';
 import AdminCatalogCommissions from '../components/AdminCatalogCommissions';
 import AdminContestManager from '../components/AdminContestManager';
+import FazerPriceManager from '../components/FazerPriceManager';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { 
@@ -5103,83 +5104,13 @@ function EmailLogsPanel() {
         </TabsContent>
 
         <TabsContent value="games" className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold text-dark">Gestion des Jeux (Top-up)</h2>
-            <Button onClick={() => handleOpenGameDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
-              <Plus className="h-4 w-4" />
-              Nouveau Jeu
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+            <div>
+              <h2 className="text-xl font-bold text-dark">Prix des Jeux (FazerCards)</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Les jeux et offres viennent de FazerCards. Personnalisez ici les prix HTG affichés aux clients.</p>
+            </div>
           </div>
-
-          <Card className="shadow-sm border-gray-200">
-            <CardContent className="p-0">
-              {gamesLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des jeux...</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50/50">
-                        <TableHead>Image</TableHead>
-                        <TableHead>Nom</TableHead>
-                        <TableHead>Prix (Range)</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {games.map((game) => (
-                        <TableRow key={game.id} className="hover:bg-gray-50/50 transition-colors">
-                          <TableCell>
-                            <img 
-                              src={game.image} 
-                              className="h-10 w-10 object-cover rounded-lg border"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/100/100';
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell className="font-semibold">{game.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-primary border-primary/20 bg-accent-light/50">
-                              {game.priceRange}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-500 max-w-xs truncate">
-                            {game.description}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => handleOpenGameDialog(game)} className="h-8 w-8 p-0">
-                                <Edit2 className="h-4 w-4 text-gray-500" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => {
-                                setGameToDelete(game);
-                                setIsGameDeleteDialogOpen(true);
-                              }} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50 bg-white/50 border border-transparent hover:border-red-100 px-2 font-medium text-xs">
-                                <Trash2 className="h-3.5 w-3.5 mr-1" />
-                                <span className="hidden sm:inline">Supprimer</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {games.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="h-32 text-center text-gray-400">
-                            Aucun jeu ajouté.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <FazerPriceManager />
         </TabsContent>
 
         <TabsContent value="cards" className="space-y-6">
