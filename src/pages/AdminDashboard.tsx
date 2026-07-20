@@ -4167,6 +4167,15 @@ function EmailLogsPanel() {
                   >
                     {agent.walletLocked ? '🔒' : '🔓'}
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAgentToDelete(agent)}
+                    className="rounded-xl border-2 border-red-100 text-red-400 hover:bg-red-50 hover:border-red-300 h-9 w-9 p-0 transition-all"
+                    title="Supprimer l'agent"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
 
@@ -4322,6 +4331,31 @@ function EmailLogsPanel() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Agent Confirmation */}
+      <Dialog open={!!agentToDelete} onOpenChange={v => { if (!v) setAgentToDelete(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Supprimer l'agent
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer l'agent <span className="font-bold text-gray-900">{agentToDelete?.name}</span> ?
+              Cette action est irréversible et supprimera son compte ainsi que son compte revendeur Free Fire.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setAgentToDelete(null)} disabled={isDeletingAgent}>
+              Annuler
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAgent} disabled={isDeletingAgent}>
+              {isDeletingAgent ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Supprimer définitivement
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

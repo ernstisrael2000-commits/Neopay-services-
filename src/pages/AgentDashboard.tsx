@@ -1555,7 +1555,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
         {/* ── FREE FIRE REVENDEUR ── */}
         {activeSection === 'free-fire' && (
-          <FreeFireResellerSection agentId={agentUid} agentName={agent.name} agentBalance={agent.balance || 0} />
+          <FreeFireResellerSection agentId={agent.id} agentName={agent.name} agentBalance={agent.balance || 0} />
         )}
 
       </AnimatePresence>

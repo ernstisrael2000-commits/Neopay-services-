@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Gamepad2, Diamond, TrendingUp, ShoppingCart, History, Loader2,
   CheckCircle2, XCircle, RefreshCw, Send, ChevronRight, Wallet,
-  Clock, AlertCircle, Flame, Star, Zap,
+  Clock, AlertCircle, Flame, Star, Zap, PackagePlus,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -44,9 +44,17 @@ interface ResellerAccount {
   enabled: boolean;
 }
 
+interface CreditPack {
+  id: string;
+  label: string;
+  diamonds: number;
+  priceUSD: number;
+}
+
 interface Props {
   agentId: string;
   agentName: string;
+  agentBalance?: number;
 }
 
 const FF_REGIONS = ['LATAM', 'Brésil', 'Europe', 'Indonésie', 'Thaïlande', 'Vietnam', 'MY/SG', 'Philippines', 'Bangladesh', 'Pakistan', 'Taiwan', 'CIS', 'MENA'];
@@ -66,7 +74,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function FreeFireResellerSection({ agentId, agentName }: Props) {
+export default function FreeFireResellerSection({ agentId, agentName, agentBalance = 0 }: Props) {
   const [account, setAccount] = useState<ResellerAccount | null>(null);
   const [initialising, setInitialising] = useState(true);
   const [transactions, setTransactions] = useState<FFTransaction[]>([]);
@@ -80,6 +88,12 @@ export default function FreeFireResellerSection({ agentId, agentName }: Props) {
   const [selectedPkg, setSelectedPkg] = useState<FFPackage | null>(null);
   const [loadingPkgs, setLoadingPkgs] = useState(false);
   const initCalled = useRef(false);
+
+  // ── Credit packs (buy with wallet balance) ───────────────────────────────────
+  const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
+  const [loadingCreditPacks, setLoadingCreditPacks] = useState(false);
+  const [buyingPackId, setBuyingPackId] = useState<string | null>(null);
+  const [buyPackOpen, setBuyPackOpen] = useState(false);
 
   // Auto-init account on mount
   const ensureAccount = useCallback(async () => {
@@ -127,7 +141,41 @@ export default function FreeFireResellerSection({ agentId, agentName }: Props) {
     finally { setLoadingPkgs(false); }
   }, []);
 
-  useEffect(() => { ensureAccount(); fetchTransactions(); }, [ensureAccount, fetchTransactions]);
+  const fetchCreditPacks = useCallback(async () => {
+    setLoadingCreditPacks(true);
+    try {
+      const res = await fetch('/api/reseller/ff/credit-packs');
+      const data = await res.json();
+      setCreditPacks(data.packs || []);
+    } catch { /* silent */ }
+    finally { setLoadingCreditPacks(false); }
+  }, []);
+
+  const handleBuyPack = async (pack: CreditPack) => {
+    if (agentBalance < pack.priceUSD) {
+      toast.error('Solde insuffisant.');
+      return;
+    }
+    setBuyingPackId(pack.id);
+    try {
+      const res = await fetch('/api/reseller/ff/buy-pack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, packId: pack.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Échec de l\'achat.');
+        return;
+      }
+      toast.success(`✅ +${pack.diamonds.toLocaleString()} 💎 ajoutés à votre compte !`);
+      setBuyPackOpen(false);
+      refreshAccount();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setBuyingPackId(null); }
+  };
+
+  useEffect(() => { ensureAccount(); fetchTransactions(); fetchCreditPacks(); }, [ensureAccount, fetchTransactions, fetchCreditPacks]);
   useEffect(() => { if (orderOpen) fetchPackages(selectedRegion); }, [orderOpen, selectedRegion, fetchPackages]);
 
   const handleOrder = async () => {
@@ -287,6 +335,25 @@ export default function FreeFireResellerSection({ agentId, agentName }: Props) {
             </div>
           )}
 
+          {/* Buy credit packs button */}
+          <button
+            onClick={() => setBuyPackOpen(true)}
+            className="w-full bg-white rounded-3xl shadow-xl shadow-blue-500/10 p-5 flex items-center gap-4 active:scale-[.98] transition-transform text-left border border-blue-100"
+          >
+            <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-400/30">
+              <PackagePlus className="h-7 w-7 text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="font-black text-slate-900 text-base">Acheter des parts</p>
+              <p className="text-slate-400 text-sm font-medium">
+                Solde disponible : <span className="font-black text-slate-700">${agentBalance.toFixed(2)}</span>
+              </p>
+            </div>
+            <div className="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500">
+              <ChevronRight className="h-5 w-5" />
+            </div>
+          </button>
+
           {/* Balance info card */}
           {balance === 0 && (
             <div className="bg-amber-50 border border-amber-100 rounded-3xl p-5 flex items-start gap-4">
@@ -296,7 +363,7 @@ export default function FreeFireResellerSection({ agentId, agentName }: Props) {
               <div>
                 <p className="font-black text-amber-800 text-sm">Crédit à zéro</p>
                 <p className="text-amber-600 text-xs font-medium mt-0.5 leading-relaxed">
-                  Votre solde est vide. Contactez l'administrateur pour acheter un pack de diamants.
+                  Achetez des parts ci-dessus pour créditer votre compte en diamants.
                 </p>
               </div>
             </div>
@@ -519,6 +586,78 @@ export default function FreeFireResellerSection({ agentId, agentName }: Props) {
                 ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Envoi en cours…</>
                 : <><Send className="h-4 w-4 mr-2" />Envoyer la recharge</>}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── BUY PACK DIALOG ─────────────────────────────────────────────────── */}
+      <Dialog open={buyPackOpen} onOpenChange={setBuyPackOpen}>
+        <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl bg-white">
+          {/* Header */}
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-500 px-6 pt-6 pb-5">
+            <DialogHeader>
+              <DialogTitle className="text-white font-black text-lg flex items-center gap-2">
+                <PackagePlus className="h-5 w-5" />
+                Acheter des parts
+              </DialogTitle>
+              <DialogDescription className="text-white/60 text-sm mt-0.5">
+                Votre solde : <span className="font-black text-white">${agentBalance.toFixed(2)}</span>
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[60vh]">
+            {loadingCreditPacks ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+              </div>
+            ) : creditPacks.length === 0 ? (
+              <p className="text-center text-slate-400 text-sm py-6">Aucun pack disponible.</p>
+            ) : (
+              <div className="space-y-3">
+                {creditPacks.map(pack => {
+                  const canAfford = agentBalance >= pack.priceUSD;
+                  const isBuying = buyingPackId === pack.id;
+                  return (
+                    <div
+                      key={pack.id}
+                      className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all ${
+                        canAfford ? 'border-slate-100 bg-slate-50' : 'border-slate-100 bg-slate-50 opacity-60'
+                      }`}
+                    >
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center shrink-0 text-xl">
+                        💎
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-slate-900 text-sm">{pack.label}</p>
+                        <p className="text-xs text-slate-400 font-medium mt-0.5">
+                          {pack.diamonds.toLocaleString()} diamants
+                        </p>
+                        <p className="text-xs font-black text-blue-600 mt-0.5">${pack.priceUSD.toFixed(2)}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleBuyPack(pack)}
+                        disabled={isBuying || !!buyingPackId}
+                        className={`rounded-xl h-9 px-4 text-xs font-black border-0 shadow-sm shrink-0 ${
+                          canAfford
+                            ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-blue-500/20'
+                            : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                        }`}
+                      >
+                        {isBuying ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : canAfford ? (
+                          'Acheter'
+                        ) : (
+                          'Solde insuffisant'
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
