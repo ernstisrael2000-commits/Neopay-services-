@@ -27,8 +27,9 @@ import {
   Phone, RefreshCw, TrendingUp, BarChart3, Users, Settings,
   Home, AlertCircle, BadgeDollarSign, ChevronRight, Star,
   ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck, PlusCircle, AlertTriangle, X,
-  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle, Check,
+  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle, Check, Gamepad2,
 } from 'lucide-react';
+import FreeFireResellerSection from '../components/agent/FreeFireResellerSection';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -97,7 +98,7 @@ interface AgentTransaction {
   createdAt: any;
 }
 
-type ActiveSection = 'overview' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'finances' | 'settings';
+type ActiveSection = 'overview' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'finances' | 'settings' | 'free-fire';
 
 const sectionNav = [
   { key: 'overview',     label: 'Accueil',      icon: Home },
@@ -675,6 +676,19 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                   <div>
                     <p className="text-slate-900 font-bold">Historique</p>
                     <p className="text-slate-400 text-xs">Détails flux</p>
+                  </div>
+                </button>
+                {/* Free Fire Revendeur */}
+                <button
+                  onClick={() => setActiveSection('free-fire')}
+                  className="bg-gradient-to-br from-orange-500 to-amber-500 rounded-3xl p-5 flex flex-col gap-3 active:scale-95 transition-transform text-left"
+                >
+                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white">
+                    <Gamepad2 className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold">Free Fire</p>
+                    <p className="text-white/60 text-xs">Diamants</p>
                   </div>
                 </button>
               </div>
@@ -1537,6 +1551,11 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               <LogOut className="h-4 w-4 mr-2" /> Déconnexion
             </Button>
           </motion.div>
+        )}
+
+        {/* ── FREE FIRE REVENDEUR ── */}
+        {activeSection === 'free-fire' && (
+          <FreeFireResellerSection agentId={agentUid} agentName={agent.name} />
         )}
 
       </AnimatePresence>

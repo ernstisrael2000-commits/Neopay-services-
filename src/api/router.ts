@@ -7111,6 +7111,226 @@ router.post('/api/fazer/giftcards/order', requireDb, async (req, res) => {
   }
 });
 
+// ── Free Fire Reseller ────────────────────────────────────────────────────────
+// Regions → FazerCards category_id
+const FF_REGIONS: Record<string, string> = {
+  'LATAM':       'free_fire_latam',
+  'Brésil':      'free_fire_br',
+  'Europe':      'free_fire_eu',
+  'Indonésie':   'free_fire_id',
+  'Thaïlande':   'free_fire_th',
+  'Vietnam':     'free_fire_vn',
+  'MY/SG':       'free_fire_my_sg',
+  'Philippines': 'free_fire_ph',
+  'Bangladesh':  'free_fire_bd',
+  'Pakistan':    'free_fire_pk',
+  'Taiwan':      'free_fire_tw',
+  'CIS':         'free_fire_cis',
+  'MENA':        'free_fire_mena',
+};
+const FALLBACK_FF_PACKAGES = [
+  { id: 'ff_100',  label: '100 Diamants',  diamonds: 100,  priceUSD: 0.99,  offerId: 'ff_100',  categoryId: 'free_fire_latam' },
+  { id: 'ff_310',  label: '310 Diamants',  diamonds: 310,  priceUSD: 2.99,  offerId: 'ff_310',  categoryId: 'free_fire_latam' },
+  { id: 'ff_520',  label: '520 Diamants',  diamonds: 520,  priceUSD: 4.99,  offerId: 'ff_520',  categoryId: 'free_fire_latam' },
+  { id: 'ff_1060', label: '1060 Diamants', diamonds: 1060, priceUSD: 9.99,  offerId: 'ff_1060', categoryId: 'free_fire_latam' },
+  { id: 'ff_2180', label: '2180 Diamants', diamonds: 2180, priceUSD: 19.99, offerId: 'ff_2180', categoryId: 'free_fire_latam' },
+  { id: 'ff_5600', label: '5600 Diamants', diamonds: 5600, priceUSD: 49.99, offerId: 'ff_5600', categoryId: 'free_fire_latam' },
+];
+
+// GET /api/reseller/ff/account
+router.get('/api/reseller/ff/account', requireDb, async (req, res) => {
+  try {
+    const { agentId } = req.query as { agentId?: string };
+    if (!agentId) return res.status(400).json({ error: 'agentId requis.' });
+    const snap = await adminDb.collection('agent_reseller_accounts').doc(agentId).get();
+    if (!snap.exists) return res.json({ account: null });
+    res.json({ account: { id: snap.id, ...snap.data() } });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/reseller/ff/packages?region=LATAM
+router.get('/api/reseller/ff/packages', async (req, res) => {
+  try {
+    const { region } = req.query as { region?: string };
+    const categoryId = (region && FF_REGIONS[region]) ? FF_REGIONS[region] : 'free_fire_latam';
+    const r = await fazerFetch(`/topups/offers?category_id=${encodeURIComponent(categoryId)}&include_ui=1`);
+    const data = await r.json() as any;
+    if (!r.ok) return res.json({ items: FALLBACK_FF_PACKAGES, regions: Object.keys(FF_REGIONS) });
+    const raw: any[] = Array.isArray(data) ? data : (data.items || data.offers || data.data || []);
+    const items = raw.map((o: any) => ({
+      id: o.id || o.offer_id || String(o.diamonds || o.value),
+      label: o.name || o.product_name || `${o.diamonds || o.value || '?'} Diamants`,
+      diamonds: parseInt(String(o.diamonds || o.value || 0)) || 0,
+      priceUSD: parseFloat(String(o.price_usd || o.price || 0)) || 0,
+      offerId: o.id || o.offer_id || String(o.diamonds),
+      categoryId,
+    })).filter(o => o.diamonds > 0);
+    res.json({ items: items.length ? items : FALLBACK_FF_PACKAGES, regions: Object.keys(FF_REGIONS) });
+  } catch (e: any) {
+    console.error('[reseller/ff/packages]', e.message);
+    res.json({ items: FALLBACK_FF_PACKAGES, regions: Object.keys(FF_REGIONS) });
+  }
+});
+
+// GET /api/reseller/ff/transactions?agentId=X
+router.get('/api/reseller/ff/transactions', requireDb, async (req, res) => {
+  try {
+    const { agentId, limit: lStr } = req.query as { agentId?: string; limit?: string };
+    if (!agentId) return res.status(400).json({ error: 'agentId requis.' });
+    const limit = Math.min(parseInt(lStr || '50'), 100);
+    const snap = await adminDb.collection('free_fire_transactions')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc').limit(limit).get();
+    res.json({ transactions: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/reseller/ff/order
+router.post('/api/reseller/ff/order', requireDb, async (req, res) => {
+  try {
+    const { agentId, playerId, region, offerId, categoryId, diamonds, packageLabel, priceUSD } = req.body as {
+      agentId: string; playerId: string; region: string; offerId: string;
+      categoryId: string; diamonds: number; packageLabel: string; priceUSD: number;
+    };
+    if (!agentId || !playerId || !region || !offerId || !categoryId)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    // 1. Verify reseller account
+    const accountRef = adminDb.collection('agent_reseller_accounts').doc(agentId);
+    const accountSnap = await accountRef.get();
+    if (!accountSnap.exists)
+      return res.status(403).json({ error: "Compte revendeur non configuré. Contactez l'administrateur." });
+    const account = accountSnap.data()!;
+    if (!account.enabled)
+      return res.status(403).json({ error: "Compte revendeur désactivé. Contactez l'administrateur." });
+    if ((account.diamondBalance || 0) < diamonds)
+      return res.status(400).json({ error: `Crédit insuffisant. Disponible : ${account.diamondBalance || 0} 💎` });
+
+    // 2. Create pending transaction
+    const txRef = adminDb.collection('free_fire_transactions').doc();
+    await txRef.set({
+      agentId, agentName: account.agentName || '',
+      playerId, region, packageLabel,
+      diamonds: Number(diamonds), priceUSD: Number(priceUSD) || 0,
+      offerId, categoryId,
+      status: 'pending', apiResponse: null, errorMessage: null, fazerOrderId: null,
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // 3. Call FazerCards
+    const idempotencyKey = `rena-reseller-${agentId}-${txRef.id}`;
+    let fazerData: any = null;
+    let success = false;
+    let errorMessage: string | null = null;
+    try {
+      const fazerRes = await fazerFetch('/topups/order', {
+        method: 'POST',
+        headers: { 'idempotency-key': idempotencyKey } as any,
+        body: JSON.stringify({ category_id: categoryId, offer_id: offerId, fields: { player_id: playerId } }),
+      });
+      fazerData = await fazerRes.json();
+      if (!fazerRes.ok) {
+        errorMessage = fazerData?.message || fazerData?.error || 'Erreur FazerCards.';
+      } else { success = true; }
+    } catch (apiErr: any) { errorMessage = apiErr.message || 'Erreur réseau FazerCards.'; }
+
+    // 4. Update transaction & deduct credit if success
+    const batch = adminDb.batch();
+    batch.update(txRef, {
+      status: success ? 'success' : 'failed',
+      apiResponse: fazerData, fazerOrderId: fazerData?.order_id || null,
+      errorMessage, updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (success) {
+      batch.update(accountRef, {
+        diamondBalance: FieldValue.increment(-Number(diamonds)),
+        totalSold: FieldValue.increment(Number(diamonds)),
+        totalOrders: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    if (!success) return res.status(400).json({ error: errorMessage, transactionId: txRef.id });
+    res.json({ success: true, transactionId: txRef.id, order: fazerData });
+  } catch (e: any) {
+    console.error('[reseller/ff/order]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// GET /api/admin/reseller/ff/agents
+router.get('/api/admin/reseller/ff/agents', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('agent_reseller_accounts').orderBy('createdAt', 'desc').get();
+    res.json({ accounts: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/reseller/ff/transactions
+router.get('/api/admin/reseller/ff/transactions', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { agentId, limit: lStr } = req.query as { agentId?: string; limit?: string };
+    const limit = Math.min(parseInt(lStr || '100'), 200);
+    let q: any = adminDb.collection('free_fire_transactions').orderBy('createdAt', 'desc').limit(limit);
+    if (agentId) q = adminDb.collection('free_fire_transactions').where('agentId', '==', agentId).orderBy('createdAt', 'desc').limit(limit);
+    const snap = await q.get();
+    res.json({ transactions: snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/reseller/ff/toggle
+router.post('/api/admin/reseller/ff/toggle', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { agentId, agentName, enabled } = req.body as { agentId: string; agentName?: string; enabled: boolean };
+    if (!agentId) return res.status(400).json({ error: 'agentId requis.' });
+    const ref = adminDb.collection('agent_reseller_accounts').doc(agentId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set({
+        agentId, agentName: agentName || '', enabled,
+        diamondBalance: 0, totalSold: 0, totalOrders: 0,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      await ref.update({ enabled, updatedAt: FieldValue.serverTimestamp() });
+    }
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/reseller/ff/credit
+router.post('/api/admin/reseller/ff/credit', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { agentId, agentName, amount, operation, note } = req.body as {
+      agentId: string; agentName?: string; amount: number; operation: 'add' | 'remove'; note?: string;
+    };
+    if (!agentId || !amount || !operation) return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (Number(amount) <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+    const ref = adminDb.collection('agent_reseller_accounts').doc(agentId);
+    const snap = await ref.get();
+    const delta = operation === 'add' ? Number(amount) : -Number(amount);
+    if (!snap.exists) {
+      if (operation === 'remove') return res.status(400).json({ error: 'Compte introuvable.' });
+      await ref.set({
+        agentId, agentName: agentName || '', enabled: true,
+        diamondBalance: Number(amount), totalSold: 0, totalOrders: 0,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      const current = snap.data()!.diamondBalance || 0;
+      const newBal = current + delta;
+      if (newBal < 0) return res.status(400).json({ error: `Solde insuffisant. Disponible : ${current} 💎` });
+      await ref.update({ diamondBalance: newBal, updatedAt: FieldValue.serverTimestamp() });
+    }
+    await adminDb.collection('ff_credit_history').add({
+      agentId, agentName: agentName || '', amount: Number(amount), operation, note: note || '',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

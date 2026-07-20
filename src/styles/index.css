@@ -1,5 +1,7 @@
 /* Google Fonts moved to <link> in index.html to avoid render-blocking @import */
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 /* ── Skeleton shimmer animation ─────────────────────────────────────────────── */
 @keyframes shimmer {
@@ -108,8 +110,6 @@
   animation: search-border-move 3s ease infinite;
 }
 
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 /* @fontsource-variable/geist supprimé — non utilisé (aucun --font-* ne le référence),
    causait un layout shift inutile lors du swap de police. */
 

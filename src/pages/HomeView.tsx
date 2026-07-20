@@ -27,6 +27,9 @@ import { isGameAvailableInHaiti, isGiftCardAvailableInHaiti } from '../lib/haiti
 import { ProductGridSkeleton } from '../components/skeletons/ProductGridSkeleton';
 import { FormationMiniSkeleton } from '../components/skeletons/FormationGridSkeleton';
 
+// ── Outside component to avoid stale closure issues ──────────────────────────
+const SEARCH_HINTS = ['Free Fire', 'Netflix', 'Disney+', 'Spotify', 'Steam', 'PlayStation', 'Xbox Game Pass', 'Amazon'];
+
 const SLIDER_IMAGES = [
   'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop',
   'https://images.unsplash.com/photo-1614850523296-62c09279446a?q=80&w=2070&auto=format&fit=crop',
@@ -115,8 +118,24 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
 
+  // ── Inject search border keyframe via JS — guarantees it works in prod builds ─
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'rena-search-border-kf';
+    style.textContent = `
+      @keyframes search-border-move {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+    `;
+    if (!document.getElementById('rena-search-border-kf')) {
+      document.head.appendChild(style);
+    }
+    return () => { document.getElementById('rena-search-border-kf')?.remove(); };
+  }, []);
+
   // ── Typewriter placeholder ──────────────────────────────────────────────────
-  const SEARCH_HINTS = ['Free Fire', 'Netflix', 'Disney+', 'Spotify', 'Steam', 'PlayStation', 'Xbox Game Pass', 'Amazon'];
   const [hintText, setHintText] = useState('');
   const [hintCursor, setHintCursor] = useState(true);
   useEffect(() => {

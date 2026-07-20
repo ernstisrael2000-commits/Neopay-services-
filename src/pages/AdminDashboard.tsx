@@ -2317,6 +2317,7 @@ function EmailLogsPanel() {
       title: "Administration & Paramètres",
       items: [
         { value: 'agents', label: 'Agents', icon: UserCheck, permission: 'settings' },
+        { value: 'free-fire-reseller', label: 'Free Fire Revendeurs', icon: Gamepad2, permission: 'settings' },
         { value: 'profits', label: 'Profits', icon: LucideIcons.TrendingUp, permission: 'settings' },
         { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
@@ -2481,6 +2482,79 @@ function EmailLogsPanel() {
       fetchTeachers();
     } catch (e: any) { toast.error(e.message || 'Erreur.'); }
     finally { setDeletingTeacherId(null); }
+  };
+
+  // ── Free Fire Reseller state ────────────────────────────────────────────────
+  const [ffResellerAgents, setFFResellerAgents] = useState<any[]>([]);
+  const [ffResellerLoading, setFFResellerLoading] = useState(false);
+  const ffResellerLoaded = useRef(false);
+  const [ffTxs, setFFTxs] = useState<any[]>([]);
+  const [ffTxsLoading, setFFTxsLoading] = useState(false);
+  const [ffCreditDialogOpen, setFFCreditDialogOpen] = useState(false);
+  const [ffCreditAgent, setFFCreditAgent] = useState<any | null>(null);
+  const [ffCreditAmount, setFFCreditAmount] = useState('');
+  const [ffCreditOp, setFFCreditOp] = useState<'add' | 'remove'>('add');
+  const [ffCreditNote, setFFCreditNote] = useState('');
+  const [ffCreditLoading, setFFCreditLoading] = useState(false);
+  const [ffToggleLoading, setFFToggleLoading] = useState<string | null>(null);
+  const [ffAgentForTx, setFFAgentForTx] = useState<any | null>(null);
+
+  const fetchFFResellerAgents = async () => {
+    setFFResellerLoading(true);
+    try {
+      const res = await fetch('/api/admin/reseller/ff/agents', { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const data = await res.json();
+      setFFResellerAgents(data.accounts || []);
+      ffResellerLoaded.current = true;
+    } catch { toast.error('Erreur chargement revendeurs Free Fire.'); }
+    finally { setFFResellerLoading(false); }
+  };
+
+  const fetchFFTransactions = async (agentId?: string) => {
+    setFFTxsLoading(true);
+    try {
+      const url = agentId
+        ? `/api/admin/reseller/ff/transactions?agentId=${encodeURIComponent(agentId)}&limit=100`
+        : '/api/admin/reseller/ff/transactions?limit=100';
+      const res = await fetch(url, { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const data = await res.json();
+      setFFTxs(data.transactions || []);
+    } catch { toast.error('Erreur chargement transactions Free Fire.'); }
+    finally { setFFTxsLoading(false); }
+  };
+
+  const handleFFToggle = async (agent: any) => {
+    setFFToggleLoading(agent.agentId);
+    try {
+      const res = await fetch('/api/admin/reseller/ff/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        body: JSON.stringify({ agentId: agent.agentId, agentName: agent.agentName, enabled: !agent.enabled }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success(agent.enabled ? 'Compte désactivé.' : 'Compte activé !');
+      fetchFFResellerAgents();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setFFToggleLoading(null); }
+  };
+
+  const handleFFCreditAdjust = async () => {
+    const amount = parseInt(ffCreditAmount);
+    if (!ffCreditAgent || isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    setFFCreditLoading(true);
+    try {
+      const res = await fetch('/api/admin/reseller/ff/credit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        body: JSON.stringify({ agentId: ffCreditAgent.agentId, agentName: ffCreditAgent.agentName, amount, operation: ffCreditOp, note: ffCreditNote }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success(ffCreditOp === 'add' ? `+${amount} 💎 ajoutés !` : `-${amount} 💎 retirés.`);
+      setFFCreditDialogOpen(false);
+      setFFCreditAmount(''); setFFCreditNote(''); setFFCreditAgent(null);
+      fetchFFResellerAgents();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setFFCreditLoading(false); }
   };
 
   const handleTeacherWithdrawalAction = async (id: string, action: 'approve' | 'reject') => {
@@ -8917,6 +8991,154 @@ function EmailLogsPanel() {
           {renderAgents()}
         </TabsContent>
 
+        {/* ── FREE FIRE REVENDEURS TAB ────────────────────────────────────── */}
+        <TabsContent value="free-fire-reseller" className="space-y-6 pt-6 px-6 pb-20">
+          {(() => { if (!ffResellerLoaded.current && !ffResellerLoading) fetchFFResellerAgents(); return null; })()}
+
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-3xl font-black text-dark tracking-tight flex items-center gap-2">
+                <Gamepad2 className="h-7 w-7 text-orange-500" />
+                Free Fire Revendeurs
+              </h2>
+              <p className="text-gray-400 text-sm mt-1">Gérez les comptes revendeurs de diamants Free Fire.</p>
+            </div>
+            <Button
+              onClick={fetchFFResellerAgents}
+              variant="outline"
+              className="rounded-2xl h-11 px-5 font-black text-[10px] uppercase tracking-widest border-2 border-gray-100 gap-2"
+            >
+              <LucideIcons.RefreshCw className="h-4 w-4" />Actualiser
+            </Button>
+          </div>
+
+          {/* Stats */}
+          {ffResellerAgents.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Revendeurs', value: ffResellerAgents.length, color: 'bg-blue-50 text-blue-700', icon: '👤' },
+                { label: 'Actifs', value: ffResellerAgents.filter(a => a.enabled).length, color: 'bg-emerald-50 text-emerald-700', icon: '✅' },
+                { label: '💎 Total', value: ffResellerAgents.reduce((s, a) => s + (a.totalSold || 0), 0).toLocaleString(), color: 'bg-orange-50 text-orange-700', icon: '💎' },
+              ].map(({ label, value, color, icon }) => (
+                <Card key={label} className={`border-0 shadow-sm rounded-2xl ${color.split(' ')[0]}`}>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-lg font-black">{value}</p>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${color.split(' ')[1]}`}>{label}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Agents list */}
+          {ffResellerLoading ? (
+            <div className="flex justify-center py-16 text-gray-300"><Loader2 className="h-10 w-10 animate-spin" /></div>
+          ) : ffResellerAgents.length === 0 ? (
+            <Card className="border-0 shadow-sm rounded-3xl">
+              <CardContent className="p-12 text-center">
+                <Gamepad2 className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                <p className="text-gray-400 font-bold">Aucun compte revendeur configuré.</p>
+                <p className="text-gray-300 text-sm mt-1">Les agents doivent être activés individuellement depuis leurs fiches ci-dessous.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {ffResellerAgents.map(a => (
+                <Card key={a.id} className="border-0 shadow-sm rounded-3xl overflow-hidden">
+                  <CardContent className="p-5">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-xl ${a.enabled ? 'bg-orange-100' : 'bg-gray-100'}`}>
+                        {a.enabled ? '💎' : '🔒'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-black text-dark">{a.agentName || a.agentId}</p>
+                          <Badge className={`text-[10px] font-black rounded-full px-2 ${a.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                            {a.enabled ? 'Actif' : 'Désactivé'}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                          <span className="text-sm font-black text-orange-600">{(a.diamondBalance || 0).toLocaleString()} 💎</span>
+                          <span className="text-sm text-gray-500">{(a.totalOrders || 0)} commandes</span>
+                          <span className="text-sm text-gray-500">{(a.totalSold || 0).toLocaleString()} vendus</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-4 border-t border-gray-50 pt-4">
+                      <Button
+                        size="sm"
+                        onClick={() => { setFFCreditAgent(a); setFFCreditOp('add'); setFFCreditDialogOpen(true); }}
+                        className="bg-emerald-500 hover:bg-emerald-600 h-9 text-[10px] font-black uppercase px-4 rounded-xl border-0 shadow-sm flex-1"
+                      >
+                        + Ajouter Crédit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setFFCreditAgent(a); setFFCreditOp('remove'); setFFCreditDialogOpen(true); }}
+                        className="border-2 border-red-100 text-red-600 hover:bg-red-50 h-9 text-[10px] font-black uppercase px-4 rounded-xl flex-1"
+                      >
+                        − Retirer Crédit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleFFToggle(a)}
+                        disabled={ffToggleLoading === a.agentId}
+                        className={`border-2 h-9 text-[10px] font-black uppercase px-4 rounded-xl flex-1 ${a.enabled ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'}`}
+                      >
+                        {ffToggleLoading === a.agentId ? <Loader2 className="h-3 w-3 animate-spin" /> : (a.enabled ? '🔒 Désactiver' : '✅ Activer')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setFFAgentForTx(a); fetchFFTransactions(a.agentId); }}
+                        className="h-9 text-[10px] font-black uppercase px-4 rounded-xl text-blue-600 hover:bg-blue-50 flex-1"
+                      >
+                        <LucideIcons.History className="h-3 w-3 mr-1" /> Ventes
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Transactions view */}
+          {ffAgentForTx && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-dark">Transactions — {ffAgentForTx.agentName || ffAgentForTx.agentId}</h3>
+                <Button variant="ghost" size="sm" onClick={() => setFFAgentForTx(null)} className="text-gray-400 h-8 rounded-xl text-[10px]">Fermer</Button>
+              </div>
+              {ffTxsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-300" /></div>
+              ) : ffTxs.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-6">Aucune transaction.</p>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {ffTxs.map(tx => (
+                    <div key={tx.id} className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 ${tx.status === 'success' ? 'bg-emerald-100' : tx.status === 'failed' ? 'bg-red-100' : 'bg-amber-100'}`}>
+                        {tx.status === 'success' ? '✅' : tx.status === 'failed' ? '❌' : '⏳'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-dark text-sm truncate">{tx.packageLabel} → {tx.playerId}</p>
+                        <p className="text-xs text-gray-400">{tx.region} · {tx.createdAt?._seconds ? format(new Date(tx.createdAt._seconds * 1000), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}</p>
+                        {tx.status === 'failed' && tx.errorMessage && <p className="text-xs text-red-500 truncate">{tx.errorMessage}</p>}
+                      </div>
+                      <span className={`text-sm font-black shrink-0 ${tx.status === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {tx.status === 'success' ? `-${tx.diamonds} 💎` : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
         {/* ── PROFITS TAB ──────────────────────────────────────────────────── */}
         <TabsContent value="profits" className="space-y-6">
           {(() => { if (!profitStatsLoaded.current && !profitStatsLoading) fetchProfitStats(); return null; })()}
@@ -11787,6 +12009,61 @@ function EmailLogsPanel() {
               {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : (editingClient ? 'Mettre à jour' : 'Enregistrer Client')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Free Fire Credit Dialog ── */}
+      <Dialog open={ffCreditDialogOpen} onOpenChange={setFFCreditDialogOpen}>
+        <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+            <DialogTitle className="font-black text-dark flex items-center gap-2">
+              <Gamepad2 className="h-5 w-5 text-orange-500" />
+              {ffCreditOp === 'add' ? 'Ajouter du Crédit' : 'Retirer du Crédit'} — {ffCreditAgent?.agentName || ffCreditAgent?.agentId}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400 text-sm">
+              Crédit actuel : <span className="font-black text-orange-500">{(ffCreditAgent?.diamondBalance || 0).toLocaleString()} 💎</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 py-5 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nombre de diamants</Label>
+              <Input
+                type="number"
+                min="1"
+                value={ffCreditAmount}
+                onChange={e => setFFCreditAmount(e.target.value)}
+                placeholder="Ex: 1000"
+                className="h-12 rounded-2xl bg-gray-50 border-0 font-black text-lg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Note (optionnel)</Label>
+              <Input
+                value={ffCreditNote}
+                onChange={e => setFFCreditNote(e.target.value)}
+                placeholder="Ex: Paiement MonCash reçu"
+                className="h-11 rounded-2xl bg-gray-50 border-0 font-medium"
+              />
+            </div>
+            {ffCreditAmount && !isNaN(parseInt(ffCreditAmount)) && parseInt(ffCreditAmount) > 0 && (
+              <div className={`p-3 rounded-2xl flex items-center gap-2 ${ffCreditOp === 'add' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                <span className="text-lg">{ffCreditOp === 'add' ? '💎' : '🔻'}</span>
+                <p className={`text-sm font-black ${ffCreditOp === 'add' ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {ffCreditOp === 'add' ? '+' : '-'}{parseInt(ffCreditAmount).toLocaleString()} 💎 → 
+                  Nouveau solde : {Math.max(0, (ffCreditAgent?.diamondBalance || 0) + (ffCreditOp === 'add' ? parseInt(ffCreditAmount) : -parseInt(ffCreditAmount))).toLocaleString()} 💎
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="px-6 pb-6">
+            <Button
+              onClick={handleFFCreditAdjust}
+              disabled={ffCreditLoading || !ffCreditAmount || isNaN(parseInt(ffCreditAmount)) || parseInt(ffCreditAmount) <= 0}
+              className={`w-full h-12 rounded-2xl font-black text-white border-0 uppercase tracking-widest text-[11px] ${ffCreditOp === 'add' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-red-500 hover:bg-red-600 shadow-red-200'} shadow-lg`}
+            >
+              {ffCreditLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (ffCreditOp === 'add' ? `Ajouter ${ffCreditAmount || 0} 💎` : `Retirer ${ffCreditAmount || 0} 💎`)}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
