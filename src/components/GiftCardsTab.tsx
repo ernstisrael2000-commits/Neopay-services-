@@ -16,8 +16,58 @@ interface Props {
   onOpenWallet?: () => void;
 }
 
+// ── Regional blocklist: exclude cards not usable in Haiti / Americas ──
+const REGION_BLOCKLIST = [
+  'japan', 'japanese', '(jp)', ' jp ', 'jpy',
+  'korea', 'korean', '(kr)', ' kr ',
+  'australia', '(au)', 'aud',
+  'europe', 'european', '(eu)', ' eu ', 'eur',
+  'united kingdom', '(uk)', ' uk ', 'gbp',
+  'germany', '(de)', ' de ',
+  'france', '(fr)', ' fr ',
+  'netherlands', '(nl)',
+  'russia', '(ru)', ' ru ',
+  'china', 'chinese', '(cn)', ' cn ',
+  'taiwan', '(tw)',
+  'india', '(in)', ' inr',
+  'brazil', '(br)', ' brl',
+  'turkey', '(tr)', ' try',
+  'saudi', '(sa)',
+  'singapore', '(sg)',
+  'malaysia', '(my)',
+  'thailand', '(th)',
+  'indonesia', '(id)',
+  'vietnam', '(vn)',
+  'philippines', '(ph)',
+  'hong kong', '(hk)', 'hkd',
+  'south africa', '(za)',
+  'norway', '(no)', 'nok',
+  'sweden', '(se)', 'sek',
+  'denmark', '(dk)',
+  'poland', '(pl)',
+  'czech', '(cz)',
+  'hungary', '(hu)',
+  'romania', '(ro)',
+  'portugal', '(pt)',
+  'spain', '(es)',
+  'italy', '(it)',
+  'austria', '(at)',
+  'belgium', '(be)',
+  'switzerland', '(ch)',
+  'finland', '(fi)',
+  'new zealand', '(nz)',
+  'israel', '(il)',
+  'pakistan', '(pk)',
+  'bangladesh', '(bd)',
+];
+
+function isAvailableInHaiti(name: string): boolean {
+  const lower = name.toLowerCase();
+  return !REGION_BLOCKLIST.some(kw => lower.includes(kw));
+}
+
 export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
-  const { categories, loading, error } = useFazerGiftCards();
+  const { categories: rawCategories, loading, error } = useFazerGiftCards();
   const { settings } = useSettingsCtx();
   const exchangeRate = settings?.exchangeRate || 146;
   const { client: liveClient } = useClientData(loggedClient?.id || null);
@@ -25,6 +75,9 @@ export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<FazerGiftCategory | null>(null);
+
+  // Only show gift cards usable in Haiti (US, Global, Canada, etc.)
+  const categories = rawCategories.filter(c => isAvailableInHaiti(c.name));
 
   const filtered = categories.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase())
@@ -160,7 +213,7 @@ interface GiftDialogProps {
   onOpenWallet?: () => void;
 }
 
-function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, onOpenWallet }: GiftDialogProps) {
+export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, onOpenWallet }: GiftDialogProps) {
   const [visible, setVisible] = useState(true);
   const { offers, loading: offersLoading } = useFazerGiftCardOffers(category.category_id);
   const isAdmin = typeof localStorage !== 'undefined' && !!localStorage.getItem('rena_admin');

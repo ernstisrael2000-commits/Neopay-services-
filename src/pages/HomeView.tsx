@@ -21,7 +21,8 @@ import { useClientData, useClientTransactions, submitClientPurchase } from '../s
 import { toast } from 'sonner';
 import { Client } from '../types';
 import { GameDialog } from '../components/GamesTab';
-import { useFazerTopups, useFazerPriceOverrides, FazerCategory } from '../hooks/useFazerTopups';
+import { GiftCardDialog } from '../components/GiftCardsTab';
+import { useFazerTopups, useFazerPriceOverrides, useFazerGiftCards, FazerCategory, FazerGiftCategory } from '../hooks/useFazerTopups';
 
 const SLIDER_IMAGES = [
   'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop',
@@ -80,6 +81,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const { cards, loading: cardsLoading } = useCardTopups();
   const { categories: fazerCategories } = useFazerTopups();
   const priceOverrides = useFazerPriceOverrides();
+  const { categories: giftCardCategories } = useFazerGiftCards();
 
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const { transactions: clientTx } = useClientTransactions(loggedClient?.id || null);
@@ -112,6 +114,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; image: string; price?: string; type: string; description?: string } | null>(null);
   const [selectedGameCat, setSelectedGameCat] = useState<FazerCategory | null>(null);
+  const [selectedGiftCat, setSelectedGiftCat] = useState<FazerGiftCategory | null>(null);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   const imagesToDisplay = sliderImages.length > 0
@@ -379,12 +382,61 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         ) : (
           (() => {
             const q = debouncedSearch.trim().toLowerCase();
-            const allItems = [
-              ...products.map(p => ({ id: p.id!, name: p.name, image: p.image, price: p.price, type: 'product', description: p.description })),
-              ...games.map(g => ({ id: g.id!, name: g.name, image: g.image, price: (g as any).priceRange || (g as any).price || '', type: 'game', description: (g as any).description || '' })),
-              ...cards.map(c => ({ id: c.id!, name: c.name, image: c.image, price: c.price, type: 'card', description: c.description })),
-            ].filter(item => !q || item.name.toLowerCase().includes(q))
-            .slice(0, q ? 20 : 8);
+
+            // Word-based fuzzy matching: every word in the query must appear in the name
+            const matchesQuery = (name: string) => {
+              if (!q) return true;
+              const words = q.split(/\s+/).filter(Boolean);
+              const lower = name.toLowerCase();
+              return words.every(w => lower.includes(w));
+            };
+
+            // ── Firebase catalog items ──────────────────────────────────────
+            const catalogItems: Array<{ id: string; name: string; image: string; price?: string; type: string; description?: string; source: 'catalog' | 'fazer-game' | 'fazer-gift' }> = [
+              ...products.map(p => ({ id: p.id!, name: p.name, image: p.image, price: p.price, type: 'product', description: p.description, source: 'catalog' as const })),
+              ...games.map(g => ({ id: g.id!, name: g.name, image: g.image, price: (g as any).priceRange || (g as any).price || '', type: 'game', description: (g as any).description || '', source: 'catalog' as const })),
+              ...cards.map(c => ({ id: c.id!, name: c.name, image: c.image, price: c.price, type: 'card', description: c.description, source: 'catalog' as const })),
+            ];
+
+            // ── FazerCards live game categories (only when searching) ───────
+            const fazerGameItems = q ? fazerCategories
+              .filter(cat => matchesQuery(cat.name))
+              .map(cat => ({
+                id: `fazer-game-${cat.category_id}`,
+                name: cat.name,
+                image: cat.imageurl || '',
+                price: '',
+                type: 'game',
+                description: 'Top-up jeu',
+                source: 'fazer-game' as const,
+                _cat: cat,
+              })) : [];
+
+            // ── FazerCards gift card categories (only when searching) ────────
+            const fazerGiftItems = q ? giftCardCategories
+              .filter(cat => matchesQuery(cat.name))
+              .map(cat => ({
+                id: `fazer-gift-${cat.category_id}`,
+                name: cat.name,
+                image: cat.imageurl || '',
+                price: '',
+                type: 'giftcard',
+                description: 'Carte-cadeau',
+                source: 'fazer-gift' as const,
+                _cat: cat,
+              })) : [];
+
+            // ── Merge: catalog first, then FazerCards (deduplicate by name) ─
+            const seenNames = new Set<string>();
+            const allItems = [...catalogItems, ...fazerGameItems, ...fazerGiftItems]
+              .filter(item => {
+                if (!matchesQuery(item.name)) return false;
+                const key = item.name.toLowerCase().split(' (')[0].trim();
+                if (seenNames.has(key)) return false;
+                seenNames.add(key);
+                return true;
+              })
+              .slice(0, q ? 40 : 8);
 
             if (allItems.length === 0) return (
               <div className="text-center py-8 text-gray-400 text-sm">
@@ -397,8 +449,18 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                 onRequestAuth?.();
                 return;
               }
+              // Gift card from FazerCards
+              if (item.source === 'fazer-gift') {
+                setSelectedGiftCat((item as any)._cat);
+                return;
+              }
+              // Game from FazerCards directly
+              if (item.source === 'fazer-game') {
+                setSelectedGameCat((item as any)._cat);
+                return;
+              }
+              // Catalog game — try to match against FazerCards
               if (item.type === 'game') {
-                // Try to match against a live FazerCards category
                 const nameLower = item.name.toLowerCase();
                 const matchingCat = fazerCategories.find(cat => {
                   const catBase = cat.name.toLowerCase().split(' (')[0].trim();
@@ -528,6 +590,17 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           loggedClient={effectiveClient || null}
           exchangeRate={exchangeRate}
           onClose={() => setSelectedGameCat(null)}
+          onOpenWallet={onOpenWallet}
+        />
+      )}
+
+      {/* ── GiftCardDialog (search result click) ── */}
+      {selectedGiftCat && (
+        <GiftCardDialog
+          category={selectedGiftCat}
+          exchangeRate={exchangeRate}
+          loggedClient={effectiveClient || null}
+          onClose={() => setSelectedGiftCat(null)}
           onOpenWallet={onOpenWallet}
         />
       )}

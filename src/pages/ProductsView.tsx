@@ -267,14 +267,14 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
         </div>
       </div>
 
-      {/* Floating tabs */}
+      {/* Floating tabs – scrollable on small screens */}
       <div className="max-w-3xl mx-auto px-4 -mt-5 mb-6">
-        <div className="bg-white rounded-2xl shadow-lg shadow-black/10 border border-gray-100 p-1.5 flex gap-1">
+        <div className="bg-white rounded-2xl shadow-lg shadow-black/10 border border-gray-100 p-1.5 flex gap-1 overflow-x-auto scrollbar-none">
           {TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-black transition-all ${
+              className={`shrink-0 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-sm font-black transition-all whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'bg-primary text-white shadow-md shadow-primary/25'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
