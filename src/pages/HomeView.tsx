@@ -390,12 +390,21 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               return words.every(w => lower.includes(w));
             };
 
-            // ── Firebase catalog items ──────────────────────────────────────
-            const catalogItems: Array<{ id: string; name: string; image: string; price?: string; type: string; description?: string; source: 'catalog' | 'fazer-game' | 'fazer-gift' }> = [
-              ...products.map(p => ({ id: p.id!, name: p.name, image: p.image, price: p.price, type: 'product', description: p.description, source: 'catalog' as const })),
-              ...games.map(g => ({ id: g.id!, name: g.name, image: g.image, price: (g as any).priceRange || (g as any).price || '', type: 'game', description: (g as any).description || '', source: 'catalog' as const })),
-              ...cards.map(c => ({ id: c.id!, name: c.name, image: c.image, price: c.price, type: 'card', description: c.description, source: 'catalog' as const })),
-            ];
+            // ── Firebase catalog items — interleaved round-robin ────────────
+            type CatalogItem = { id: string; name: string; image: string; price?: string; type: string; description?: string; source: 'catalog' | 'fazer-game' | 'fazer-gift' };
+            const _products = products.map(p => ({ id: p.id!, name: p.name, image: p.image, price: p.price, type: 'product', description: p.description, source: 'catalog' as const }));
+            const _games    = games.map(g => ({ id: g.id!, name: g.name, image: g.image, price: (g as any).priceRange || (g as any).price || '', type: 'game', description: (g as any).description || '', source: 'catalog' as const }));
+            const _cards    = cards.map(c => ({ id: c.id!, name: c.name, image: c.image, price: c.price, type: 'card', description: c.description, source: 'catalog' as const }));
+
+            // Round-robin interleave: 1 product, 1 game, 1 card, repeat
+            const catalogItems: CatalogItem[] = [];
+            const buckets = [_products, _games, _cards];
+            const maxLen = Math.max(...buckets.map(b => b.length));
+            for (let i = 0; i < maxLen; i++) {
+              for (const bucket of buckets) {
+                if (i < bucket.length) catalogItems.push(bucket[i]);
+              }
+            }
 
             // ── FazerCards live game categories (only when searching) ───────
             const fazerGameItems = q ? fazerCategories
@@ -435,7 +444,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                 seenNames.add(key);
                 return true;
               })
-              .slice(0, q ? 40 : 8);
+              .slice(0, q ? 40 : 10);
 
             if (allItems.length === 0) return (
               <div className="text-center py-8 text-gray-400 text-sm">
@@ -473,51 +482,85 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               setSelectedItem(item);
             };
 
+            const typeConfig: Record<string, { label: string; bg: string; dot: string }> = {
+              game:     { label: 'Jeu',          bg: 'bg-purple-500/90',  dot: 'bg-purple-400' },
+              card:     { label: 'Carte',         bg: 'bg-emerald-500/90', dot: 'bg-emerald-400' },
+              product:  { label: 'Produit',       bg: 'bg-blue-500/90',   dot: 'bg-blue-400' },
+              giftcard: { label: 'Carte-cadeau',  bg: 'bg-amber-500/90',  dot: 'bg-amber-400' },
+            };
+
             return (
               <div className="grid grid-cols-2 gap-3">
-                {allItems.map((item, i) => (
-                  <motion.button
-                    key={`${item.type}-${item.id}`}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => handleItemClick(item)}
-                    className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all group bg-white text-left active:scale-[0.98]"
-                  >
-                    <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/200/150'; }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-                      {!loggedClient && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-                          <div className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-md">
-                            <LucideIcons.Lock className="h-4 w-4 text-gray-700" />
-                          </div>
-                        </div>
-                      )}
-                      {item.price && (
-                        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-black bg-primary text-white shadow-md leading-none">
-                          {item.price}
+                {allItems.map((item, i) => {
+                  const tc = typeConfig[item.type] ?? typeConfig.product;
+                  const isFeatured = i === 0 && !q;
+                  return (
+                    <motion.button
+                      key={`${item.type}-${item.id}`}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04, type: 'spring', stiffness: 260, damping: 22 }}
+                      onClick={() => handleItemClick(item)}
+                      className={`relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all group bg-white text-left active:scale-[0.98]${isFeatured ? ' col-span-2' : ''}`}
+                    >
+                      <div className={`relative bg-gray-100 overflow-hidden ${isFeatured ? 'aspect-[16/7]' : 'aspect-[4/3]'}`}>
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          loading={i < 4 ? 'eager' : 'lazy'}
+                          decoding="async"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/200/150'; }}
+                        />
+                        {/* gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+
+                        {/* type badge — top left */}
+                        <span className={`absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow leading-none backdrop-blur-sm ${tc.bg}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${tc.dot}`} />
+                          {tc.label}
                         </span>
-                      )}
-                      <div className="absolute bottom-2 left-2 right-2">
-                        <p className="text-white font-black text-[11px] leading-tight line-clamp-2 drop-shadow">{item.name}</p>
+
+                        {/* price — top right */}
+                        {item.price && (
+                          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-black bg-white/90 text-gray-800 shadow leading-none">
+                            {item.price}
+                          </span>
+                        )}
+
+                        {/* lock overlay */}
+                        {!loggedClient && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
+                            <div className="h-9 w-9 rounded-full bg-white/90 flex items-center justify-center shadow-md">
+                              <LucideIcons.Lock className="h-4 w-4 text-gray-700" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* name at bottom */}
+                        <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5 pt-6">
+                          <p className={`text-white font-black leading-tight drop-shadow ${isFeatured ? 'text-sm' : 'text-[11px] line-clamp-2'}`}>{item.name}</p>
+                          {isFeatured && item.description && (
+                            <p className="text-white/70 text-[10px] mt-0.5 line-clamp-1">{item.description}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="px-2.5 py-2 flex items-center justify-between">
-                      <p className="text-[9px] text-gray-400 capitalize">{item.type === 'game' ? 'Jeu' : item.type === 'card' ? 'Carte' : 'Produit'}</p>
-                      <span className="flex items-center gap-0.5 text-[9px] text-primary font-black">
-                        {loggedClient ? 'Voir' : 'Connexion'} <ArrowRight className="h-2.5 w-2.5" />
-                      </span>
-                    </div>
-                  </motion.button>
-                ))}
+
+                      {/* footer */}
+                      <div className="px-2.5 py-1.5 flex items-center justify-between">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          item.type === 'game'     ? 'text-purple-600 bg-purple-50' :
+                          item.type === 'card'     ? 'text-emerald-600 bg-emerald-50' :
+                          item.type === 'giftcard' ? 'text-amber-600 bg-amber-50' :
+                          'text-blue-600 bg-blue-50'
+                        }`}>{tc.label}</span>
+                        <span className="flex items-center gap-0.5 text-[9px] text-primary font-black">
+                          {loggedClient ? 'Voir' : 'Connexion'} <ArrowRight className="h-2.5 w-2.5" />
+                        </span>
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
             );
           })()
