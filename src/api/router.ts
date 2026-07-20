@@ -3732,6 +3732,17 @@ router.post('/api/admin/agent/:agentId/wallet/adjust', requireDb, async (req, re
   }
 });
 
+// ── Admin secret guard (timing-safe comparison) ───────────────────────────────
+const _ADMIN_SECRET_BUF = Buffer.from('rena-admin-2024');
+const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const supplied = String(req.headers['x-admin-secret'] || '');
+  const buf = Buffer.alloc(_ADMIN_SECRET_BUF.length);
+  buf.write(supplied);
+  const ok = supplied.length === _ADMIN_SECRET_BUF.length && timingSafeEqual(buf, _ADMIN_SECRET_BUF);
+  if (!ok) return res.status(403).json({ error: 'Non autorisé.' });
+  next();
+};
+
 // ── Admin: delete agent ───────────────────────────────────────────────────────
 router.delete('/api/admin/agent/:agentId', requireDb, requireAdminSecret, async (req, res) => {
   try {
@@ -4514,17 +4525,6 @@ router.post('/api/formations/progress/position', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
-// ── Admin secret guard (timing-safe comparison) ───────────────────────────────
-const _ADMIN_SECRET_BUF = Buffer.from('rena-admin-2024');
-const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const supplied = String(req.headers['x-admin-secret'] || '');
-  const buf = Buffer.alloc(_ADMIN_SECRET_BUF.length);
-  buf.write(supplied);
-  const ok = supplied.length === _ADMIN_SECRET_BUF.length && timingSafeEqual(buf, _ADMIN_SECRET_BUF);
-  if (!ok) return res.status(403).json({ error: 'Non autorisé.' });
-  next();
-};
 
 // ── Admin Login (server-side — élimine la dépendance à l'auth anonyme) ───────
 router.post('/api/admin/login', requireDb, async (req, res) => {
