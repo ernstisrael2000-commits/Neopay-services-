@@ -16,54 +16,45 @@ interface Props {
   onOpenWallet?: () => void;
 }
 
-// ── Regional blocklist: exclude cards not usable in Haiti / Americas ──
-const REGION_BLOCKLIST = [
-  'japan', 'japanese', '(jp)', ' jp ', 'jpy',
-  'korea', 'korean', '(kr)', ' kr ',
-  'australia', '(au)', 'aud',
-  'europe', 'european', '(eu)', ' eu ', 'eur',
-  'united kingdom', '(uk)', ' uk ', 'gbp',
-  'germany', '(de)', ' de ',
-  'france', '(fr)', ' fr ',
-  'netherlands', '(nl)',
-  'russia', '(ru)', ' ru ',
-  'china', 'chinese', '(cn)', ' cn ',
-  'taiwan', '(tw)',
-  'india', '(in)', ' inr',
-  'brazil', '(br)', ' brl',
-  'turkey', '(tr)', ' try',
-  'saudi', '(sa)',
-  'singapore', '(sg)',
-  'malaysia', '(my)',
-  'thailand', '(th)',
-  'indonesia', '(id)',
-  'vietnam', '(vn)',
-  'philippines', '(ph)',
-  'hong kong', '(hk)', 'hkd',
-  'south africa', '(za)',
-  'norway', '(no)', 'nok',
-  'sweden', '(se)', 'sek',
-  'denmark', '(dk)',
-  'poland', '(pl)',
-  'czech', '(cz)',
-  'hungary', '(hu)',
-  'romania', '(ro)',
-  'portugal', '(pt)',
-  'spain', '(es)',
-  'italy', '(it)',
-  'austria', '(at)',
-  'belgium', '(be)',
-  'switzerland', '(ch)',
-  'finland', '(fi)',
-  'new zealand', '(nz)',
-  'israel', '(il)',
-  'pakistan', '(pk)',
-  'bangladesh', '(bd)',
+// ── Suffixes de région incompatibles avec Haïti ───────────────────
+// Même logique que GamesTab : on exclut uniquement les tags explicites
+// entre parenthèses. Tout ce qui est Global / US / LATAM / sans tag reste visible.
+const GIFT_EXCLUDED: string[] = [
+  // Asie Pacifique
+  '(JP)', '(Japan)', '(JPN)',
+  '(KR)', '(Korea)',
+  '(CN)', '(China)',
+  '(TW)', '(Taiwan)', '(HK)', '(HK/MO)', '(TW/HK/MO)',
+  '(ID)', '(Indonesia)',
+  '(MY)', '(Malaysia)', '(MY/SG)', '(SG/MY)',
+  '(SG)', '(Singapore)',
+  '(PH)', '(Philippines)',
+  '(TH)', '(Thailand)',
+  '(VN)', '(Vietnam)',
+  '(SEA)',
+  '(AU)', '(Australia)', '(NZ)',
+  // Europe
+  '(EU)', '(Europe)',
+  '(UK)', '(GB)', '(IE)',
+  '(DE)', '(AT)', '(CH)',
+  '(FR)',
+  '(NL)', '(BE)',
+  '(IT)',
+  '(ES)', '(PT)',
+  '(PL)', '(CZ)', '(HU)', '(RO)', '(SK)',
+  '(SE)', '(NO)', '(DK)', '(FI)',
+  '(RU)', '(Russia)', '(CIS)',
+  // Moyen-Orient / Afrique
+  '(MENA)', '(SA)', '(AE)', '(IL)', '(TR)', '(Turkey)',
+  '(ZA)', '(Africa)',
+  // Asie du Sud
+  '(IN)', '(India)', '(BD)', '(PK)', '(KZ)',
+  // Amérique du Sud (devises locales)
+  '(BR)', '(Brazil)', '(AR)', '(CL)', '(CO)', '(PE)',
 ];
 
 function isAvailableInHaiti(name: string): boolean {
-  const lower = name.toLowerCase();
-  return !REGION_BLOCKLIST.some(kw => lower.includes(kw));
+  return !GIFT_EXCLUDED.some(tag => name.includes(tag));
 }
 
 export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
