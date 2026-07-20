@@ -515,19 +515,6 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         {/* gradient overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
 
-                        {/* type badge — top left */}
-                        <span className={`absolute top-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black text-white shadow leading-none backdrop-blur-sm ${tc.bg}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${tc.dot}`} />
-                          {tc.label}
-                        </span>
-
-                        {/* price — top right */}
-                        {item.price && (
-                          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-black bg-white/90 text-gray-800 shadow leading-none">
-                            {item.price}
-                          </span>
-                        )}
-
                         {/* lock overlay */}
                         {!loggedClient && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
@@ -546,18 +533,6 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         </div>
                       </div>
 
-                      {/* footer */}
-                      <div className="px-2.5 py-1.5 flex items-center justify-between">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                          item.type === 'game'     ? 'text-purple-600 bg-purple-50' :
-                          item.type === 'card'     ? 'text-emerald-600 bg-emerald-50' :
-                          item.type === 'giftcard' ? 'text-amber-600 bg-amber-50' :
-                          'text-blue-600 bg-blue-50'
-                        }`}>{tc.label}</span>
-                        <span className="flex items-center gap-0.5 text-[9px] text-primary font-black">
-                          {loggedClient ? 'Voir' : 'Connexion'} <ArrowRight className="h-2.5 w-2.5" />
-                        </span>
-                      </div>
                     </motion.button>
                   );
                 })}
