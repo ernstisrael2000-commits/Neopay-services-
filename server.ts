@@ -112,6 +112,11 @@ async function startServer() {
       setHeaders(res, filePath) {
         if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (filePath.endsWith('sw.js')) {
+          // Service workers must never be cached by the browser — always revalidate
+          // so a new deployment is picked up immediately.
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Service-Worker-Allowed', '/');
         } else if (
           filePath.endsWith('.webmanifest') ||
           filePath.endsWith('robots.txt') ||

@@ -118,22 +118,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
 
-  // ── Inject search border keyframe via JS — guarantees it works in prod builds ─
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.id = 'rena-search-border-kf';
-    style.textContent = `
-      @keyframes search-border-move {
-        0%   { background-position: 0% 50%; }
-        50%  { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-    `;
-    if (!document.getElementById('rena-search-border-kf')) {
-      document.head.appendChild(style);
-    }
-    return () => { document.getElementById('rena-search-border-kf')?.remove(); };
-  }, []);
+  // ── search-border-move keyframe is defined in src/styles/index.css ──────────
+  // No JS injection needed — the keyframe ships in the production CSS bundle.
+  // Injecting it via document.createElement('style') can fail when the hosting
+  // layer enforces Content-Security-Policy: style-src 'self' (no unsafe-inline).
 
   // ── Typewriter placeholder ──────────────────────────────────────────────────
   const [hintText, setHintText] = useState('');

@@ -29,8 +29,8 @@ try {
 }
 
 // ── Cache names (bump version to force refresh) ───────────────────────────────
-const SHELL_CACHE   = 'rena-shell-v3';      // App shell: JS, CSS, fonts
-const IMAGE_CACHE   = 'rena-images-v3';     // Local + Firebase Storage images
+const SHELL_CACHE   = 'rena-shell-v4';      // App shell: JS, CSS, fonts
+const IMAGE_CACHE   = 'rena-images-v4';     // Local + Firebase Storage images
 const OFFLINE_URL   = '/';
 
 // Assets pre-cached at install time

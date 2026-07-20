@@ -3,6 +3,35 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/*
+ * ── Production safelist ────────────────────────────────────────────────────
+ * Tailwind v4 scans source files statically. Classes assembled at runtime via
+ * Record<string,string> maps (statusColors, typeColors, methodColors,
+ * levelGradients, etc.) risk being purged if the scanner doesn't walk into
+ * every object-literal value. We force-include them here with @source inline.
+ */
+
+/* Gradient pairs used in levelGradients, AgentDashboard ternaries, skeletons */
+@source inline("from-emerald-500 to-teal-600 from-violet-500 to-purple-700 from-rose-500 to-pink-700 from-orange-500 to-amber-500 from-amber-500 to-orange-500");
+
+/* Background + text color pairs from statusColors / typeColors (all files) */
+@source inline("bg-amber-100 text-amber-700 bg-emerald-100 text-emerald-700 bg-red-100 text-red-700 bg-blue-100 text-blue-700 bg-primary/10");
+
+/* methodColors in ClientDashboard */
+@source inline("text-rose-500 bg-rose-50 text-amber-500 bg-amber-50 text-blue-500 bg-blue-50 text-violet-500 bg-violet-50 text-emerald-500 bg-emerald-50");
+
+/* Featured formations stats pills */
+@source inline("text-violet-700 bg-violet-50 border-violet-100 text-emerald-700 bg-emerald-50 border-emerald-100 text-amber-700 bg-amber-50 border-amber-100 text-blue-700 bg-blue-50 border-blue-100");
+
+/* Shadow color utilities used conditionally in AgentDashboard */
+@source inline("shadow-emerald-200 shadow-violet-200 shadow-amber-200 shadow-rose-200");
+
+/* bg-gradient-to-br combos in AgentDashboard ternaries */
+@source inline("bg-gradient-to-br from-emerald-500 to-teal-600 bg-gradient-to-br from-violet-500 to-purple-700");
+
+/* Arbitrary color values used in AgentDashboard */
+@source inline("text-[#00C853]");
+
 /* ── Skeleton shimmer animation ─────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
