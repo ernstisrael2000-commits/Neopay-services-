@@ -7203,7 +7203,7 @@ router.get('/api/reseller/ff/packages', async (req, res) => {
       label: o.name || o.product_name || `${o.diamonds || o.value || '?'} Diamants`,
       diamonds: parseInt(String(o.diamonds || o.value || 0)) || 0,
       priceUSD: parseFloat(String(o.price_usd || o.price || 0)) || 0,
-      offerId: o.id || o.offer_id || String(o.diamonds),
+      offerId: o.offer_id || o.id || String(o.diamonds),
       categoryId,
     })).filter(o => o.diamonds > 0);
     res.json({ items: items.length ? items : FALLBACK_FF_PACKAGES, regions: Object.keys(FF_REGIONS) });

@@ -95,6 +95,11 @@ export default function FreeFireResellerSection({ agentId, agentName, agentBalan
   const [buyingPackId, setBuyingPackId] = useState<string | null>(null);
   const [buyPackOpen, setBuyPackOpen] = useState(false);
 
+  // ── Player ID lookup ──────────────────────────────────────────────────────────
+  const [playerName, setPlayerName] = useState<string | null>(null);
+  const [lookingUpPlayer, setLookingUpPlayer] = useState(false);
+  const lookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Auto-init account on mount
   const ensureAccount = useCallback(async () => {
     if (initCalled.current) return;
@@ -177,6 +182,36 @@ export default function FreeFireResellerSection({ agentId, agentName, agentBalan
 
   useEffect(() => { ensureAccount(); fetchTransactions(); fetchCreditPacks(); }, [ensureAccount, fetchTransactions, fetchCreditPacks]);
   useEffect(() => { if (orderOpen) fetchPackages(selectedRegion); }, [orderOpen, selectedRegion, fetchPackages]);
+
+  // Debounced player name lookup
+  useEffect(() => {
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current);
+    const pid = playerId.trim();
+    if (!/^\d{5,15}$/.test(pid)) {
+      setPlayerName(null);
+      setLookingUpPlayer(false);
+      return;
+    }
+    setPlayerName(null);
+    setLookingUpPlayer(true);
+    lookupTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/fazer/topups/validate-id', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category_id: 'free_fire', fields: { player_id: pid } }),
+        });
+        const data = await res.json();
+        if (res.ok && data.valid !== false) {
+          setPlayerName(data.username || null);
+        } else {
+          setPlayerName(null);
+        }
+      } catch { setPlayerName(null); }
+      finally { setLookingUpPlayer(false); }
+    }, 700);
+    return () => { if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current); };
+  }, [playerId]);
 
   const handleOrder = async () => {
     const pid = playerId.trim();
@@ -473,15 +508,37 @@ export default function FreeFireResellerSection({ agentId, agentName, agentBalan
             {/* Player ID */}
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID Joueur *</Label>
-              <Input
-                value={playerId}
-                onChange={e => setPlayerId(e.target.value.replace(/\D/g, '').slice(0, 15))}
-                placeholder="Ex : 123456789"
-                className="h-12 rounded-2xl bg-slate-50 border-0 font-black text-base placeholder:font-normal"
-                inputMode="numeric"
-                autoFocus
-              />
-              <p className="text-[10px] text-slate-300 font-medium">Chiffres uniquement · 5 à 15 caractères</p>
+              <div className="relative">
+                <Input
+                  value={playerId}
+                  onChange={e => { setPlayerId(e.target.value.replace(/\D/g, '').slice(0, 15)); }}
+                  placeholder="Ex : 123456789"
+                  className="h-12 rounded-2xl bg-slate-50 border-0 font-black text-base placeholder:font-normal pr-10"
+                  inputMode="numeric"
+                  autoFocus
+                />
+                {lookingUpPlayer && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  </div>
+                )}
+                {!lookingUpPlayer && playerName && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  </div>
+                )}
+              </div>
+              {lookingUpPlayer ? (
+                <p className="text-[10px] text-slate-400 font-medium animate-pulse">Recherche du joueur…</p>
+              ) : playerName ? (
+                <p className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
+                  ✓ <span>{playerName}</span>
+                </p>
+              ) : playerId.length >= 5 && !lookingUpPlayer ? (
+                <p className="text-[10px] text-amber-500 font-medium">Joueur non trouvé — vérifiez l'ID et la région</p>
+              ) : (
+                <p className="text-[10px] text-slate-300 font-medium">Chiffres uniquement · 5 à 15 caractères</p>
+              )}
             </div>
 
             {/* Region */}
