@@ -23,6 +23,7 @@ import { Client } from '../types';
 import { GameDialog } from '../components/GamesTab';
 import { GiftCardDialog } from '../components/GiftCardsTab';
 import { useFazerTopups, useFazerPriceOverrides, useFazerGiftCards, FazerCategory, FazerGiftCategory } from '../hooks/useFazerTopups';
+import { isGameAvailableInHaiti, isGiftCardAvailableInHaiti } from '../lib/haitiFilter';
 
 const SLIDER_IMAGES = [
   'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop',
@@ -400,7 +401,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
             // ── FazerCards live game categories (only when searching) ───────
             const fazerGameItems = q ? fazerCategories
-              .filter(cat => matchesQuery(cat.name))
+              .filter(cat => isGameAvailableInHaiti(cat.name) && matchesQuery(cat.name))
               .map(cat => ({
                 id: `fazer-game-${cat.category_id}`,
                 name: cat.name,
@@ -414,7 +415,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
             // ── FazerCards gift card categories (only when searching) ────────
             const fazerGiftItems = q ? giftCardCategories
-              .filter(cat => matchesQuery(cat.name))
+              .filter(cat => isGiftCardAvailableInHaiti(cat.name) && matchesQuery(cat.name))
               .map(cat => ({
                 id: `fazer-gift-${cat.category_id}`,
                 name: cat.name,

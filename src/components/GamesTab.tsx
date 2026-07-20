@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { Client } from '../types';
 import { useFazerTopups, useFazerOffers, useFazerValidatableGames, useFazerPriceOverrides, FazerCategory, FazerOffer } from '../hooks/useFazerTopups';
+import { isGameAvailableInHaiti } from '../lib/haitiFilter';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
 
@@ -57,30 +58,7 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
   const [selected, setSelected] = useState<FazerCategory | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // ── Filtre région Haïti ──────────────────────────────────────────
-  // On exclut les jeux dont le nom contient un indicateur de région
-  // incompatible avec Haïti (LATAM / Global / Amériques sont acceptés).
-  const HAITI_EXCLUDED: string[] = [
-    '(EU)', '(Europe)', '(CIS)',
-    '(ID)', '(Indonesia)',
-    '(TH)', '(Thailand)',
-    '(MY)', '(Malaysia)',
-    '(SG)', '(Singapore)', '(SG/MY)', '(MY/SG)',
-    '(SEA)',
-    '(PH)', '(Philippines)',
-    '(VN)', '(Vietnam)',
-    '(TW)', '(Taiwan)', '(HK)', '(HK/MO)', '(TW/HK/MO)',
-    '(MENA)',
-    '(BD)', '(PK)', '(IN)',
-    '(SA)', '(KZ)',
-    '(RU)', '(Russia)', '(Turkey)',
-    '(Asia)', '(Black Clover M (Asia))',
-    ' (KH)', ' VNG',
-  ];
-  const isAvailableInHaiti = (c: FazerCategory) =>
-    !HAITI_EXCLUDED.some(tag => c.name.includes(tag));
-
-  const visibleCategories = categories.filter(isAvailableInHaiti);
+  const visibleCategories = categories.filter(c => isGameAvailableInHaiti(c.name));
 
   // Featured game: prefer Free Fire LATAM — always pinned first in grid
   const freefire =

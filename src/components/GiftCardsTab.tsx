@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { Client } from '../types';
 import { useFazerGiftCards, useFazerGiftCardOffers, FazerGiftCategory, FazerOffer } from '../hooks/useFazerTopups';
+import { isGiftCardAvailableInHaiti } from '../lib/haitiFilter';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
 
@@ -16,46 +17,6 @@ interface Props {
   onOpenWallet?: () => void;
 }
 
-// ── Suffixes de région incompatibles avec Haïti ───────────────────
-// Même logique que GamesTab : on exclut uniquement les tags explicites
-// entre parenthèses. Tout ce qui est Global / US / LATAM / sans tag reste visible.
-const GIFT_EXCLUDED: string[] = [
-  // Asie Pacifique
-  '(JP)', '(Japan)', '(JPN)',
-  '(KR)', '(Korea)',
-  '(CN)', '(China)',
-  '(TW)', '(Taiwan)', '(HK)', '(HK/MO)', '(TW/HK/MO)',
-  '(ID)', '(Indonesia)',
-  '(MY)', '(Malaysia)', '(MY/SG)', '(SG/MY)',
-  '(SG)', '(Singapore)',
-  '(PH)', '(Philippines)',
-  '(TH)', '(Thailand)',
-  '(VN)', '(Vietnam)',
-  '(SEA)',
-  '(AU)', '(Australia)', '(NZ)',
-  // Europe
-  '(EU)', '(Europe)',
-  '(UK)', '(GB)', '(IE)',
-  '(DE)', '(AT)', '(CH)',
-  '(FR)',
-  '(NL)', '(BE)',
-  '(IT)',
-  '(ES)', '(PT)',
-  '(PL)', '(CZ)', '(HU)', '(RO)', '(SK)',
-  '(SE)', '(NO)', '(DK)', '(FI)',
-  '(RU)', '(Russia)', '(CIS)',
-  // Moyen-Orient / Afrique
-  '(MENA)', '(SA)', '(AE)', '(IL)', '(TR)', '(Turkey)',
-  '(ZA)', '(Africa)',
-  // Asie du Sud
-  '(IN)', '(India)', '(BD)', '(PK)', '(KZ)',
-  // Amérique du Sud (devises locales)
-  '(BR)', '(Brazil)', '(AR)', '(CL)', '(CO)', '(PE)',
-];
-
-function isAvailableInHaiti(name: string): boolean {
-  return !GIFT_EXCLUDED.some(tag => name.includes(tag));
-}
 
 export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
   const { categories: rawCategories, loading, error } = useFazerGiftCards();
@@ -68,7 +29,7 @@ export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
   const [selected, setSelected] = useState<FazerGiftCategory | null>(null);
 
   // Only show gift cards usable in Haiti (US, Global, Canada, etc.)
-  const categories = rawCategories.filter(c => isAvailableInHaiti(c.name));
+  const categories = rawCategories.filter(c => isGiftCardAvailableInHaiti(c.name));
 
   const filtered = categories.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase())
