@@ -7137,6 +7137,26 @@ const FALLBACK_FF_PACKAGES = [
   { id: 'ff_5600', label: '5600 Diamants', diamonds: 5600, priceUSD: 49.99, offerId: 'ff_5600', categoryId: 'free_fire_latam' },
 ];
 
+// POST /api/reseller/ff/ensure-account — auto-create at 0 💎 if not exists
+router.post('/api/reseller/ff/ensure-account', requireDb, async (req, res) => {
+  try {
+    const { agentId, agentName } = req.body as { agentId: string; agentName?: string };
+    if (!agentId) return res.status(400).json({ error: 'agentId requis.' });
+    const ref = adminDb.collection('agent_reseller_accounts').doc(agentId);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      await ref.set({
+        agentId, agentName: agentName || '',
+        enabled: true, diamondBalance: 0, totalSold: 0, totalOrders: 0,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      const fresh = await ref.get();
+      return res.json({ account: { id: fresh.id, ...fresh.data() }, created: true });
+    }
+    res.json({ account: { id: snap.id, ...snap.data() }, created: false });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/reseller/ff/account
 router.get('/api/reseller/ff/account', requireDb, async (req, res) => {
   try {
@@ -7259,11 +7279,49 @@ router.post('/api/reseller/ff/order', requireDb, async (req, res) => {
   }
 });
 
-// GET /api/admin/reseller/ff/agents
+// GET /api/admin/reseller/ff/packs — configurable diamond credit packs
+const DEFAULT_FF_PACKS = [
+  { id: 'pack_5000',  label: 'Pack 5 000',  diamonds: 5000,  priceUSD: 45 },
+  { id: 'pack_10000', label: 'Pack 10 000', diamonds: 10000, priceUSD: 85 },
+  { id: 'pack_15000', label: 'Pack 15 000', diamonds: 15000, priceUSD: 120 },
+  { id: 'pack_20000', label: 'Pack 20 000', diamonds: 20000, priceUSD: 155 },
+];
+router.get('/api/admin/reseller/ff/packs', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('settings').doc('ff_credit_packs').get();
+    const packs = snap.exists ? (snap.data()!.packs || DEFAULT_FF_PACKS) : DEFAULT_FF_PACKS;
+    res.json({ packs });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.put('/api/admin/reseller/ff/packs', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { packs } = req.body as { packs: typeof DEFAULT_FF_PACKS };
+    if (!Array.isArray(packs) || packs.length === 0) return res.status(400).json({ error: 'Packs invalides.' });
+    await adminDb.collection('settings').doc('ff_credit_packs').set({ packs, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/reseller/ff/agents — ALL agents merged with their reseller account
 router.get('/api/admin/reseller/ff/agents', requireDb, requireAdminSecret, async (_req, res) => {
   try {
-    const snap = await adminDb.collection('agent_reseller_accounts').orderBy('createdAt', 'desc').get();
-    res.json({ accounts: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    // Fetch all agents
+    const agentsSnap = await adminDb.collection('agents').orderBy('name').get();
+    const agents = agentsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+    // Fetch all reseller accounts
+    const accountsSnap = await adminDb.collection('agent_reseller_accounts').get();
+    const accountMap = new Map<string, any>();
+    accountsSnap.docs.forEach(d => accountMap.set(d.id, { id: d.id, ...d.data() }));
+    // Merge: auto-defaults for agents without an account yet
+    const accounts = agents.map(a => {
+      const existing = accountMap.get(a.id);
+      return existing ?? {
+        id: a.id, agentId: a.id, agentName: a.name || '',
+        enabled: true, diamondBalance: 0, totalSold: 0, totalOrders: 0,
+        pending: true, // flag: not yet in Firestore
+      };
+    });
+    res.json({ accounts });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

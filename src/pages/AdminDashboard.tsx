@@ -2490,14 +2490,29 @@ function EmailLogsPanel() {
   const ffResellerLoaded = useRef(false);
   const [ffTxs, setFFTxs] = useState<any[]>([]);
   const [ffTxsLoading, setFFTxsLoading] = useState(false);
+  const [ffAgentForTx, setFFAgentForTx] = useState<any | null>(null);
+  const [ffToggleLoading, setFFToggleLoading] = useState<string | null>(null);
+  // Credit dialog
   const [ffCreditDialogOpen, setFFCreditDialogOpen] = useState(false);
   const [ffCreditAgent, setFFCreditAgent] = useState<any | null>(null);
-  const [ffCreditAmount, setFFCreditAmount] = useState('');
   const [ffCreditOp, setFFCreditOp] = useState<'add' | 'remove'>('add');
   const [ffCreditNote, setFFCreditNote] = useState('');
   const [ffCreditLoading, setFFCreditLoading] = useState(false);
-  const [ffToggleLoading, setFFToggleLoading] = useState<string | null>(null);
-  const [ffAgentForTx, setFFAgentForTx] = useState<any | null>(null);
+  const [ffSelectedPack, setFFSelectedPack] = useState<any | null>(null);
+  const [ffCustomAmount, setFFCustomAmount] = useState('');
+  const [ffUseCustom, setFFUseCustom] = useState(false);
+  // Packs management
+  const [ffCreditPacks, setFFCreditPacks] = useState<any[]>([
+    { id: 'pack_5000',  label: 'Pack 5 000',  diamonds: 5000,  priceUSD: 45 },
+    { id: 'pack_10000', label: 'Pack 10 000', diamonds: 10000, priceUSD: 85 },
+    { id: 'pack_15000', label: 'Pack 15 000', diamonds: 15000, priceUSD: 120 },
+    { id: 'pack_20000', label: 'Pack 20 000', diamonds: 20000, priceUSD: 155 },
+  ]);
+  const [ffPacksLoading, setFFPacksLoading] = useState(false);
+  const ffPacksLoaded = useRef(false);
+  const [ffPacksDialogOpen, setFFPacksDialogOpen] = useState(false);
+  const [ffEditingPacks, setFFEditingPacks] = useState<any[]>([]);
+  const [ffPacksSaving, setFFPacksSaving] = useState(false);
 
   const fetchFFResellerAgents = async () => {
     setFFResellerLoading(true);
@@ -2506,8 +2521,34 @@ function EmailLogsPanel() {
       const data = await res.json();
       setFFResellerAgents(data.accounts || []);
       ffResellerLoaded.current = true;
-    } catch { toast.error('Erreur chargement revendeurs Free Fire.'); }
+    } catch { toast.error('Erreur chargement agents Free Fire.'); }
     finally { setFFResellerLoading(false); }
+  };
+
+  const fetchFFPacks = async () => {
+    setFFPacksLoading(true);
+    try {
+      const res = await fetch('/api/admin/reseller/ff/packs', { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const data = await res.json();
+      if (data.packs?.length) { setFFCreditPacks(data.packs); ffPacksLoaded.current = true; }
+    } catch { /* use defaults */ }
+    finally { setFFPacksLoading(false); }
+  };
+
+  const handleFFPacksSave = async () => {
+    setFFPacksSaving(true);
+    try {
+      const res = await fetch('/api/admin/reseller/ff/packs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        body: JSON.stringify({ packs: ffEditingPacks }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      setFFCreditPacks(ffEditingPacks);
+      setFFPacksDialogOpen(false);
+      toast.success('Packs de diamants mis à jour !');
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+    finally { setFFPacksSaving(false); }
   };
 
   const fetchFFTransactions = async (agentId?: string) => {
@@ -2524,12 +2565,12 @@ function EmailLogsPanel() {
   };
 
   const handleFFToggle = async (agent: any) => {
-    setFFToggleLoading(agent.agentId);
+    setFFToggleLoading(agent.agentId || agent.id);
     try {
       const res = await fetch('/api/admin/reseller/ff/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
-        body: JSON.stringify({ agentId: agent.agentId, agentName: agent.agentName, enabled: !agent.enabled }),
+        body: JSON.stringify({ agentId: agent.agentId || agent.id, agentName: agent.agentName || agent.name || '', enabled: !agent.enabled }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
       toast.success(agent.enabled ? 'Compte désactivé.' : 'Compte activé !');
@@ -2539,19 +2580,25 @@ function EmailLogsPanel() {
   };
 
   const handleFFCreditAdjust = async () => {
-    const amount = parseInt(ffCreditAmount);
-    if (!ffCreditAgent || isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    const amount = ffUseCustom ? parseInt(ffCustomAmount) : ffSelectedPack?.diamonds;
+    if (!ffCreditAgent || !amount || isNaN(amount) || amount <= 0) { toast.error('Sélectionnez un pack ou entrez un montant.'); return; }
     setFFCreditLoading(true);
     try {
       const res = await fetch('/api/admin/reseller/ff/credit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
-        body: JSON.stringify({ agentId: ffCreditAgent.agentId, agentName: ffCreditAgent.agentName, amount, operation: ffCreditOp, note: ffCreditNote }),
+        body: JSON.stringify({
+          agentId: ffCreditAgent.agentId || ffCreditAgent.id,
+          agentName: ffCreditAgent.agentName || ffCreditAgent.name || '',
+          amount, operation: ffCreditOp, note: ffCreditNote,
+        }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success(ffCreditOp === 'add' ? `+${amount} 💎 ajoutés !` : `-${amount} 💎 retirés.`);
+      toast.success(ffCreditOp === 'add'
+        ? `+${amount.toLocaleString()} 💎 ajoutés à ${ffCreditAgent.agentName || ffCreditAgent.name} !`
+        : `-${amount.toLocaleString()} 💎 retirés.`);
       setFFCreditDialogOpen(false);
-      setFFCreditAmount(''); setFFCreditNote(''); setFFCreditAgent(null);
+      setFFSelectedPack(null); setFFCustomAmount(''); setFFCreditNote(''); setFFCreditAgent(null); setFFUseCustom(false);
       fetchFFResellerAgents();
     } catch (e: any) { toast.error(e.message || 'Erreur.'); }
     finally { setFFCreditLoading(false); }
@@ -8992,151 +9039,194 @@ function EmailLogsPanel() {
         </TabsContent>
 
         {/* ── FREE FIRE REVENDEURS TAB ────────────────────────────────────── */}
-        <TabsContent value="free-fire-reseller" className="space-y-6 pt-6 px-6 pb-20">
-          {(() => { if (!ffResellerLoaded.current && !ffResellerLoading) fetchFFResellerAgents(); return null; })()}
+        <TabsContent value="free-fire-reseller" className="space-y-0 pb-20">
+          {(() => {
+            if (!ffResellerLoaded.current && !ffResellerLoading) { fetchFFResellerAgents(); fetchFFPacks(); }
+            return null;
+          })()}
 
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h2 className="text-3xl font-black text-dark tracking-tight flex items-center gap-2">
-                <Gamepad2 className="h-7 w-7 text-orange-500" />
-                Free Fire Revendeurs
-              </h2>
-              <p className="text-gray-400 text-sm mt-1">Gérez les comptes revendeurs de diamants Free Fire.</p>
-            </div>
-            <Button
-              onClick={fetchFFResellerAgents}
-              variant="outline"
-              className="rounded-2xl h-11 px-5 font-black text-[10px] uppercase tracking-widest border-2 border-gray-100 gap-2"
-            >
-              <LucideIcons.RefreshCw className="h-4 w-4" />Actualiser
-            </Button>
-          </div>
-
-          {/* Stats */}
-          {ffResellerAgents.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Revendeurs', value: ffResellerAgents.length, color: 'bg-blue-50 text-blue-700', icon: '👤' },
-                { label: 'Actifs', value: ffResellerAgents.filter(a => a.enabled).length, color: 'bg-emerald-50 text-emerald-700', icon: '✅' },
-                { label: '💎 Total', value: ffResellerAgents.reduce((s, a) => s + (a.totalSold || 0), 0).toLocaleString(), color: 'bg-orange-50 text-orange-700', icon: '💎' },
-              ].map(({ label, value, color, icon }) => (
-                <Card key={label} className={`border-0 shadow-sm rounded-2xl ${color.split(' ')[0]}`}>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-lg font-black">{value}</p>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mt-0.5 ${color.split(' ')[1]}`}>{label}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Agents list */}
-          {ffResellerLoading ? (
-            <div className="flex justify-center py-16 text-gray-300"><Loader2 className="h-10 w-10 animate-spin" /></div>
-          ) : ffResellerAgents.length === 0 ? (
-            <Card className="border-0 shadow-sm rounded-3xl">
-              <CardContent className="p-12 text-center">
-                <Gamepad2 className="h-14 w-14 text-gray-200 mx-auto mb-4" />
-                <p className="text-gray-400 font-bold">Aucun compte revendeur configuré.</p>
-                <p className="text-gray-300 text-sm mt-1">Les agents doivent être activés individuellement depuis leurs fiches ci-dessous.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {ffResellerAgents.map(a => (
-                <Card key={a.id} className="border-0 shadow-sm rounded-3xl overflow-hidden">
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-xl ${a.enabled ? 'bg-orange-100' : 'bg-gray-100'}`}>
-                        {a.enabled ? '💎' : '🔒'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-black text-dark">{a.agentName || a.agentId}</p>
-                          <Badge className={`text-[10px] font-black rounded-full px-2 ${a.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
-                            {a.enabled ? 'Actif' : 'Désactivé'}
-                          </Badge>
-                        </div>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-                          <span className="text-sm font-black text-orange-600">{(a.diamondBalance || 0).toLocaleString()} 💎</span>
-                          <span className="text-sm text-gray-500">{(a.totalOrders || 0)} commandes</span>
-                          <span className="text-sm text-gray-500">{(a.totalSold || 0).toLocaleString()} vendus</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-4 border-t border-gray-50 pt-4">
-                      <Button
-                        size="sm"
-                        onClick={() => { setFFCreditAgent(a); setFFCreditOp('add'); setFFCreditDialogOpen(true); }}
-                        className="bg-emerald-500 hover:bg-emerald-600 h-9 text-[10px] font-black uppercase px-4 rounded-xl border-0 shadow-sm flex-1"
-                      >
-                        + Ajouter Crédit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { setFFCreditAgent(a); setFFCreditOp('remove'); setFFCreditDialogOpen(true); }}
-                        className="border-2 border-red-100 text-red-600 hover:bg-red-50 h-9 text-[10px] font-black uppercase px-4 rounded-xl flex-1"
-                      >
-                        − Retirer Crédit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleFFToggle(a)}
-                        disabled={ffToggleLoading === a.agentId}
-                        className={`border-2 h-9 text-[10px] font-black uppercase px-4 rounded-xl flex-1 ${a.enabled ? 'border-gray-200 text-gray-600 hover:bg-gray-50' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'}`}
-                      >
-                        {ffToggleLoading === a.agentId ? <Loader2 className="h-3 w-3 animate-spin" /> : (a.enabled ? '🔒 Désactiver' : '✅ Activer')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => { setFFAgentForTx(a); fetchFFTransactions(a.agentId); }}
-                        className="h-9 text-[10px] font-black uppercase px-4 rounded-xl text-blue-600 hover:bg-blue-50 flex-1"
-                      >
-                        <LucideIcons.History className="h-3 w-3 mr-1" /> Ventes
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Transactions view */}
-          {ffAgentForTx && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-black text-dark">Transactions — {ffAgentForTx.agentName || ffAgentForTx.agentId}</h3>
-                <Button variant="ghost" size="sm" onClick={() => setFFAgentForTx(null)} className="text-gray-400 h-8 rounded-xl text-[10px]">Fermer</Button>
-              </div>
-              {ffTxsLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-300" /></div>
-              ) : ffTxs.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-6">Aucune transaction.</p>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {ffTxs.map(tx => (
-                    <div key={tx.id} className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 ${tx.status === 'success' ? 'bg-emerald-100' : tx.status === 'failed' ? 'bg-red-100' : 'bg-amber-100'}`}>
-                        {tx.status === 'success' ? '✅' : tx.status === 'failed' ? '❌' : '⏳'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-dark text-sm truncate">{tx.packageLabel} → {tx.playerId}</p>
-                        <p className="text-xs text-gray-400">{tx.region} · {tx.createdAt?._seconds ? format(new Date(tx.createdAt._seconds * 1000), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}</p>
-                        {tx.status === 'failed' && tx.errorMessage && <p className="text-xs text-red-500 truncate">{tx.errorMessage}</p>}
-                      </div>
-                      <span className={`text-sm font-black shrink-0 ${tx.status === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {tx.status === 'success' ? `-${tx.diamonds} 💎` : '—'}
-                      </span>
+          {/* ── Hero Banner ── */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-[#FF6B00] via-[#FF8C00] to-[#FFB347] px-6 pt-8 pb-16 mb-0">
+            <div className="absolute top-0 right-0 w-56 h-56 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute top-6 right-6 opacity-10"><Gamepad2 className="h-28 w-28 text-white" /></div>
+            <div className="relative">
+              <p className="text-white/60 text-[10px] font-black uppercase tracking-widest mb-1">Administration</p>
+              <h2 className="text-2xl font-black text-white mb-1">Free Fire Revendeurs 💎</h2>
+              <p className="text-white/60 text-sm font-medium">Tous les agents disposent d'un compte revendeur activé automatiquement.</p>
+              {/* Global stats */}
+              {ffResellerAgents.length > 0 && (
+                <div className="grid grid-cols-3 gap-3 mt-5">
+                  {[
+                    { label: 'Agents', value: ffResellerAgents.length },
+                    { label: '💎 Vendus', value: ffResellerAgents.reduce((s, a) => s + (a.totalSold || 0), 0).toLocaleString() },
+                    { label: 'Commandes', value: ffResellerAgents.reduce((s, a) => s + (a.totalOrders || 0), 0) },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="bg-white/10 border border-white/15 rounded-2xl p-3 text-center">
+                      <p className="text-white font-black text-lg leading-tight">{value}</p>
+                      <p className="text-white/50 text-[9px] font-black uppercase tracking-wider mt-0.5">{label}</p>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          )}
+          </div>
+
+          <div className="px-6 space-y-4 -mt-6 relative z-10">
+
+            {/* ── Action bar ── */}
+            <div className="flex gap-2">
+              <Button
+                onClick={fetchFFResellerAgents}
+                variant="outline"
+                size="sm"
+                className="rounded-2xl h-10 px-4 font-black text-[10px] uppercase tracking-widest border-2 border-gray-100 gap-2 bg-white shadow-sm"
+              >
+                <LucideIcons.RefreshCw className="h-3.5 w-3.5" /> Actualiser
+              </Button>
+              <Button
+                onClick={() => { setFFEditingPacks(ffCreditPacks.map(p => ({ ...p }))); setFFPacksDialogOpen(true); }}
+                size="sm"
+                className="rounded-2xl h-10 px-4 font-black text-[10px] uppercase tracking-widest bg-orange-500 hover:bg-orange-600 text-white border-0 gap-2 shadow-sm"
+              >
+                <LucideIcons.Settings className="h-3.5 w-3.5" /> Packs Diamants
+              </Button>
+            </div>
+
+            {/* ── Packs preview ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {ffCreditPacks.map(pack => (
+                <div key={pack.id} className="bg-white border border-orange-100 rounded-2xl p-3 text-center shadow-sm">
+                  <p className="text-2xl mb-1">💎</p>
+                  <p className="font-black text-slate-900 text-sm">{pack.diamonds.toLocaleString()}</p>
+                  <p className="text-orange-500 font-black text-xs">${pack.priceUSD}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Agents list ── */}
+            {ffResellerLoading ? (
+              <div className="flex justify-center py-16"><Loader2 className="h-10 w-10 animate-spin text-orange-400" /></div>
+            ) : ffResellerAgents.length === 0 ? (
+              <div className="bg-white rounded-3xl shadow-sm p-12 text-center">
+                <Gamepad2 className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                <p className="text-gray-400 font-bold">Aucun agent trouvé.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-1">{ffResellerAgents.length} agents</p>
+                {ffResellerAgents.map(a => {
+                  const agentId = a.agentId || a.id;
+                  const agentName = a.agentName || a.name || agentId;
+                  const isPending = !!a.pending; // not yet in Firestore
+                  return (
+                    <div key={agentId} className={`bg-white rounded-3xl shadow-sm border overflow-hidden ${!a.enabled ? 'border-red-100' : 'border-transparent'}`}>
+                      <div className="p-4">
+                        {/* Agent info */}
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 text-lg font-black ${a.enabled ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
+                            {agentName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-black text-slate-900 truncate">{agentName}</p>
+                              {isPending ? (
+                                <span className="text-[9px] font-black bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full uppercase">Compte non init.</span>
+                              ) : (
+                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${a.enabled ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-500'}`}>
+                                  {a.enabled ? '● Actif' : '● Désactivé'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex gap-3 mt-0.5">
+                              <span className="text-sm font-black text-orange-500">{(a.diamondBalance || 0).toLocaleString()} 💎</span>
+                              <span className="text-xs text-gray-400 font-medium">{a.totalOrders || 0} cmd · {(a.totalSold || 0).toLocaleString()} vendus</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Balance bar */}
+                        {!isPending && (
+                          <div className="mb-3">
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-full transition-all"
+                                style={{ width: `${Math.min(100, ((a.diamondBalance || 0) / 20000) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            onClick={() => { setFFCreditAgent(a); setFFCreditOp('add'); setFFSelectedPack(null); setFFUseCustom(false); setFFCreditNote(''); setFFCreditDialogOpen(true); }}
+                            className="flex-1 h-8 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                          >
+                            + Créditer
+                          </button>
+                          <button
+                            onClick={() => { setFFCreditAgent(a); setFFCreditOp('remove'); setFFSelectedPack(null); setFFUseCustom(false); setFFCreditNote(''); setFFCreditDialogOpen(true); }}
+                            className="flex-1 h-8 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 transition-colors"
+                          >
+                            − Débiter
+                          </button>
+                          <button
+                            onClick={() => handleFFToggle(a)}
+                            disabled={ffToggleLoading === agentId}
+                            className={`flex-1 h-8 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border ${
+                              a.enabled
+                                ? 'bg-gray-50 hover:bg-gray-100 text-gray-500 border-gray-200'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200'
+                            }`}
+                          >
+                            {ffToggleLoading === agentId
+                              ? <Loader2 className="h-3 w-3 animate-spin inline" />
+                              : (a.enabled ? 'Désactiver' : 'Activer')}
+                          </button>
+                          <button
+                            onClick={() => { setFFAgentForTx(a); fetchFFTransactions(agentId); }}
+                            className="h-8 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl text-[10px] font-black uppercase transition-colors"
+                          >
+                            <LucideIcons.History className="h-3.5 w-3.5 inline mr-1" />Ventes
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Transaction accordion */}
+                      {ffAgentForTx?.id === agentId && (
+                        <div className="border-t border-gray-50 bg-gray-50/50 px-4 pb-4 pt-3 space-y-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Dernières ventes</p>
+                            <button onClick={() => setFFAgentForTx(null)} className="text-[10px] text-gray-400 font-black">✕ Fermer</button>
+                          </div>
+                          {ffTxsLoading ? (
+                            <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
+                          ) : ffTxs.length === 0 ? (
+                            <p className="text-center text-gray-400 text-xs py-3">Aucune vente enregistrée.</p>
+                          ) : (
+                            ffTxs.slice(0, 15).map(tx => (
+                              <div key={tx.id} className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-gray-100">
+                                <span className="text-base shrink-0">
+                                  {tx.status === 'success' ? '✅' : tx.status === 'failed' ? '❌' : '⏳'}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-slate-800 truncate">{tx.packageLabel} → ID {tx.playerId}</p>
+                                  <p className="text-[10px] text-gray-400">{tx.region} · {tx.createdAt?._seconds ? format(new Date(tx.createdAt._seconds * 1000), 'dd/MM/yy HH:mm') : '—'}</p>
+                                </div>
+                                <span className={`text-xs font-black shrink-0 ${tx.status === 'success' ? 'text-emerald-600' : 'text-red-400'}`}>
+                                  {tx.status === 'success' ? `-${(tx.diamonds || 0).toLocaleString()} 💎` : '—'}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         {/* ── PROFITS TAB ──────────────────────────────────────────────────── */}
@@ -12013,55 +12103,200 @@ function EmailLogsPanel() {
       </Dialog>
 
       {/* ── Free Fire Credit Dialog ── */}
-      <Dialog open={ffCreditDialogOpen} onOpenChange={setFFCreditDialogOpen}>
-        <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-            <DialogTitle className="font-black text-dark flex items-center gap-2">
-              <Gamepad2 className="h-5 w-5 text-orange-500" />
-              {ffCreditOp === 'add' ? 'Ajouter du Crédit' : 'Retirer du Crédit'} — {ffCreditAgent?.agentName || ffCreditAgent?.agentId}
+      <Dialog open={ffCreditDialogOpen} onOpenChange={v => { if (!v) { setFFSelectedPack(null); setFFCustomAmount(''); setFFUseCustom(false); } setFFCreditDialogOpen(v); }}>
+        <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl bg-white">
+          {/* Header */}
+          <div className={`px-6 pt-6 pb-5 ${ffCreditOp === 'add' ? 'bg-gradient-to-br from-emerald-500 to-teal-500' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
+            <DialogTitle className="text-white font-black text-lg flex items-center gap-2">
+              <Gamepad2 className="h-5 w-5 opacity-80" />
+              {ffCreditOp === 'add' ? 'Ajouter du Crédit' : 'Retirer du Crédit'}
             </DialogTitle>
-            <DialogDescription className="text-gray-400 text-sm">
-              Crédit actuel : <span className="font-black text-orange-500">{(ffCreditAgent?.diamondBalance || 0).toLocaleString()} 💎</span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-6 py-5 space-y-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nombre de diamants</Label>
-              <Input
-                type="number"
-                min="1"
-                value={ffCreditAmount}
-                onChange={e => setFFCreditAmount(e.target.value)}
-                placeholder="Ex: 1000"
-                className="h-12 rounded-2xl bg-gray-50 border-0 font-black text-lg"
-              />
-            </div>
+            <p className="text-white/70 text-sm mt-1 font-medium">
+              {ffCreditAgent?.agentName || ffCreditAgent?.name || '—'} ·{' '}
+              <span className="font-black text-white">{(ffCreditAgent?.diamondBalance || 0).toLocaleString()} 💎</span> actuellement
+            </p>
+          </div>
+
+          <div className="px-6 py-5 space-y-5 overflow-y-auto max-h-[60vh]">
+            {/* Pack selection (add only) */}
+            {ffCreditOp === 'add' && (
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Choisir un pack</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {ffCreditPacks.map(pack => (
+                    <button
+                      key={pack.id}
+                      onClick={() => { setFFSelectedPack(pack); setFFUseCustom(false); }}
+                      className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all ${
+                        !ffUseCustom && ffSelectedPack?.id === pack.id
+                          ? 'border-emerald-400 bg-emerald-50'
+                          : 'border-gray-100 bg-gray-50 hover:border-emerald-200'
+                      }`}
+                    >
+                      <span className="text-2xl">💎</span>
+                      <p className={`font-black text-sm ${!ffUseCustom && ffSelectedPack?.id === pack.id ? 'text-emerald-700' : 'text-slate-800'}`}>
+                        {pack.diamonds.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-400 font-medium">${pack.priceUSD}</p>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => { setFFUseCustom(true); setFFSelectedPack(null); }}
+                  className={`w-full text-center py-2.5 rounded-2xl border-2 text-[10px] font-black uppercase tracking-widest transition-all ${ffUseCustom ? 'border-orange-400 bg-orange-50 text-orange-600' : 'border-dashed border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                >
+                  ✏️ Montant personnalisé
+                </button>
+              </div>
+            )}
+
+            {/* Custom amount (for remove, always show; for add, show when custom selected) */}
+            {(ffCreditOp === 'remove' || ffUseCustom) && (
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Nombre de diamants</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={ffCustomAmount}
+                  onChange={e => setFFCustomAmount(e.target.value)}
+                  placeholder="Ex : 5000"
+                  className="h-12 rounded-2xl bg-gray-50 border-0 font-black text-lg"
+                  autoFocus={ffCreditOp === 'remove'}
+                />
+              </div>
+            )}
+
+            {/* Note */}
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Note (optionnel)</Label>
               <Input
                 value={ffCreditNote}
                 onChange={e => setFFCreditNote(e.target.value)}
-                placeholder="Ex: Paiement MonCash reçu"
+                placeholder="Ex : Paiement MonCash reçu"
                 className="h-11 rounded-2xl bg-gray-50 border-0 font-medium"
               />
             </div>
-            {ffCreditAmount && !isNaN(parseInt(ffCreditAmount)) && parseInt(ffCreditAmount) > 0 && (
-              <div className={`p-3 rounded-2xl flex items-center gap-2 ${ffCreditOp === 'add' ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                <span className="text-lg">{ffCreditOp === 'add' ? '💎' : '🔻'}</span>
-                <p className={`text-sm font-black ${ffCreditOp === 'add' ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {ffCreditOp === 'add' ? '+' : '-'}{parseInt(ffCreditAmount).toLocaleString()} 💎 → 
-                  Nouveau solde : {Math.max(0, (ffCreditAgent?.diamondBalance || 0) + (ffCreditOp === 'add' ? parseInt(ffCreditAmount) : -parseInt(ffCreditAmount))).toLocaleString()} 💎
-                </p>
-              </div>
-            )}
+
+            {/* Preview */}
+            {(() => {
+              const amt = ffUseCustom ? parseInt(ffCustomAmount) : (ffCreditOp === 'remove' ? parseInt(ffCustomAmount) : ffSelectedPack?.diamonds);
+              if (!amt || isNaN(amt) || amt <= 0) return null;
+              const cur = ffCreditAgent?.diamondBalance || 0;
+              const next = ffCreditOp === 'add' ? cur + amt : Math.max(0, cur - amt);
+              return (
+                <div className={`p-4 rounded-2xl ${ffCreditOp === 'add' ? 'bg-emerald-50 border border-emerald-100' : 'bg-red-50 border border-red-100'}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-2 ${ffCreditOp === 'add' ? 'text-emerald-600' : 'text-red-500'}`}>Aperçu</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 font-medium">Solde actuel</span>
+                    <span className="font-black text-sm">{cur.toLocaleString()} 💎</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-sm text-gray-600 font-medium">{ffCreditOp === 'add' ? 'Ajout' : 'Retrait'}</span>
+                    <span className={`font-black text-sm ${ffCreditOp === 'add' ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {ffCreditOp === 'add' ? '+' : '−'}{amt.toLocaleString()} 💎
+                    </span>
+                  </div>
+                  <div className="h-px bg-gray-200 my-2" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black text-gray-800">Nouveau solde</span>
+                    <span className="font-black text-base text-orange-600">{next.toLocaleString()} 💎</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
+
           <div className="px-6 pb-6">
             <Button
               onClick={handleFFCreditAdjust}
-              disabled={ffCreditLoading || !ffCreditAmount || isNaN(parseInt(ffCreditAmount)) || parseInt(ffCreditAmount) <= 0}
-              className={`w-full h-12 rounded-2xl font-black text-white border-0 uppercase tracking-widest text-[11px] ${ffCreditOp === 'add' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' : 'bg-red-500 hover:bg-red-600 shadow-red-200'} shadow-lg`}
+              disabled={ffCreditLoading || (() => {
+                const amt = ffUseCustom ? parseInt(ffCustomAmount) : (ffCreditOp === 'remove' ? parseInt(ffCustomAmount) : ffSelectedPack?.diamonds);
+                return !amt || isNaN(amt) || amt <= 0;
+              })()}
+              className={`w-full h-12 rounded-2xl font-black text-white border-0 uppercase tracking-widest text-[11px] shadow-lg disabled:opacity-40 ${ffCreditOp === 'add' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
             >
-              {ffCreditLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (ffCreditOp === 'add' ? `Ajouter ${ffCreditAmount || 0} 💎` : `Retirer ${ffCreditAmount || 0} 💎`)}
+              {ffCreditLoading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : ffCreditOp === 'add'
+                  ? `Ajouter ${(ffUseCustom ? parseInt(ffCustomAmount) : ffSelectedPack?.diamonds || 0).toLocaleString()} 💎`
+                  : `Retirer ${(parseInt(ffCustomAmount) || 0).toLocaleString()} 💎`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Free Fire Packs Configuration Dialog ── */}
+      <Dialog open={ffPacksDialogOpen} onOpenChange={setFFPacksDialogOpen}>
+        <DialogContent className="max-w-md rounded-3xl border-0 p-0 overflow-hidden shadow-2xl bg-white">
+          <div className="bg-gradient-to-br from-orange-500 to-amber-400 px-6 pt-6 pb-5">
+            <DialogTitle className="text-white font-black text-lg flex items-center gap-2">
+              <LucideIcons.Settings className="h-5 w-5 opacity-80" />
+              Configurer les Packs Diamants
+            </DialogTitle>
+            <DialogDescription className="text-white/60 text-sm mt-1">
+              Ces packs sont proposés aux admins lors de l'ajout de crédit aux agents.
+            </DialogDescription>
+          </div>
+
+          <div className="px-6 py-5 space-y-3 max-h-[60vh] overflow-y-auto">
+            {ffEditingPacks.map((pack, idx) => (
+              <div key={pack.id} className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Pack {idx + 1}</p>
+                  {ffEditingPacks.length > 1 && (
+                    <button
+                      onClick={() => setFFEditingPacks(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-red-400 hover:text-red-600 text-xs font-black"
+                    >✕ Supprimer</button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Diamants</Label>
+                    <Input
+                      type="number"
+                      value={pack.diamonds}
+                      onChange={e => setFFEditingPacks(prev => prev.map((p, i) => i === idx ? { ...p, diamonds: parseInt(e.target.value) || 0 } : p))}
+                      className="h-10 rounded-xl bg-white border-gray-200 font-black"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Prix (USD)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={pack.priceUSD}
+                      onChange={e => setFFEditingPacks(prev => prev.map((p, i) => i === idx ? { ...p, priceUSD: parseFloat(e.target.value) || 0 } : p))}
+                      className="h-10 rounded-xl bg-white border-gray-200 font-black"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] font-black uppercase tracking-widest text-gray-400">Label</Label>
+                  <Input
+                    value={pack.label}
+                    onChange={e => setFFEditingPacks(prev => prev.map((p, i) => i === idx ? { ...p, label: e.target.value } : p))}
+                    className="h-10 rounded-xl bg-white border-gray-200 font-medium"
+                    placeholder={`Pack ${pack.diamonds?.toLocaleString() || '?'}`}
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setFFEditingPacks(prev => [...prev, { id: `pack_${Date.now()}`, label: '', diamonds: 0, priceUSD: 0 }])}
+              className="w-full py-3 border-2 border-dashed border-orange-200 rounded-2xl text-orange-500 text-[10px] font-black uppercase tracking-widest hover:bg-orange-50 transition-colors"
+            >
+              + Ajouter un pack
+            </button>
+          </div>
+
+          <div className="px-6 pb-6 border-t border-gray-50 pt-4">
+            <Button
+              onClick={handleFFPacksSave}
+              disabled={ffPacksSaving}
+              className="w-full h-12 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-black border-0 shadow-lg uppercase tracking-widest text-[11px]"
+            >
+              {ffPacksSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓ Enregistrer les packs'}
             </Button>
           </div>
         </DialogContent>
