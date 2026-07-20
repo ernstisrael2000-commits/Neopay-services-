@@ -23,6 +23,8 @@ import NotificationBell from '../components/NotificationBell';
 import PhotoUrlEditor from '../components/PhotoUrlEditor';
 import ReferralTree from '../components/ReferralTree';
 import { getAgentByCode, submitAgentDepositRequest } from '../services/agentService';
+import { AffiliateDashboardSkeleton } from '../components/skeletons/AffiliateDashboardSkeleton';
+import { TransactionListSkeleton } from '../components/skeletons/TransactionListSkeleton';
 import { Affiliate, WithdrawalRequest, WalletTransaction, TransactionStatus } from '../types';
 import { Progress } from '../components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -679,11 +681,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   };
 
   if (affiliateLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <AffiliateDashboardSkeleton />;
   }
 
   if (!affiliate) return null;
@@ -1354,7 +1352,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 )}
               </div>
               {transactionsLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                <TransactionListSkeleton count={3} />
               ) : recentTx.length > 0 ? (
                 <div className="divide-y divide-gray-50">
                   {recentTx.map(t => {
@@ -1495,7 +1493,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
             {/* Transaction list */}
             {transactionsLoading ? (
-              <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              <TransactionListSkeleton count={5} />
             ) : transactions.length === 0 ? (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
                 <History className="h-12 w-12 mx-auto mb-3 text-gray-200" />

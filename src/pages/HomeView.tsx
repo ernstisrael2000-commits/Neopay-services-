@@ -24,6 +24,8 @@ import { GameDialog } from '../components/GamesTab';
 import { GiftCardDialog } from '../components/GiftCardsTab';
 import { useFazerTopups, useFazerPriceOverrides, useFazerGiftCards, FazerCategory, FazerGiftCategory } from '../hooks/useFazerTopups';
 import { isGameAvailableInHaiti, isGiftCardAvailableInHaiti } from '../lib/haitiFilter';
+import { ProductGridSkeleton } from '../components/skeletons/ProductGridSkeleton';
+import { FormationMiniSkeleton } from '../components/skeletons/FormationGridSkeleton';
 
 const SLIDER_IMAGES = [
   'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop',
@@ -375,11 +377,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           )}
         </div>
         {(productsLoading || gamesLoading || cardsLoading) ? (
-          <div className="grid grid-cols-2 gap-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-44 rounded-2xl bg-gray-100 animate-pulse" />
-            ))}
-          </div>
+          <ProductGridSkeleton count={6} />
         ) : (
           (() => {
             const q = debouncedSearch.trim().toLowerCase();
@@ -777,17 +775,7 @@ function FeaturedFormations({ onGoToFormations }: { onGoToFormations: () => void
 
       {/* Course grid */}
       {loading ? (
-        <div className="grid grid-cols-2 gap-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-2xl overflow-hidden border border-gray-100">
-              <div className="h-28 bg-gray-100 animate-pulse" />
-              <div className="p-2.5 space-y-1.5">
-                <div className="h-3 bg-gray-100 rounded animate-pulse w-3/4" />
-                <div className="h-2.5 bg-gray-100 rounded animate-pulse w-1/2" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <FormationMiniSkeleton count={4} />
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {formations.map((f, i) => (

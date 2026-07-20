@@ -20,6 +20,7 @@ import GamesTab from '../components/GamesTab';
 import GiftCardsTab from '../components/GiftCardsTab';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
+import { ProductGridSkeleton } from '../components/skeletons/ProductGridSkeleton';
 import { Client } from '../types';
 import { toast } from 'sonner';
 
@@ -303,9 +304,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                 </div>
               </div>
               {cardsLoading ? (
-                <div className="flex justify-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-                </div>
+                <ProductGridSkeleton count={6} />
               ) : cards.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
                   <CreditCard className="h-10 w-10 text-gray-200 mx-auto mb-3" />
@@ -374,9 +373,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                 </div>
               </div>
               {productsLoading ? (
-                <div className="flex justify-center py-16">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
+                <ProductGridSkeleton count={6} />
               ) : products.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
                   <Package className="h-10 w-10 text-gray-200 mx-auto mb-3" />

@@ -88,13 +88,16 @@ export const deleteNavButton = async (id: string) => {
 
 // Card Topup Services
 export const useCardTopups = () => {
-  const [cards, setCards] = useState<CardTopup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<CardTopup[]>('card_topups');
+  const [cards, setCards] = useState<CardTopup[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CardTopup[]);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CardTopup[];
+      setCards(data);
+      cacheSet('card_topups', data, 60 * 60 * 1000); // 1h TTL
       setLoading(false);
     }, (error) => {
       console.error("Error fetching card topups:", error);
@@ -195,13 +198,16 @@ export const deleteProduct = async (id: string) => {
 
 // Game Services
 export const useGames = () => {
-  const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<Game[]>('games');
+  const [games, setGames] = useState<Game[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
     const q = query(collection(db, 'games'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Game[]);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Game[];
+      setGames(data);
+      cacheSet('games', data, 60 * 60 * 1000); // 1h TTL
       setLoading(false);
     }, (error) => {
       console.error("Error fetching games:", error);
@@ -329,16 +335,24 @@ export const deleteShippingConfig = async (id: string) => {
 
 // ── Online Sub-Services ────────────────────────────────────────────────────────
 export const useOnlineServices = () => {
-  const [services, setServices] = useState<OnlineSubService[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = cacheGet<OnlineSubService[]>('online_services');
+  const [services, setServices] = useState<OnlineSubService[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    if (!cached || refresh > 0) setLoading(true);
     fetch('/api/online-sub-services')
       .then(r => r.json())
-      .then(data => { if (!cancelled) { setServices(data.services || []); setLoading(false); } })
+      .then(data => {
+        if (!cancelled) {
+          const list = data.services || [];
+          setServices(list);
+          cacheSet('online_services', list, 30 * 60 * 1000); // 30min TTL
+          setLoading(false);
+        }
+      })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [refresh]);

@@ -3,6 +3,7 @@ import Navbar from './layouts/Navbar';
 import BottomNav from './layouts/BottomNav';
 import FormationsNavbar from './layouts/FormationsNavbar';
 import LoadingScreen from './components/LoadingScreen';
+import { PageSkeleton } from './components/skeletons/PageSkeleton';
 import { SettingsProvider, useSettingsCtx } from './contexts/SettingsContext';
 
 // Heavy pages — loaded only when the user navigates to them
@@ -359,7 +360,7 @@ function AppInner() {
           }`}
           style={{ overflowX: 'hidden' }}
         >
-          <Suspense fallback={<div className="flex items-center justify-center min-h-[40vh]"><div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>}>
+          <Suspense fallback={<PageSkeleton />}>
             {/* Wallet page — full-screen, rendered outside AnimatePresence for clean layout */}
             {view === 'wallet' && loggedClient && (
               <ClientDashboard

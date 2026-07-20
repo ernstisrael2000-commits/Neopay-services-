@@ -19,6 +19,7 @@ import { Client } from '../types';
 import { toast } from 'sonner';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { loginClientWithGoogle } from '../services/clientService';
+import { FormationGridSkeleton } from '../components/skeletons/FormationGridSkeleton';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -341,15 +342,8 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   // ── Render: Loading ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative mx-auto mb-4 w-16 h-16">
-            <div className="absolute inset-0 rounded-full border-4 border-violet-100" />
-            <div className="absolute inset-0 rounded-full border-4 border-t-violet-600 animate-spin" />
-            <GraduationCap className="absolute inset-0 m-auto h-7 w-7 text-violet-600" />
-          </div>
-          <p className="text-gray-600 font-semibold">Chargement des formations...</p>
-        </div>
+      <div className="min-h-screen bg-[#f0f2ff] px-4 pt-6 pb-24">
+        <FormationGridSkeleton count={6} />
       </div>
     );
   }

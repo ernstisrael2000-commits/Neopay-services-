@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import { createServer as createHttpServer } from "http";
 import path from "path";
 import dotenv from "dotenv";
@@ -14,6 +15,9 @@ import apiRouter from './src/api/router.ts';
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '5000', 10);
+
+  // ── Gzip compression for all responses ─────────────────────────────────────
+  app.use(compression({ level: 6, threshold: 1024 }));
 
   app.use(express.json({ limit: '2mb' }));
 

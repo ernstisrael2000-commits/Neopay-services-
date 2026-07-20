@@ -37,6 +37,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { apiFetch } from '../lib/apiFetch';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import ErnstChat from '../components/ErnstChat';
+import { AgentDashboardSkeleton } from '../components/skeletons/AgentDashboardSkeleton';
+import { TransactionListSkeleton } from '../components/skeletons/TransactionListSkeleton';
 
 interface AgentDashboardProps {
   agentUid: string;
@@ -516,11 +518,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   }, [allTransactions]);
 
   if (agentLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
+    return <AgentDashboardSkeleton />;
   }
 
   if (!agent) {
@@ -706,7 +704,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                 <button onClick={() => setActiveSection('commissions')} className="text-[#0A3D91] text-xs font-bold">Voir tout</button>
               </div>
               {loadingStats ? (
-                <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-[#0A3D91]" /></div>
+                <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="min-w-[140px] bg-white border border-slate-100 rounded-2xl p-4 space-y-2 shrink-0">
+                      <div className="skeleton h-4 w-4 rounded" />
+                      <div className="skeleton h-2.5 w-20 rounded-full" />
+                      <div className="skeleton h-6 w-16 rounded-full" />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
                   <div className="min-w-[140px] bg-[#0A3D91] rounded-2xl p-4 text-white flex flex-col gap-1 shrink-0">
@@ -748,7 +754,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                 </button>
               </div>
               {loadingTx ? (
-                <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
+                <TransactionListSkeleton count={4} />
               ) : allTransactions.length === 0 ? (
                 <div className="bg-gray-50 rounded-2xl p-8 text-center border-2 border-dashed border-gray-200">
                   <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />
