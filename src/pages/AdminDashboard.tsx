@@ -2564,6 +2564,27 @@ function EmailLogsPanel() {
     finally { setFFTxsLoading(false); }
   };
 
+  // ── Delete agent ─────────────────────────────────────────────────────────────
+  const [agentToDelete, setAgentToDelete] = useState<any | null>(null);
+  const [isDeletingAgent, setIsDeletingAgent] = useState(false);
+  const handleDeleteAgent = async () => {
+    if (!agentToDelete) return;
+    setIsDeletingAgent(true);
+    try {
+      const res = await fetch(`/api/admin/agent/${agentToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-secret': 'rena-admin-2024' },
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur lors de la suppression.'); return; }
+      toast.success(`Agent "${agentToDelete.name}" supprimé.`);
+      setAgentToDelete(null);
+      // Refresh lists
+      fetchFFResellerAgents();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setIsDeletingAgent(false); }
+  };
+
   const handleFFToggle = async (agent: any) => {
     setFFToggleLoading(agent.agentId || agent.id);
     try {

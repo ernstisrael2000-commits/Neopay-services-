@@ -3732,6 +3732,27 @@ router.post('/api/admin/agent/:agentId/wallet/adjust', requireDb, async (req, re
   }
 });
 
+// ── Admin: delete agent ───────────────────────────────────────────────────────
+router.delete('/api/admin/agent/:agentId', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const agentRef = adminDb.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
+    const batch = adminDb.batch();
+    batch.delete(agentRef);
+    // Also delete reseller account if it exists
+    const resellerRef = adminDb.collection('agent_reseller_accounts').doc(agentId);
+    const resellerSnap = await resellerRef.get();
+    if (resellerSnap.exists) batch.delete(resellerRef);
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/agent/delete]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Admin: toggle agent wallet lock ──────────────────────────────────────────
 router.post('/api/admin/agent/:agentId/toggle-lock', requireDb, async (req, res) => {
   try {
@@ -7387,6 +7408,79 @@ router.post('/api/admin/reseller/ff/credit', requireDb, requireAdminSecret, asyn
     });
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/reseller/ff/credit-packs — packs visible aux agents pour achat
+router.get('/api/reseller/ff/credit-packs', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('settings').doc('ff_credit_packs').get();
+    const packs = snap.exists ? (snap.data()!.packs || DEFAULT_FF_PACKS) : DEFAULT_FF_PACKS;
+    res.json({ packs });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/reseller/ff/buy-pack — agent achète un pack avec son solde wallet
+router.post('/api/reseller/ff/buy-pack', requireDb, async (req, res) => {
+  try {
+    const { agentId, packId } = req.body as { agentId: string; packId: string };
+    if (!agentId || !packId) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    // Retrieve configured packs
+    const packsSnap = await adminDb.collection('settings').doc('ff_credit_packs').get();
+    const packs: any[] = packsSnap.exists ? (packsSnap.data()!.packs || DEFAULT_FF_PACKS) : DEFAULT_FF_PACKS;
+    const pack = packs.find((p: any) => p.id === packId);
+    if (!pack) return res.status(404).json({ error: 'Pack introuvable.' });
+
+    // Check agent wallet balance
+    const agentRef = adminDb.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentData = agentSnap.data()!;
+    const currentBalance = Number(agentData.balance || 0);
+    if (currentBalance < pack.priceUSD) {
+      return res.status(400).json({
+        error: `Solde insuffisant. Disponible : ${currentBalance.toFixed(2)} — Requis : ${pack.priceUSD}`,
+        code: 'INSUFFICIENT_BALANCE',
+      });
+    }
+
+    // Atomic: deduct wallet balance + add diamond balance
+    const resellerRef = adminDb.collection('agent_reseller_accounts').doc(agentId);
+    const resellerSnap = await resellerRef.get();
+    const batch = adminDb.batch();
+    batch.update(agentRef, {
+      balance: FieldValue.increment(-pack.priceUSD),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (!resellerSnap.exists) {
+      batch.set(resellerRef, {
+        agentId, agentName: agentData.name || '', enabled: true,
+        diamondBalance: pack.diamonds, totalSold: 0, totalOrders: 0,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+    } else {
+      batch.update(resellerRef, {
+        diamondBalance: FieldValue.increment(pack.diamonds),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    // Record in history
+    await adminDb.collection('ff_credit_history').add({
+      agentId, agentName: agentData.name || '',
+      amount: pack.diamonds, operation: 'add',
+      note: `Achat pack ${pack.label} — ${pack.priceUSD}`,
+      type: 'agent_purchase', packId, packLabel: pack.label, priceUSD: pack.priceUSD,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const newWalletBalance = parseFloat((currentBalance - pack.priceUSD).toFixed(6));
+    res.json({ success: true, diamonds: pack.diamonds, newWalletBalance });
+  } catch (e: any) {
+    console.error('[reseller/ff/buy-pack]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
 });
 
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
