@@ -342,21 +342,28 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               onClick={() => onViewChange('products')}
             >
               <div className="absolute inset-0 w-full h-full z-0">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={currentSlide}
-                    initial={{ opacity: 0, scale: 1.08 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0"
-                  >
-                    <div
-                      className="absolute inset-0 bg-cover bg-center"
-                      style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/30 to-transparent opacity-55" />
-                  </motion.div>
+                <AnimatePresence mode="sync">
+                  {imagesToDisplay.map((img, idx) =>
+                    idx === currentSlide ? (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.7, ease: 'easeInOut' }}
+                        className="absolute inset-0"
+                        style={{ willChange: 'opacity' }}
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.description || 'slide'}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          draggable={false}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-tr from-black/70 via-black/25 to-transparent" />
+                      </motion.div>
+                    ) : null
+                  )}
                 </AnimatePresence>
               </div>
               <div

@@ -528,25 +528,48 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
             {/* ── Footer CTA ── */}
             <div className="px-4 pb-5 pt-3 border-t border-gray-100 bg-white shrink-0 space-y-2">
               {loggedClient ? (
-                <button
-                  type="button"
-                  onClick={handleOrder}
-                  disabled={!selectedOffer || orderLoading || (fields.length > 0 && validState !== 'ok')}
-                  className={`w-full rounded-2xl font-black text-base flex items-center justify-center gap-2.5 transition-all py-4 ${
-                    selectedOffer && (fields.length === 0 || validState === 'ok')
-                      ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-200 hover:shadow-xl active:scale-[0.98]'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  {orderLoading
-                    ? <><Loader2 className="h-5 w-5 animate-spin" /> Traitement…</>
-                    : selectedOffer && fields.length > 0 && validState !== 'ok'
-                    ? <><AlertCircle className="h-5 w-5" /> Validez votre ID joueur</>
-                    : selectedOffer
-                    ? <><Zap className="h-5 w-5" /> Payer {offerHTG(selectedOffer).toLocaleString()} HTG</>
-                    : <><Gamepad2 className="h-5 w-5" /> Sélectionnez une offre</>
-                  }
-                </button>
+                <>
+                  {/* Solde insuffisant — affiché en rouge si l'offre sélectionnée dépasse le solde */}
+                  <AnimatePresence>
+                    {selectedOffer && balanceUSD < selectedOffer.price && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.18 }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200"
+                      >
+                        <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                        <p className="text-xs font-black text-red-600">
+                          Solde insuffisant — vous avez {balanceHTG.toLocaleString()} HTG
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <button
+                    type="button"
+                    onClick={handleOrder}
+                    disabled={!selectedOffer || orderLoading || (fields.length > 0 && validState !== 'ok') || (!!selectedOffer && balanceUSD < selectedOffer.price)}
+                    className={`w-full rounded-2xl font-black text-base flex items-center justify-center gap-2.5 transition-all py-4 ${
+                      selectedOffer && balanceUSD < selectedOffer.price
+                        ? 'bg-red-50 text-red-400 cursor-not-allowed border-2 border-red-200'
+                        : selectedOffer && (fields.length === 0 || validState === 'ok')
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-200 hover:shadow-xl active:scale-[0.98]'
+                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {orderLoading
+                      ? <><Loader2 className="h-5 w-5 animate-spin" /> Traitement…</>
+                      : selectedOffer && balanceUSD < selectedOffer.price
+                      ? <><AlertCircle className="h-5 w-5" /> Solde insuffisant</>
+                      : selectedOffer && fields.length > 0 && validState !== 'ok'
+                      ? <><AlertCircle className="h-5 w-5" /> Validez votre ID joueur</>
+                      : selectedOffer
+                      ? <><Zap className="h-5 w-5" /> Payer {offerHTG(selectedOffer).toLocaleString()} HTG</>
+                      : <><Gamepad2 className="h-5 w-5" /> Sélectionnez une offre</>
+                    }
+                  </button>
+                </>
               ) : (
                 <button type="button" onClick={() => { handleClose(); onOpenWallet?.(); }}
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-base flex items-center justify-center gap-2.5 shadow-lg shadow-purple-200 active:scale-[0.98]">

@@ -86,36 +86,26 @@
   50% { box-shadow: 0 0 0 8px rgba(109, 40, 217, 0); }
 }
 
-@keyframes search-border-spin {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+/* Search bar animated border — linear-gradient universally supported */
+@keyframes search-border-move {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 .search-border-wrap {
   position: relative;
   border-radius: 1rem;
   padding: 2px;
-  background: conic-gradient(
-    from var(--angle, 0deg),
-    #2563EB 0%,
-    #818cf8 25%,
-    #e879f9 50%,
-    #818cf8 75%,
-    #2563EB 100%
+  background: linear-gradient(
+    270deg,
+    #2563EB,
+    #818cf8,
+    #e879f9,
+    #818cf8,
+    #2563EB
   );
-  animation: search-border-rotate 2.4s linear infinite;
-}
-@property --angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-@keyframes search-border-rotate {
-  to { --angle: 360deg; }
-}
-@keyframes search-border-gradient {
-  0%   { background-position: 0% 50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  background-size: 300% 300%;
+  animation: search-border-move 3s ease infinite;
 }
 
 @import "tw-animate-css";
