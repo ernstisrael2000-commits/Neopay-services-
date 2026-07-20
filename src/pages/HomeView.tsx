@@ -113,6 +113,43 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  // ── Typewriter placeholder ──────────────────────────────────────────────────
+  const SEARCH_HINTS = ['Free Fire', 'Netflix', 'Disney+', 'Spotify', 'Steam', 'PlayStation', 'Xbox Game Pass', 'Amazon'];
+  const [hintText, setHintText] = useState('');
+  const [hintCursor, setHintCursor] = useState(true);
+  useEffect(() => {
+    if (searchQuery || searchFocused) { setHintText(''); return; }
+    let wordIdx = 0, charIdx = 0, erasing = false, mounted = true;
+    const tick = () => {
+      if (!mounted) return;
+      const word = SEARCH_HINTS[wordIdx];
+      if (!erasing) {
+        charIdx++;
+        setHintText(word.slice(0, charIdx));
+        if (charIdx === word.length) {
+          erasing = true;
+          setTimeout(tick, 1400); // pause fully typed
+        } else {
+          setTimeout(tick, 90);
+        }
+      } else {
+        charIdx--;
+        setHintText(word.slice(0, charIdx));
+        if (charIdx === 0) {
+          erasing = false;
+          wordIdx = (wordIdx + 1) % SEARCH_HINTS.length;
+          setTimeout(tick, 400); // pause before next word
+        } else {
+          setTimeout(tick, 55);
+        }
+      }
+    };
+    const start = setTimeout(tick, 600);
+    const cursorInterval = setInterval(() => setHintCursor(v => !v), 530);
+    return () => { mounted = false; clearTimeout(start); clearInterval(cursorInterval); };
+  }, [searchQuery, searchFocused]);
   // Debounce filtering so heavy .filter() only runs 250ms after the user stops typing
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; image: string; price?: string; type: string; description?: string } | null>(null);
@@ -345,9 +382,21 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Rechercher un produit, jeu, carte..."
-            className="w-full h-12 pl-11 pr-10 rounded-[14px] bg-white text-sm font-medium text-dark placeholder:text-gray-400 focus:outline-none transition-all"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder=""
+            className="w-full h-12 pl-11 pr-10 rounded-[14px] bg-white text-sm font-medium text-dark focus:outline-none transition-all"
           />
+          {/* Animated typewriter placeholder — hidden when typing or focused */}
+          {!searchQuery && !searchFocused && (
+            <span
+              className="absolute left-11 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-400 pointer-events-none select-none whitespace-nowrap overflow-hidden"
+              aria-hidden
+            >
+              {hintText}
+              <span className={`inline-block w-[1.5px] h-[14px] bg-gray-400 align-middle ml-[1px] transition-opacity duration-100 ${hintCursor ? 'opacity-100' : 'opacity-0'}`} />
+            </span>
+          )}
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
