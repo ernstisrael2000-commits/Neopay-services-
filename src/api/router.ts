@@ -7019,6 +7019,98 @@ router.post('/api/fazer/price-overrides', requireDb, requireAdminSecret, async (
   }
 });
 
+// ── FazerCards Gift Cards ─────────────────────────────────────────────────────
+
+// GET /api/fazer/giftcards — list gift card categories
+router.get('/api/fazer/giftcards', async (_req, res) => {
+  try {
+    const r = await fazerFetch('/giftcards?include_ui=1&limit=100');
+    if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards Gift Cards.' });
+    const data = await r.json() as any;
+    const items = Array.isArray(data) ? data : (data.items || data.data || []);
+    res.json({ items });
+  } catch (e: any) {
+    console.error('[fazer/giftcards]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// GET /api/fazer/giftcards/offers?category_id=X
+router.get('/api/fazer/giftcards/offers', async (req, res) => {
+  try {
+    const { category_id } = req.query as { category_id?: string };
+    if (!category_id) return res.status(400).json({ error: 'category_id requis.' });
+    const r = await fazerFetch(`/giftcards/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
+    if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
+    const data = await r.json() as any;
+    const raw: any[] = Array.isArray(data) ? data : (data.items || data.offers || data.data || []);
+    const items = raw.map((o: any) => ({
+      ...o,
+      price: typeof o.price === 'number' ? o.price : parseFloat(o.price_usd ?? o.price ?? '0') || 0,
+    }));
+    res.json({ items });
+  } catch (e: any) {
+    console.error('[fazer/giftcards/offers]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// POST /api/fazer/giftcards/order — purchase a gift card and deduct wallet
+router.post('/api/fazer/giftcards/order', requireDb, async (req, res) => {
+  try {
+    const { clientId, category_id, offer_id, priceUSD } = req.body as {
+      clientId: string; category_id: string; offer_id: string; priceUSD: number;
+    };
+    if (!clientId || !category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+    const price = Number(priceUSD) || 0;
+    if (price > 0 && (clientData.balance || 0) < price)
+      return res.status(400).json({ error: `Solde insuffisant. Disponible: ${clientData.balance?.toFixed(2)} USD.` });
+
+    const idempotencyKey = `rena-gc-${clientId}-${Date.now()}`;
+    const fazerRes = await fazerFetch('/giftcards/order', {
+      method: 'POST',
+      headers: { 'idempotency-key': idempotencyKey } as any,
+      body: JSON.stringify({ category_id, offer_id }),
+    });
+    const fazerData = await fazerRes.json() as any;
+    if (!fazerRes.ok) {
+      console.error('[fazer/giftcards/order] error:', fazerData);
+      return res.status(fazerRes.status).json({ error: fazerData.message || fazerData.error || 'Erreur commande.' });
+    }
+
+    const batch = adminDb.batch();
+    if (price > 0) {
+      batch.update(clientRef, {
+        balance: Math.max(0, (clientData.balance || 0) - price),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    const txRef = adminDb.collection('client_transactions').doc();
+    batch.set(txRef, {
+      clientId, clientName: clientData.name || '',
+      type: 'purchase', amount: price, status: 'completed',
+      productName: fazerData.category_name || category_id,
+      productPrice: `${price} USD`,
+      description: `Carte-cadeau: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
+      fazerOrderId: fazerData.order_id || null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    const code = fazerData.code || fazerData.pin || fazerData.serial || fazerData.card_number || null;
+    res.json({ success: true, order: fazerData, code });
+  } catch (e: any) {
+    console.error('[fazer/giftcards/order]', e.message);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

@@ -20,6 +20,8 @@ import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData, useClientTransactions, submitClientPurchase } from '../services/clientService';
 import { toast } from 'sonner';
 import { Client } from '../types';
+import { GameDialog } from '../components/GamesTab';
+import { useFazerTopups, useFazerPriceOverrides, FazerCategory } from '../hooks/useFazerTopups';
 
 const SLIDER_IMAGES = [
   'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop',
@@ -76,6 +78,8 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
+  const { categories: fazerCategories } = useFazerTopups();
+  const priceOverrides = useFazerPriceOverrides();
 
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const { transactions: clientTx } = useClientTransactions(loggedClient?.id || null);
@@ -107,6 +111,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   // Debounce filtering so heavy .filter() only runs 250ms after the user stops typing
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; image: string; price?: string; type: string; description?: string } | null>(null);
+  const [selectedGameCat, setSelectedGameCat] = useState<FazerCategory | null>(null);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   const imagesToDisplay = sliderImages.length > 0
@@ -390,9 +395,21 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             const handleItemClick = (item: typeof allItems[0]) => {
               if (!loggedClient) {
                 onRequestAuth?.();
-              } else {
-                setSelectedItem(item);
+                return;
               }
+              if (item.type === 'game') {
+                // Try to match against a live FazerCards category
+                const nameLower = item.name.toLowerCase();
+                const matchingCat = fazerCategories.find(cat => {
+                  const catBase = cat.name.toLowerCase().split(' (')[0].trim();
+                  return cat.name.toLowerCase().includes(nameLower) || nameLower.includes(catBase);
+                });
+                if (matchingCat) {
+                  setSelectedGameCat(matchingCat);
+                  return;
+                }
+              }
+              setSelectedItem(item);
             };
 
             return (
@@ -502,6 +519,18 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           <MessageCircle className="h-6 w-6" />
         </Button>
       </div>
+
+      {/* ── FazerCards GameDialog (search result click) ── */}
+      {selectedGameCat && (
+        <GameDialog
+          category={selectedGameCat}
+          priceOverrides={priceOverrides}
+          loggedClient={effectiveClient || null}
+          exchangeRate={exchangeRate}
+          onClose={() => setSelectedGameCat(null)}
+          onOpenWallet={onOpenWallet}
+        />
+      )}
 
       {/* ── Product quick-view modal ── */}
       <Dialog open={!!selectedItem} onOpenChange={(v) => { if (!v) setSelectedItem(null); }}>

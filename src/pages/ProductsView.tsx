@@ -4,7 +4,7 @@ import * as LucideIcons from 'lucide-react';
 import {
   ShoppingBag, CreditCard, Gamepad2, MessageCircle, ArrowRight,
   Info, Wallet, Smartphone, Landmark, Zap, ShieldCheck,
-  DollarSign, Clock, Package, Star, QrCode, Loader2, X
+  DollarSign, Clock, Package, Star, QrCode, Loader2, X, Gift
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -17,6 +17,7 @@ import {
 } from '../components/ui/dialog';
 import { useProducts, useCardTopups } from '../services/parcelService';
 import GamesTab from '../components/GamesTab';
+import GiftCardsTab from '../components/GiftCardsTab';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';
@@ -85,7 +86,7 @@ interface ProductsViewProps {
   onProductDetailChange?: (open: boolean) => void;
 }
 
-type TabKey = 'cards' | 'games' | 'products';
+type TabKey = 'cards' | 'games' | 'products' | 'giftcards';
 
 export default function ProductsView({ loggedClient, onOpenWallet, onViewChange, onProductDetailChange }: ProductsViewProps) {
   const { products, loading: productsLoading } = useProducts();
@@ -179,9 +180,10 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
   };
 
   const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-    { key: 'cards',    label: 'Cartes',   icon: <CreditCard className="h-4 w-4" /> },
-    { key: 'games',    label: 'Jeux',     icon: <Gamepad2 className="h-4 w-4" /> },
-    { key: 'products', label: 'Produits', icon: <ShoppingBag className="h-4 w-4" /> },
+    { key: 'products',  label: 'Produits',    icon: <ShoppingBag className="h-4 w-4" /> },
+    { key: 'games',     label: 'Jeux',        icon: <Gamepad2 className="h-4 w-4" /> },
+    { key: 'giftcards', label: 'Gift Cards',  icon: <Gift className="h-4 w-4" /> },
+    { key: 'cards',     label: 'Cartes',      icon: <CreditCard className="h-4 w-4" /> },
   ];
 
   // ── Vue Jeux : pleine page indépendante ──────────────────────────
@@ -195,7 +197,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
         transition={{ duration: 0.25 }}
         className="min-h-screen bg-gray-50 pb-28"
       >
-        {/* Sticky top bar */}
         <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
           <button
             onClick={() => setActiveTab('products')}
@@ -210,10 +211,40 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
             <span className="font-black text-gray-900 text-base">Top-up Jeux</span>
           </div>
         </div>
-
-        {/* Content */}
         <div className="max-w-3xl mx-auto px-4 pt-4">
           <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Vue Gift Cards : pleine page indépendante ─────────────────────
+  if (activeTab === 'giftcards') {
+    return (
+      <motion.div
+        key="giftcards-page"
+        initial={{ opacity: 0, x: 30 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 30 }}
+        transition={{ duration: 0.25 }}
+        className="min-h-screen bg-gray-50 pb-28"
+      >
+        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
+          <button
+            onClick={() => setActiveTab('products')}
+            className="h-9 w-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 active:scale-95 transition-all shrink-0"
+          >
+            <LucideIcons.ArrowLeft className="h-4 w-4 text-gray-700" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
+              <Gift className="h-3.5 w-3.5 text-white" />
+            </div>
+            <span className="font-black text-gray-900 text-base">Cartes-cadeaux</span>
+          </div>
+        </div>
+        <div className="max-w-3xl mx-auto px-4 pt-4">
+          <GiftCardsTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
         </div>
       </motion.div>
     );

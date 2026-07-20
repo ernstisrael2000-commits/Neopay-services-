@@ -96,6 +96,50 @@ export function useFazerValidatableGames() {
   return games;
 }
 
+// ── Gift Cards ────────────────────────────────────────────────────
+export interface FazerGiftCategory {
+  category_id: string;
+  name: string;
+  imageurl?: string;
+  slug?: string;
+}
+
+export function useFazerGiftCards() {
+  const [categories, setCategories] = useState<FazerGiftCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    apiFetch<{ items: FazerGiftCategory[] }>('/api/fazer/giftcards')
+      .then(data => { if (!cancelled) setCategories(data.items || []); })
+      .catch(e => { if (!cancelled) setError(e.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return { categories, loading, error };
+}
+
+export function useFazerGiftCardOffers(categoryId: string | null) {
+  const [offers, setOffers] = useState<FazerOffer[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!categoryId) { setOffers([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    apiFetch<{ items: FazerOffer[] }>(`/api/fazer/giftcards/offers?category_id=${encodeURIComponent(categoryId)}`)
+      .then(data => { if (!cancelled) setOffers(data.items || []); })
+      .catch(() => { if (!cancelled) setOffers([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [categoryId]);
+
+  return { offers, loading };
+}
+
 // ── Hook: custom HTG price overrides (set by admin) ───────────────
 // Returns { [offerId]: customPriceHTG }
 export function useFazerPriceOverrides() {

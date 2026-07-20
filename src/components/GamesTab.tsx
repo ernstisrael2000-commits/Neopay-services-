@@ -11,6 +11,8 @@ import { useFazerTopups, useFazerOffers, useFazerValidatableGames, useFazerPrice
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
 
+export type { FazerCategory };
+
 // ── Known game accent colours ──────────────────────────────────────────────
 const GAME_ACCENTS: Record<string, string> = {
   'free fire': 'from-orange-500 to-red-600',
@@ -275,7 +277,7 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
 }
 
 // ── Game Dialog ────────────────────────────────────────────────────────────
-interface DialogProps {
+export interface DialogProps {
   category: FazerCategory;
   priceOverrides: Record<string, number>;
   loggedClient: Client | null;
@@ -284,7 +286,8 @@ interface DialogProps {
   onOpenWallet?: () => void;
 }
 
-function GameDialog({ category, priceOverrides, loggedClient, exchangeRate, onClose, onOpenWallet }: DialogProps) {
+export function GameDialog({ category, priceOverrides, loggedClient, exchangeRate, onClose, onOpenWallet }: DialogProps) {
+  const isAdmin = typeof localStorage !== 'undefined' && !!localStorage.getItem('rena_admin');
   // AnimatePresence lives INSIDE the portal — needed for proper exit animation
   const [visible, setVisible] = useState(true);
 
@@ -472,7 +475,7 @@ function GameDialog({ category, priceOverrides, loggedClient, exchangeRate, onCl
                             )}
                             <p className="text-[11px] font-black text-gray-900 leading-tight pr-5">{offer.name}</p>
                             <p className="text-sm font-black text-purple-600 mt-1 leading-none">{htg.toLocaleString()} HTG</p>
-                            <p className="text-[9px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>
+                            {isAdmin && <p className="text-[9px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>}
                           </button>
                         );
                       })}
