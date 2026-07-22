@@ -368,17 +368,17 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
           onClick={e => { if (e.target === e.currentTarget) handleClose(); }}
         >
           <motion.div
             key="card"
-            initial={{ scale: 0.93, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.93, opacity: 0 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-            className="bg-white w-full rounded-3xl overflow-hidden flex flex-col"
-            style={{ maxWidth: 420 }}
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            className="bg-white w-full sm:rounded-3xl rounded-t-3xl overflow-hidden flex flex-col"
+            style={{ maxWidth: 540, maxHeight: '96vh', height: '92vh' }}
             onClick={e => e.stopPropagation()}
           >
             {/* ── Header ── */}
@@ -413,9 +413,9 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
             </div>
 
             {/* ── Body ── */}
-            <div>
+            <div className="overflow-y-auto flex-1">
               {/* Step 1 — Grille d'offres */}
-              <div className="px-4 pt-3 pb-2">
+              <div className="px-4 pt-4 pb-2">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
                   1 · Choisissez votre offre
                 </p>

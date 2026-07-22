@@ -347,11 +347,11 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                   </button>
                 </div>
               ) : (
-                <Button onClick={() => setShowAuthModal(true)}
-                  className="bg-primary hover:bg-[#1D4ED8] text-white text-xs font-bold px-3 py-1.5 h-auto rounded-xl flex items-center gap-1.5">
-                  <LogIn className="h-3.5 w-3.5" />
-                  <span className="hidden xs:inline">Connexion</span>
-                </Button>
+                <button onClick={() => setShowAuthModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white text-sm font-bold shadow-md shadow-primary/25 hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
+                  <LogIn className="h-4 w-4 shrink-0" />
+                  <span>Se connecter</span>
+                </button>
               )}
 
               {/* Burger — always on mobile, also on desktop when logged in for compactness */}
