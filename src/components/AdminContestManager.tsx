@@ -1,7 +1,7 @@
 // ─── Gestion du Concours — Admin ──────────────────────────────────────────────
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  onSnapshot, doc, updateDoc, collection, addDoc, getDocs,
+  onSnapshot, doc, updateDoc, setDoc, collection, addDoc, getDocs,
   orderBy, query, Timestamp,
 } from 'firebase/firestore';
 import { ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -68,7 +68,7 @@ const DEFAULT_CFG: ContestCfg = {
   contestActive: false,
   contestTitle: '',
   contestPeriod: 'month',
-  contestType: 'affiliates',
+  contestType: 'both',
   affiliateContestMetric: 'points',
   agentContestMetric: 'monthlyTransactions',
   prize1: DEFAULT_PRIZE(1), prize2: DEFAULT_PRIZE(2), prize3: DEFAULT_PRIZE(3),
@@ -370,7 +370,7 @@ export default function AdminContestManager() {
       contestActive:          d.contestActive ?? false,
       contestTitle:           d.contestTitle ?? '',
       contestPeriod:          d.contestPeriod ?? 'month',
-      contestType:            d.contestType ?? 'affiliates',
+      contestType:            d.contestType ?? 'both',
       affiliateContestMetric: d.affiliateContestMetric ?? 'points',
       agentContestMetric:     d.agentContestMetric ?? 'monthlyTransactions',
       prize1: d.prize1 ?? DEFAULT_PRIZE(1),
@@ -420,7 +420,7 @@ export default function AdminContestManager() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), {
+      await setDoc(doc(db, 'settings', 'global'), {
         contestActive:          draft.contestActive,
         contestTitle:           draft.contestTitle,
         contestPeriod:          draft.contestPeriod,
@@ -431,7 +431,7 @@ export default function AdminContestManager() {
         prize2:                 draft.prize2,
         prize3:                 draft.prize3,
         contestEndDate:         draft.contestEndDate || null,
-      });
+      }, { merge: true });
       setDirty(false);
       toast.success('Configuration sauvegardée ✓');
     } catch { toast.error('Erreur lors de la sauvegarde'); }

@@ -27,7 +27,7 @@ import {
   Phone, RefreshCw, TrendingUp, BarChart3, Users, Settings,
   Home, AlertCircle, BadgeDollarSign, ChevronRight, Star,
   ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck, PlusCircle, AlertTriangle, X,
-  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle, Check, Gamepad2,
+  QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle, Check, Gamepad2, Trophy,
 } from 'lucide-react';
 import FreeFireResellerSection from '../components/agent/FreeFireResellerSection';
 import { toast } from 'sonner';
@@ -98,7 +98,7 @@ interface AgentTransaction {
   createdAt: any;
 }
 
-type ActiveSection = 'overview' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'finances' | 'settings' | 'free-fire';
+type ActiveSection = 'overview' | 'contest' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'finances' | 'settings' | 'free-fire';
 
 const sectionNav = [
   { key: 'overview',     label: 'Accueil',      icon: Home },
@@ -691,6 +691,19 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                     <p className="text-white/60 text-xs">Diamants</p>
                   </div>
                 </button>
+                {/* Concours */}
+                <button
+                  onClick={() => setActiveSection('contest')}
+                  className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-5 flex flex-col gap-3 active:scale-95 transition-transform text-left"
+                >
+                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-white">
+                    <Trophy className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold">Concours</p>
+                    <p className="text-white/60 text-xs">Classement & prix</p>
+                  </div>
+                </button>
               </div>
             </section>
 
@@ -814,6 +827,20 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               </div>
             </section>
 
+          </motion.div>
+        )}
+
+        {/* ── CONCOURS ── */}
+        {activeSection === 'contest' && (
+          <motion.div key="contest" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <div className="flex items-center gap-3 px-1">
+              <Trophy className="h-6 w-6 text-amber-500" />
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Concours</h2>
+                <p className="text-xs text-slate-400">Classement des agents et récompenses</p>
+              </div>
+            </div>
+            <ContestPodium participantId={agentUid} participantType="agent" />
           </motion.div>
         )}
 

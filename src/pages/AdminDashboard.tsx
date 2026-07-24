@@ -8917,6 +8917,10 @@ function EmailLogsPanel() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="contest" className="space-y-6">
+          <AdminContestManager />
+        </TabsContent>
+
         <TabsContent value="admins" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Administrateurs</h2>

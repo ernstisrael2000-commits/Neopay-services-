@@ -107,7 +107,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 
-type Tab = 'accueil' | 'filleuls' | 'historique' | 'profil';
+type Tab = 'accueil' | 'concours' | 'filleuls' | 'historique' | 'profil';
 
 interface AffiliateDashboardProps {
   affiliateId: string;
@@ -688,6 +688,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'accueil', label: 'Accueil', icon: Home },
+    { id: 'concours', label: 'Concours', icon: Trophy },
     { id: 'filleuls', label: 'Filleuls', icon: Users },
     { id: 'historique', label: 'Historique', icon: History },
     { id: 'profil', label: 'Profil', icon: User },
@@ -731,6 +732,11 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         {/* ═══ ACCUEIL ═══ */}
         {activeTab === 'accueil' && (
           <ContestPodium participantId={affiliateId} participantType="affiliate" />
+        )}
+        {activeTab === 'concours' && (
+          <div className="pt-4">
+            <ContestPodium participantId={affiliateId} participantType="affiliate" />
+          </div>
         )}
         {activeTab === 'accueil' && (
           <div className="p-4 space-y-4">
@@ -1668,6 +1674,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             {activeTab === 'filleuls' && <motion.div layoutId="tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
             <Users className="h-5 w-5" />
             <span className="text-[9px] font-black uppercase tracking-wider">Filleuls</span>
+          </button>
+          {/* Concours */}
+          <button onClick={() => setActiveTab('concours')}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 relative transition-colors ${activeTab === 'concours' ? 'text-primary' : 'text-gray-400'}`}>
+            {activeTab === 'concours' && <motion.div layoutId="tab-indicator" className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />}
+            <Trophy className="h-5 w-5" />
+            <span className="text-[9px] font-black uppercase tracking-wider">Concours</span>
           </button>
           {/* Slot 3 — Centre raised button (Retrait rapide) */}
           <div className="flex-1 flex justify-center relative">

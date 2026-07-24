@@ -86,15 +86,43 @@ const MEDALS = ['🥈', '🥇', '🥉'];
 // visual order: 2nd(idx=1), 1st(idx=0), 3rd(idx=2) → maps from top3[podiumMap[i]]
 const PODIUM_MAP = [1, 0, 2]; // visual position → ranking index
 
+const DEFAULT_PRIZE = (rank: 1 | 2 | 3): PrizeCfg => ({
+  type: 'wallet',
+  amount: rank === 1 ? 500 : rank === 2 ? 250 : 150,
+  label: rank === 1 ? '1er Prix' : rank === 2 ? '2ème Prix' : '3ème Prix',
+  emoji: rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉',
+});
+
+const DEFAULT_CONTEST_CONFIG: ContestConfig = {
+  contestActive: false,
+  contestType: 'both',
+  contestTitle: 'Grand Concours Rena',
+  contestPeriod: 'month',
+  affiliateContestMetric: 'points',
+  agentContestMetric: 'monthlyTransactions',
+  prize1: DEFAULT_PRIZE(1),
+  prize2: DEFAULT_PRIZE(2),
+  prize3: DEFAULT_PRIZE(3),
+};
+
 // ── Main component ───────────────────────────────────────────────────────────
 export default function ContestPodium({ participantId, participantType }: ContestPodiumProps) {
-  const [config, setConfig] = useState<ContestConfig | null>(null);
+  const [config, setConfig] = useState<ContestConfig>(DEFAULT_CONTEST_CONFIG);
   const [ranking, setRanking] = useState<Participant[]>([]);
   const countdown = useCountdown(config?.contestEndDate || undefined);
 
   // Listen to contest config
   useEffect(() => onSnapshot(doc(db, 'settings', 'global'), snap => {
-    if (snap.exists()) setConfig(snap.data() as ContestConfig);
+    if (!snap.exists()) return;
+    const data = snap.data() as Partial<ContestConfig>;
+    setConfig({
+      ...DEFAULT_CONTEST_CONFIG,
+      ...data,
+      contestType: data.contestType || 'both',
+      prize1: data.prize1 || DEFAULT_PRIZE(1),
+      prize2: data.prize2 || DEFAULT_PRIZE(2),
+      prize3: data.prize3 || DEFAULT_PRIZE(3),
+    });
   }), []);
 
   // Live ranking
@@ -113,7 +141,26 @@ export default function ContestPodium({ participantId, participantType }: Contes
     });
   }, [config?.contestActive, config?.affiliateContestMetric, config?.agentContestMetric, participantType]);
 
-  if (!config?.contestActive) return null;
+  if (!config.contestActive) {
+    return (
+      <div className="mx-4 mb-5 rounded-3xl overflow-hidden border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-sm">
+        <div className="flex items-center gap-3 px-5 py-4">
+          <div className="h-11 w-11 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
+            <Trophy className="h-5 w-5 text-amber-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-gray-900">Concours Rena</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              Le prochain concours affiliés & agents sera bientôt disponible.
+            </p>
+          </div>
+          <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-amber-700">
+            À venir
+          </span>
+        </div>
+      </div>
+    );
+  }
   const typeOk = config.contestType === 'both'
     || (participantType === 'affiliate' && config.contestType === 'affiliates')
     || (participantType === 'agent' && config.contestType === 'agents');

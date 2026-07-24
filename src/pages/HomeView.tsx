@@ -516,33 +516,13 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             );
 
             const handleItemClick = (item: typeof allItems[0]) => {
-              if (!loggedClient) {
-                onRequestAuth?.();
-                return;
-              }
-              // Gift card from FazerCards
-              if (item.source === 'fazer-gift') {
-                setSelectedGiftCat((item as any)._cat);
-                return;
-              }
-              // Game from FazerCards directly
-              if (item.source === 'fazer-game') {
-                setSelectedGameCat((item as any)._cat);
-                return;
-              }
-              // Catalog game — try to match against FazerCards
-              if (item.type === 'game') {
-                const nameLower = item.name.toLowerCase();
-                const matchingCat = fazerCategories.find(cat => {
-                  const catBase = cat.name.toLowerCase().split(' (')[0].trim();
-                  return cat.name.toLowerCase().includes(nameLower) || nameLower.includes(catBase);
-                });
-                if (matchingCat) {
-                  setSelectedGameCat(matchingCat);
-                  return;
-                }
-              }
-              setSelectedItem(item);
+              // Home cards should open the full catalogue directly. The quick-view
+              // dialog with "Voir le catalogue" / "WhatsApp" is intentionally not
+              // used from this entry point.
+              setSelectedItem(null);
+              setSelectedGameCat(null);
+              setSelectedGiftCat(null);
+              onViewChange('products');
             };
 
             const typeConfig: Record<string, { label: string; bg: string; dot: string }> = {
