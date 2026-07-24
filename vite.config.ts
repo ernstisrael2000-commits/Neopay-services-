@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.RECAPTCHA_SITE_KEY': JSON.stringify(env.RECAPTCHA_SITE_KEY || process.env.RECAPTCHA_SITE_KEY || ''),
       'process.env.FIREBASE_VAPID_KEY': JSON.stringify(env.FIREBASE_VAPID_KEY || process.env.FIREBASE_VAPID_KEY || ''),
+      'process.env.VAPID_PUBLIC_KEY': JSON.stringify(env.VAPID_PUBLIC_KEY || process.env.VAPID_PUBLIC_KEY || ''),
     },
     resolve: {
       alias: {

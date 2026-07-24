@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const VAPID_PUBLIC_KEY = 'BBKd8Oy-Zuvr3XN2qXkNXPZKvA05nfzChYmm0WQInUOwHUAYUO0yGDS-VzUOKmImahgcZxpeqwE7FATMadhBui8';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -44,7 +44,10 @@ export function usePushNotifications() {
   };
 
   const subscribe = useCallback(async (): Promise<boolean> => {
-    if (!supported) return false;
+    if (!supported || !VAPID_PUBLIC_KEY) {
+      console.warn('[Push] VAPID public key is not configured.');
+      return false;
+    }
     setLoading(true);
     try {
       const perm = await Notification.requestPermission();
