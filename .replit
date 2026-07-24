@@ -90,6 +90,10 @@ externalPort = 8099
 localPort = 5186
 externalPort = 9000
 
+[[ports]]
+localPort = 23636
+externalPort = 8081
+
 [deployment]
 deploymentTarget = "autoscale"
 run = ["npx", "tsx", "server.ts"]
