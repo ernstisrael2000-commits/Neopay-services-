@@ -729,15 +729,16 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
               className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
               onClick={() => setIsProductDetailOpen(false)}
             />
-            {/* Panel */}
-            <motion.div
-              key="product-panel"
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-              className="fixed inset-0 m-auto z-50 bg-white rounded-[2rem] shadow-2xl w-[92vw] sm:w-[80vw] max-w-[720px] h-[80dvh] flex flex-col overflow-hidden"
-            >
+            {/* Centered fixed panel */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+              <motion.div
+                key="product-panel"
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+                className="relative pointer-events-auto bg-white rounded-[2rem] shadow-2xl w-full sm:w-[80vw] max-w-[720px] h-[80dvh] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
+              >
               {/* Handle bar */}
               <div className="flex justify-center pt-3 pb-1 shrink-0">
                 <div className="h-1 w-10 rounded-full bg-gray-200" />
@@ -774,7 +775,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
               </div>
 
               {/* Content is intentionally fixed-height: the complete purchase summary stays visible without nested scrolling. */}
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
                 <div className="p-5 space-y-5 pb-8">
 
                   {/* Titre + sous-titre */}
@@ -971,7 +972,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                   })()}
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </div>
           </>
         )}
       </AnimatePresence>
