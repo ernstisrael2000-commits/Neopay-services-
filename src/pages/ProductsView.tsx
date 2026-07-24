@@ -19,7 +19,7 @@ import { useProducts, useCardTopups } from '../services/parcelService';
 import GamesTab from '../components/GamesTab';
 import GiftCardsTab from '../components/GiftCardsTab';
 import { useSettingsCtx } from '../contexts/SettingsContext';
-import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
+import { submitClientPurchase, useClientData, useClientPendingPurchase, validatePromoCode, usePromoCode } from '../services/clientService';
 import { ProductGridSkeleton } from '../components/skeletons/ProductGridSkeleton';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -118,6 +118,38 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [customAmountUSD, setCustomAmountUSD] = useState('');
+
+  // Promo code
+  const [promoInput, setPromoInput] = useState('');
+  const [promoValidating, setPromoValidating] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{ id: string; code: string; discountPercent: number } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+
+  const handleValidatePromo = async () => {
+    if (!promoInput.trim()) return;
+    setPromoValidating(true);
+    setPromoError(null);
+    try {
+      const result = await validatePromoCode(promoInput.trim(), selectedProduct?.name || '');
+      if (result.valid) {
+        setAppliedPromo({ id: result.id!, code: promoInput.trim().toUpperCase(), discountPercent: result.discountPercent! });
+        toast.success(`✅ Code "${promoInput.toUpperCase()}" appliqué — -${result.discountPercent}% !`);
+      } else {
+        setPromoError(result.error || 'Code invalide.');
+        setAppliedPromo(null);
+      }
+    } catch {
+      setPromoError('Erreur de validation. Réessayez.');
+    } finally {
+      setPromoValidating(false);
+    }
+  };
+
+  const resetPromo = () => {
+    setPromoInput('');
+    setAppliedPromo(null);
+    setPromoError(null);
+  };
 
   useEffect(() => {
     onProductDetailChange?.(isProductDetailOpen);
@@ -826,14 +858,59 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                     </div>
                   )}
 
+                  {/* ── Code Promo ── */}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Code promotionnel</p>
+                    {appliedPromo ? (
+                      <div className="flex items-center gap-2 p-3 rounded-2xl bg-emerald-50 border-2 border-emerald-200">
+                        <LucideIcons.Tag className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-emerald-700 font-mono">{appliedPromo.code}</p>
+                          <p className="text-[10px] text-emerald-600">-{appliedPromo.discountPercent}% appliqué !</p>
+                        </div>
+                        <button onClick={resetPromo} className="shrink-0 h-6 w-6 rounded-full bg-emerald-200 flex items-center justify-center hover:bg-emerald-300 transition-colors">
+                          <X className="h-3 w-3 text-emerald-700" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="ex: NETFLIX20"
+                          value={promoInput}
+                          onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(null); }}
+                          className="h-11 rounded-2xl border-2 font-mono text-sm flex-1"
+                          onKeyDown={e => { if (e.key === 'Enter') handleValidatePromo(); }}
+                        />
+                        <Button
+                          onClick={handleValidatePromo}
+                          disabled={promoValidating || !promoInput.trim()}
+                          className="h-11 px-4 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black shrink-0"
+                        >
+                          {promoValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Appliquer'}
+                        </Button>
+                      </div>
+                    )}
+                    {promoError && <p className="text-[11px] text-red-500 font-semibold px-1">{promoError}</p>}
+                  </div>
+
                   {/* Boutons d'action */}
                   {(() => {
                     const rate2 = selectedProduct.customExchangeRate || exchangeRate;
                     const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD))
                       ? Math.round(parseFloat(customAmountUSD) * rate2) : null;
-                    const displayPrice = customHTG !== null
+                    const rawPrice = customHTG !== null
                       ? `${customHTG} HTG`
                       : (selectedPlan ? selectedPlan.price : selectedProduct.price);
+                    // Apply promo discount
+                    const applyDiscount = (priceStr: string) => {
+                      if (!appliedPromo) return priceStr;
+                      const numMatch = priceStr.match(/[\d.,]+/);
+                      if (!numMatch) return priceStr;
+                      const base = parseFloat(numMatch[0].replace(',', '.'));
+                      const discounted = Math.round(base * (1 - appliedPromo.discountPercent / 100));
+                      return priceStr.replace(numMatch[0], discounted.toLocaleString('fr-FR'));
+                    };
+                    const displayPrice = applyDiscount(rawPrice);
                     const displayName = selectedPlan
                       ? `${selectedProduct.name} (${selectedPlan.name})`
                       : selectedProduct.name;
@@ -842,6 +919,12 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                       : null;
                     return (
                       <div className="space-y-3 pt-1">
+                        {appliedPromo && rawPrice !== displayPrice && (
+                          <div className="flex items-center justify-between px-2">
+                            <span className="text-xs text-gray-400 line-through">{rawPrice}</span>
+                            <span className="text-lg font-black text-emerald-600">{displayPrice}</span>
+                          </div>
+                        )}
                         {loggedClient && (
                           <WalletPayButton
                             client={effectiveClient || loggedClient}
@@ -850,7 +933,13 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                             hasPendingPurchase={hasPendingPurchase}
                             purchaseLoading={purchaseLoading}
                             setPurchaseLoading={setPurchaseLoading}
-                            onSuccess={() => setIsProductDetailOpen(false)}
+                            onSuccess={async () => {
+                              if (appliedPromo) {
+                                try { await usePromoCode(appliedPromo.id); } catch {}
+                              }
+                              setIsProductDetailOpen(false);
+                              resetPromo();
+                            }}
                             exchangeRate={exchangeRate}
                           />
                         )}

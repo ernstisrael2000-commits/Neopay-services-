@@ -66,7 +66,7 @@ import {
   updateAgentBalance
 } from '../services/agentService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, CardFeeRule, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
-import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, clearAllAdminNotifications, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
+import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, clearAllAdminNotifications, approvePurchaseRequest, declinePurchaseRequest, usePromoCodes, savePromoCode, deletePromoCode } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
 import AgentFeeHistory from './AgentFeeHistory';
@@ -2292,6 +2292,7 @@ function EmailLogsPanel() {
         { value: 'teachers', label: 'Professeurs', icon: LucideIcons.UserCheck, permission: 'products' },
         { value: 'teacher-withdrawals', label: 'Retraits Professeurs', icon: LucideIcons.Banknote, permission: 'settings' },
         { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
+        { value: 'promo-codes', label: 'Codes Promo', icon: LucideIcons.Tag, permission: 'products' },
         { value: 'commissions-catalog', label: 'Commissions & Tarifs', icon: LucideIcons.BadgePercent, permission: 'settings' },
         { value: 'contest', label: 'Concours', icon: LucideIcons.Trophy, permission: 'settings' },
       ]
@@ -2750,6 +2751,25 @@ function EmailLogsPanel() {
   const [clientTxActionLoading, setClientTxActionLoading] = useState<string | null>(null);
   const [purchaseActionLoading, setPurchaseActionLoading] = useState<string | null>(null);
 
+  // ── Credentials modal (approve streaming purchase with login/password) ─────
+  const [credentialsModalOpen, setCredentialsModalOpen] = useState(false);
+  const [credentialNotif, setCredentialNotif] = useState<any | null>(null);
+  const [credentialEmail, setCredentialEmail] = useState('');
+  const [credentialPassword, setCredentialPassword] = useState('');
+  const [credentialLoading, setCredentialLoading] = useState(false);
+
+  // ── Promo Codes ────────────────────────────────────────────────────────────
+  const { codes: promoCodes, loading: promoCodesLoading, refresh: refreshPromoCodes } = usePromoCodes();
+  const [promoDialogOpen, setPromoDialogOpen] = useState(false);
+  const [promoEditTarget, setPromoEditTarget] = useState<any | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoServiceName, setPromoServiceName] = useState('');
+  const [promoDiscount, setPromoDiscount] = useState('');
+  const [promoMaxUses, setPromoMaxUses] = useState('0');
+  const [promoActive, setPromoActive] = useState(true);
+  const [promoSaving, setPromoSaving] = useState(false);
+  const [promoDeleteTarget, setPromoDeleteTarget] = useState<any | null>(null);
+
   // Affiliate-submitted client requests (client_requests collection)
   const [affiliateClientRequests, setAffiliateClientRequests] = useState<any[]>([]);
   const [affiliateReqLoading, setAffiliateReqLoading] = useState(false);
@@ -2808,6 +2828,75 @@ function EmailLogsPanel() {
       toast.error(err.message || 'Erreur.');
     } finally {
       setPurchaseActionLoading(null);
+    }
+  };
+
+  const handleApproveWithCredentials = async () => {
+    if (!credentialNotif) return;
+    setCredentialLoading(true);
+    try {
+      const creds = credentialEmail.trim() && credentialPassword.trim()
+        ? { email: credentialEmail.trim(), password: credentialPassword.trim() }
+        : null;
+      await approvePurchaseRequest(
+        credentialNotif.id!,
+        credentialNotif.transactionId,
+        credentialNotif.clientId,
+        credentialNotif.amount,
+        credentialNotif.directSponsorId || null,
+        creds,
+        credentialNotif.productName || '',
+      );
+      toast.success(creds ? '✅ Service approuvé avec identifiants envoyés !' : '✅ Service approuvé !');
+      setCredentialsModalOpen(false);
+      setCredentialNotif(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
+    } finally {
+      setCredentialLoading(false);
+    }
+  };
+
+  const openPromoDialog = (target: any | null = null) => {
+    setPromoEditTarget(target);
+    setPromoCode(target?.code || '');
+    setPromoServiceName(target?.serviceName || '');
+    setPromoDiscount(target?.discountPercent?.toString() || '');
+    setPromoMaxUses(target?.maxUses?.toString() || '0');
+    setPromoActive(target?.active !== false);
+    setPromoDialogOpen(true);
+  };
+
+  const handleSavePromoCode = async () => {
+    if (!promoCode.trim() || !promoDiscount) { toast.error('Code et réduction requis.'); return; }
+    setPromoSaving(true);
+    try {
+      await savePromoCode({
+        code: promoCode.trim(),
+        serviceName: promoServiceName.trim(),
+        discountPercent: Number(promoDiscount),
+        maxUses: Number(promoMaxUses) || 0,
+        active: promoActive,
+      }, promoEditTarget?.id);
+      toast.success(promoEditTarget ? 'Code modifié !' : 'Code créé !');
+      setPromoDialogOpen(false);
+      refreshPromoCodes();
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
+    } finally {
+      setPromoSaving(false);
+    }
+  };
+
+  const handleDeletePromoCode = async () => {
+    if (!promoDeleteTarget) return;
+    try {
+      await deletePromoCode(promoDeleteTarget.id);
+      toast.success('Code supprimé.');
+      setPromoDeleteTarget(null);
+      refreshPromoCodes();
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
     }
   };
 
@@ -7476,16 +7565,14 @@ function EmailLogsPanel() {
                                   size="sm"
                                   className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black gap-1.5"
                                   disabled={isPurchaseLoading}
-                                  onClick={() => handlePurchaseAction(
-                                    notif.id!,
-                                    (notif as any).transactionId,
-                                    (notif as any).clientId,
-                                    notif.amount,
-                                    (notif as any).directSponsorId || null,
-                                    'approve'
-                                  )}
+                                  onClick={() => {
+                                    setCredentialNotif(notif);
+                                    setCredentialEmail('');
+                                    setCredentialPassword('');
+                                    setCredentialsModalOpen(true);
+                                  }}
                                 >
-                                  {isPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Terminé</>}
+                                  {isPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Approuver</>}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -8686,6 +8773,78 @@ function EmailLogsPanel() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="promo-codes" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-dark">Codes Promotionnels</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Créez et gérez des codes promo pour vos services.</p>
+            </div>
+            <Button onClick={() => openPromoDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
+              <Plus className="h-4 w-4" /> Nouveau Code
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {promoCodesLoading ? (
+                <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : promoCodes.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <LucideIcons.Tag className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-semibold">Aucun code promo</p>
+                  <p className="text-xs mt-1">Créez votre premier code promotionnel.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Code</TableHead>
+                        <TableHead>Service</TableHead>
+                        <TableHead>Réduction</TableHead>
+                        <TableHead>Utilisations</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {promoCodes.map((pc: any) => (
+                        <TableRow key={pc.id} className="hover:bg-gray-50/50">
+                          <TableCell>
+                            <span className="font-mono font-black text-primary bg-primary/5 px-2 py-0.5 rounded-lg text-sm">{pc.code}</span>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">{pc.serviceName || <span className="text-gray-300 italic">Tous les services</span>}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 font-black">-{pc.discountPercent}%</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {pc.usedCount || 0}{pc.maxUses > 0 ? ` / ${pc.maxUses}` : ' / ∞'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={pc.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : 'text-gray-500 border-gray-200 bg-gray-50'}>
+                              {pc.active ? 'Actif' : 'Inactif'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => openPromoDialog(pc)} className="h-8 w-8 p-0 rounded-lg">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setPromoDeleteTarget(pc)} className="h-8 w-8 p-0 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="nav-buttons" className="space-y-6">
@@ -12354,6 +12513,125 @@ function EmailLogsPanel() {
               {ffPacksSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓ Enregistrer les packs'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Credentials Approval Modal ─────────────────────────────────────── */}
+      <Dialog open={credentialsModalOpen} onOpenChange={v => { if (!credentialLoading) setCredentialsModalOpen(v); }}>
+        <DialogContent className="max-w-md rounded-3xl p-0 overflow-hidden border-0 shadow-2xl">
+          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-6 text-white">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                <CheckCircle2 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-white text-lg font-black">Approuver le service</DialogTitle>
+                <DialogDescription className="text-white/70 text-xs mt-0.5">
+                  {credentialNotif?.productName || 'Service'} — {credentialNotif?.clientName}
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-gray-600">
+              Vous pouvez fournir les identifiants du compte <strong>{credentialNotif?.productName || 'service'}</strong> au client. Ces informations seront envoyées par email et notification.
+            </p>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-widest">Email / Identifiant du compte</Label>
+                <Input
+                  placeholder="ex: client@netflix.com"
+                  value={credentialEmail}
+                  onChange={e => setCredentialEmail(e.target.value)}
+                  className="h-11 rounded-xl border-2 font-mono text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-widest">Mot de passe</Label>
+                <Input
+                  placeholder="Mot de passe du compte"
+                  value={credentialPassword}
+                  onChange={e => setCredentialPassword(e.target.value)}
+                  className="h-11 rounded-xl border-2 font-mono text-sm"
+                />
+              </div>
+              {(credentialEmail || credentialPassword) && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 font-semibold">
+                  ✅ Ces identifiants seront envoyés au client par email et notification.
+                </div>
+              )}
+              {!credentialEmail && !credentialPassword && (
+                <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 text-xs text-gray-500">
+                  Sans identifiants : le client recevra juste une notification d'activation.
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="px-6 pb-6 flex gap-3">
+            <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setCredentialsModalOpen(false)} disabled={credentialLoading}>
+              Annuler
+            </Button>
+            <Button
+              className="flex-1 rounded-xl h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-black"
+              onClick={handleApproveWithCredentials}
+              disabled={credentialLoading}
+            >
+              {credentialLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4 mr-1.5" /> Approuver</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Promo Code Dialog ───────────────────────────────────────────────── */}
+      <Dialog open={promoDialogOpen} onOpenChange={setPromoDialogOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{promoEditTarget ? 'Modifier le code' : 'Nouveau code promo'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Code *</Label>
+              <Input placeholder="ex: NETFLIX20" value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())} className="font-mono font-black" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Service (laisser vide = tous)</Label>
+              <Input placeholder="ex: Netflix, Amazon Prime…" value={promoServiceName} onChange={e => setPromoServiceName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Réduction % *</Label>
+                <Input type="number" min="1" max="100" placeholder="20" value={promoDiscount} onChange={e => setPromoDiscount(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Utilisations max (0=∞)</Label>
+                <Input type="number" min="0" placeholder="0" value={promoMaxUses} onChange={e => setPromoMaxUses(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border">
+              <input type="checkbox" id="promo-active" checked={promoActive} onChange={e => setPromoActive(e.target.checked)} className="h-4 w-4 accent-primary rounded" />
+              <Label htmlFor="promo-active" className="font-bold text-sm cursor-pointer">Code actif</Label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPromoDialogOpen(false)} className="rounded-xl">Annuler</Button>
+            <Button onClick={handleSavePromoCode} disabled={promoSaving} className="rounded-xl bg-primary hover:bg-[#1D4ED8] text-white font-black">
+              {promoSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : promoEditTarget ? 'Enregistrer' : 'Créer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Promo Code Delete Confirmation ─────────────────────────────────── */}
+      <Dialog open={!!promoDeleteTarget} onOpenChange={v => { if (!v) setPromoDeleteTarget(null); }}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Supprimer le code</DialogTitle>
+            <DialogDescription>Supprimer <strong className="font-mono">{promoDeleteTarget?.code}</strong> ? Cette action est irréversible.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setPromoDeleteTarget(null)} className="rounded-xl">Annuler</Button>
+            <Button variant="destructive" onClick={handleDeletePromoCode} className="rounded-xl">Supprimer</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -747,3 +747,30 @@ export async function emailFormationPurchase(opts: {
     await send(clientEmail, `🎓 Accès à "${formationTitle}" activé`, html, 'formation_purchase_client');
   }
 }
+
+// 16. Identifiants de service → client
+export async function emailServiceCredentials(opts: {
+  clientEmail: string;
+  productName: string;
+  credentialEmail: string;
+  credentialPassword: string;
+}): Promise<void> {
+  const { clientEmail, productName, credentialEmail, credentialPassword } = opts;
+  const date = dateFr();
+  const html = baseHtml(`🔑 Accès ${productName}`, '#7c3aed',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Voici vos identifiants de connexion pour <strong>${productName}</strong>.</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Service', productName, true)}
+      ${row('Email / Identifiant', credentialEmail, true)}
+      ${row('Mot de passe', credentialPassword, true)}
+      ${row('Date d\'activation', date)}
+    </table>
+    <p style="margin:24px 0 0;padding:16px;background:#faf5ff;border-radius:10px;font-size:13px;color:#6d28d9;border-left:4px solid #7c3aed;">
+      🔒 Gardez ces identifiants en lieu sûr. Ne les partagez avec personne.
+    </p>
+    <p style="margin:16px 0 0;padding:16px;background:#fef9c3;border-radius:10px;font-size:13px;color:#713f12;border-left:4px solid #eab308;">
+      ⚠️ Si vous n'êtes pas à l'origine de cet achat, contactez notre support immédiatement.
+    </p>`
+  );
+  await send(clientEmail, `🔑 Vos identifiants ${productName} — Rena`, html, 'service_credentials');
+}

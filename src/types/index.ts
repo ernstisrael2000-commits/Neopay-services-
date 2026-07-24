@@ -315,10 +315,23 @@ export interface ClientNotification {
   clientId: string;
   title: string;
   message: string;
-  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system';
+  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system' | 'purchase_credentials';
   read: boolean;
   amount?: number;
+  metadata?: Record<string, any>;
   createdAt: any;
+}
+
+export interface PromoCode {
+  id?: string;
+  code: string;
+  serviceName: string;   // '' = tous les services
+  discountPercent: number;
+  maxUses: number;       // 0 = illimité
+  usedCount: number;
+  active: boolean;
+  createdAt: any;
+  updatedAt?: any;
 }
 
 export interface Client {

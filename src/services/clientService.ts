@@ -285,15 +285,76 @@ export const approvePurchaseRequest = async (
   transactionId: string,
   clientId: string,
   amount: number,
-  directSponsorId?: string | null
+  directSponsorId?: string | null,
+  credentials?: { email: string; password: string } | null,
+  productName?: string
 ) => {
   await apiPost('/api/admin/purchase/approve', {
     notifId,
     transactionId,
     clientId,
     amount,
-    directSponsorId: directSponsorId || null
+    directSponsorId: directSponsorId || null,
+    credentials: credentials || null,
+    productName: productName || '',
   });
+};
+
+// ─── Promo Codes ─────────────────────────────────────────────────────────────
+
+export const usePromoCodes = () => {
+  const [codes, setCodes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/promo-codes')
+      .then(r => r.json())
+      .then(d => { setCodes(d.codes || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/promo-codes');
+      const d = await r.json();
+      setCodes(d.codes || []);
+    } finally { setLoading(false); }
+  };
+
+  return { codes, loading, refresh };
+};
+
+export const savePromoCode = async (data: {
+  code: string; serviceName: string; discountPercent: number;
+  maxUses: number; active: boolean;
+}, id?: string): Promise<void> => {
+  if (id) {
+    await apiPost(`/api/promo-codes/${id}`, data);
+  } else {
+    await apiPost('/api/promo-codes', data);
+  }
+};
+
+// Use fetch directly for DELETE since apiPost doesn't support DELETE
+export const deletePromoCode = async (id: string): Promise<void> => {
+  const r = await fetch(`/api/promo-codes/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Erreur serveur.'); }
+};
+
+export const validatePromoCode = async (
+  code: string, serviceName: string
+): Promise<{ valid: boolean; id?: string; discountPercent?: number; serviceName?: string; error?: string }> => {
+  const r = await fetch('/api/promo-codes/validate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, serviceName }),
+  });
+  return r.json();
+};
+
+export const usePromoCode = async (codeId: string): Promise<void> => {
+  await fetch(`/api/promo-codes/${codeId}/use`, { method: 'POST' });
 };
 
 // ─── Admin: decline a pending purchase ───────────────────────────────────────

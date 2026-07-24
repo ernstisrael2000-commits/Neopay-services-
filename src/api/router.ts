@@ -13,6 +13,7 @@ import {
   emailAffiliateWithdrawalApproved, emailAffiliateWithdrawalRejected,
   emailFormationPurchase,
   emailAgentNewRequest, emailAgentProcessed,
+  emailServiceCredentials,
   ADMIN_EMAIL,
 } from '../lib/email.ts';
 
@@ -3252,7 +3253,7 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
 
 router.post('/api/admin/purchase/approve', requireDb, async (req, res) => {
   try {
-    const { notifId, transactionId, clientId } = req.body;
+    const { notifId, transactionId, clientId, credentials, productName } = req.body;
     if (!notifId || !transactionId)
       return res.status(400).json({ error: 'Paramètres manquants.' });
 
@@ -3263,15 +3264,62 @@ router.post('/api/admin/purchase/approve', requireDb, async (req, res) => {
     batch.update(adminDb.collection('admin_notifications').doc(notifId), {
       status: 'approved', read: true, resolvedAt: FieldValue.serverTimestamp(),
     });
+
+    // If credentials provided, create a dedicated client notification
+    const hasCredentials = credentials?.email && credentials?.password;
+    if (clientId && hasCredentials) {
+      const credNotifRef = adminDb.collection('client_notifications').doc();
+      batch.set(credNotifRef, {
+        clientId,
+        type: 'purchase_credentials',
+        title: `🔑 Accès ${productName || 'Service'}`,
+        message: `Voici vos identifiants de connexion pour ${productName || 'votre service'}.`,
+        metadata: {
+          credentialEmail: credentials.email,
+          credentialPassword: credentials.password,
+          productName: productName || '',
+        },
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Also create a standard approval notification
+    if (clientId) {
+      const stdNotifRef = adminDb.collection('client_notifications').doc();
+      batch.set(stdNotifRef, {
+        clientId,
+        type: 'purchase',
+        title: '✅ Service activé',
+        message: hasCredentials
+          ? `Votre service ${productName || ''} est activé. Consultez vos identifiants dans vos notifications.`
+          : `Votre service ${productName || ''} a été traité avec succès. Merci pour votre confiance !`,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+
     await batch.commit();
 
     if (clientId) {
       sendFcmToClient(
         clientId,
-        '✅ Service traité',
-        'Votre service a été traité avec succès. Merci pour votre confiance !',
+        '✅ Service activé',
+        hasCredentials ? `Vos identifiants pour ${productName || 'votre service'} sont disponibles.` : 'Votre service a été traité avec succès.',
         { type: 'purchase_approved', txId: transactionId }
       );
+
+      // Send email with credentials if client has email
+      if (hasCredentials) {
+        const clientSnap = await adminDb.collection('clients').doc(clientId).get();
+        const clientEmail = clientSnap.data()?.email;
+        if (clientEmail) {
+          fireEmail(
+            () => emailServiceCredentials({ clientEmail, productName: productName || 'Service', credentialEmail: credentials.email, credentialPassword: credentials.password }),
+            { type: 'service_credentials', to: [clientEmail], clientId }
+          );
+        }
+      }
     }
 
     res.json({ success: true });
@@ -3312,6 +3360,92 @@ router.post('/api/admin/purchase/decline', requireDb, async (req, res) => {
     console.error('[purchase/decline]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
   }
+});
+
+// ── Promo Codes ───────────────────────────────────────────────────────────────
+router.get('/api/promo-codes', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('promo_codes').orderBy('createdAt', 'desc').get();
+    res.json({ codes: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/api/promo-codes', requireDb, async (req, res) => {
+  try {
+    const { code, serviceName, discountPercent, maxUses, active } = req.body;
+    if (!code || discountPercent == null) return res.status(400).json({ error: 'code et discountPercent requis.' });
+    // Check uniqueness
+    const existing = await adminDb.collection('promo_codes').where('code', '==', code.toUpperCase().trim()).limit(1).get();
+    if (!existing.empty) return res.status(400).json({ error: 'Ce code existe déjà.' });
+    const ref = await adminDb.collection('promo_codes').add({
+      code: code.toUpperCase().trim(),
+      serviceName: serviceName || '',
+      discountPercent: Number(discountPercent),
+      maxUses: Number(maxUses) || 0,
+      usedCount: 0,
+      active: active !== false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/api/promo-codes/:id', requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code, serviceName, discountPercent, maxUses, active } = req.body;
+    const updates: Record<string, any> = { updatedAt: FieldValue.serverTimestamp() };
+    if (code !== undefined) updates.code = code.toUpperCase().trim();
+    if (serviceName !== undefined) updates.serviceName = serviceName;
+    if (discountPercent !== undefined) updates.discountPercent = Number(discountPercent);
+    if (maxUses !== undefined) updates.maxUses = Number(maxUses);
+    if (active !== undefined) updates.active = active;
+    await adminDb.collection('promo_codes').doc(id).update(updates);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/promo-codes/:id', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('promo_codes').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Validate a promo code for a given service (client-facing)
+router.post('/api/promo-codes/validate', requireDb, async (req, res) => {
+  try {
+    const { code, serviceName } = req.body;
+    if (!code) return res.status(400).json({ error: 'Code requis.' });
+    const snap = await adminDb.collection('promo_codes')
+      .where('code', '==', code.toUpperCase().trim())
+      .where('active', '==', true)
+      .limit(1).get();
+    if (snap.empty) return res.json({ valid: false, error: 'Code introuvable ou inactif.' });
+    const doc = snap.docs[0];
+    const data = doc.data();
+    // Check service match (empty = all services)
+    if (data.serviceName && serviceName && !serviceName.toLowerCase().includes(data.serviceName.toLowerCase())) {
+      return res.json({ valid: false, error: `Ce code est valable uniquement pour ${data.serviceName}.` });
+    }
+    // Check max uses
+    if (data.maxUses > 0 && (data.usedCount || 0) >= data.maxUses) {
+      return res.json({ valid: false, error: 'Ce code a atteint sa limite d\'utilisation.' });
+    }
+    res.json({ valid: true, id: doc.id, discountPercent: data.discountPercent, serviceName: data.serviceName });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Increment usage after a purchase with promo code
+router.post('/api/promo-codes/:id/use', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('promo_codes').doc(req.params.id).update({
+      usedCount: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Admin: affiliate withdrawal approve / reject ───────────────────────────────
