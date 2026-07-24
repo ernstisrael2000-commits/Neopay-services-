@@ -3990,12 +3990,25 @@ router.post('/api/client/register', requireDb, async (req, res) => {
 
 router.post('/api/client/login', requireDb, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
     if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis.' });
+
+    // Query only by email. Combining email + password in Firestore requires a
+    // composite index and caused a server error for otherwise valid logins.
     const snap = await adminDb.collection('clients')
-      .where('email', '==', email).where('password', '==', password).limit(1).get();
+      .where('email', '==', email).limit(1).get();
     if (snap.empty) return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
-    res.json({ success: true, client: serializeDoc(snap.docs[0]) });
+
+    const clientDoc = snap.docs[0];
+    const clientData = clientDoc.data() || {};
+    if (clientData.password !== password) {
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+    }
+
+    const client = serializeDoc(clientDoc);
+    delete client.password;
+    res.json({ success: true, client });
   } catch (e: any) {
     console.error('[login]', e);
     res.status(500).json({ error: e.message || 'Erreur de connexion.' });
