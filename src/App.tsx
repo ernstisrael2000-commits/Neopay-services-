@@ -415,6 +415,7 @@ function AppInner() {
                     <ProductsView
                       loggedClient={loggedClient}
                       onOpenWallet={() => handleViewChange('wallet')}
+                      onRequestAuth={() => setShowAuthModal(true)}
                       onViewChange={handleViewChange}
                       onProductDetailChange={setIsProductDetailOpen}
                     />

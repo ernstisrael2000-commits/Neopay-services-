@@ -83,13 +83,14 @@ const WalletPayButton = ({
 interface ProductsViewProps {
   loggedClient?: Client | null;
   onOpenWallet?: () => void;
+  onRequestAuth?: () => void;
   onViewChange: (view: any) => void;
   onProductDetailChange?: (open: boolean) => void;
 }
 
 type TabKey = 'cards' | 'games' | 'products' | 'giftcards';
 
-export default function ProductsView({ loggedClient, onOpenWallet, onViewChange, onProductDetailChange }: ProductsViewProps) {
+export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth, onViewChange, onProductDetailChange }: ProductsViewProps) {
   const { products, loading: productsLoading } = useProducts();
   const { cards, loading: cardsLoading } = useCardTopups();
   const { settings } = useSettingsCtx();
@@ -206,6 +207,10 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
   };
 
   const handleProductClick = (product: any) => {
+    if (!loggedClient) {
+      onRequestAuth?.();
+      return;
+    }
     setSelectedProduct(product);
     setSelectedPlan(product.plans?.[0] || null);
     setCustomAmountUSD('');
@@ -245,7 +250,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
           </div>
         </div>
         <div className="max-w-3xl mx-auto px-4 pt-4">
-          <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
+            <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} onRequestAuth={onRequestAuth} />
         </div>
       </motion.div>
     );
@@ -277,7 +282,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
           </div>
         </div>
         <div className="max-w-3xl mx-auto px-4 pt-4">
-          <GiftCardsTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
+          <GiftCardsTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} onRequestAuth={onRequestAuth} />
         </div>
       </motion.div>
     );
@@ -388,7 +393,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
           {/* ── JEUX TAB ── */}
           {activeTab === 'games' && (
             <motion.div key="games" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28 }}>
-              <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} />
+              <GamesTab loggedClient={loggedClient} onOpenWallet={onOpenWallet} onRequestAuth={onRequestAuth} />
             </motion.div>
           )}
 
@@ -463,7 +468,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
 
       {/* ── Card Recharge — Step 1 ── */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
-        <DialogContent className="sm:max-w-lg border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+        <DialogContent className="w-[92vw] sm:w-[80vw] max-w-[720px] max-h-[80dvh] border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
           <div className="bg-emerald-600 p-7 text-white relative overflow-hidden shrink-0">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
             <DialogHeader>
@@ -495,7 +500,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-hidden p-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Identifiant ou Nom complet</Label>
               <div className="relative">
@@ -597,7 +602,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
 
       {/* ── Card Recharge — Step 2 ── */}
       <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
-        <DialogContent className="sm:max-w-lg border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+        <DialogContent className="w-[92vw] sm:w-[80vw] max-w-[720px] max-h-[80dvh] border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
           <div className="bg-emerald-800 p-7 text-white shrink-0">
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
@@ -643,7 +648,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
             })()}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          <div className="flex-1 overflow-hidden p-5 space-y-3">
             {(() => {
               const usd = parseFloat(rechargeAmountUSD || '0');
               const feeRulesS = selectedCardForRecharge?.feeRules || [];
@@ -664,7 +669,11 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                       <p className="text-xs text-gray-400 mt-1">Connectez-vous pour payer avec votre solde Wallet.</p>
                     </div>
                     <button
-                      onClick={() => { setIsPaymentMethodDialogOpen(false); onOpenWallet?.(); }}
+                       onClick={() => {
+                         setIsPaymentMethodDialogOpen(false);
+                         if (onRequestAuth) onRequestAuth();
+                         else onOpenWallet?.();
+                       }}
                       className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
                     >
                       <Wallet className="h-5 w-5" /> Se connecter
@@ -693,7 +702,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                   </button>
                   {!canPay && (
                     <button
-                      onClick={() => { setIsPaymentMethodDialogOpen(false); onOpenWallet?.(); }}
+                       onClick={() => { setIsPaymentMethodDialogOpen(false); onOpenWallet?.(); }}
                       className="w-full text-xs text-emerald-600 font-semibold hover:underline flex items-center justify-center gap-1 py-1"
                     >
                       Recharger mon wallet →
@@ -727,7 +736,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-              className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-[2rem] shadow-2xl max-h-[92dvh] flex flex-col overflow-hidden"
+              className="fixed inset-0 m-auto z-50 bg-white rounded-[2rem] shadow-2xl w-[92vw] sm:w-[80vw] max-w-[720px] h-[80dvh] flex flex-col overflow-hidden"
             >
               {/* Handle bar */}
               <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -764,8 +773,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                 </div>
               </div>
 
-              {/* Scrollable content */}
-              <div className="flex-1 overflow-y-auto overscroll-contain">
+              {/* Content is intentionally fixed-height: the complete purchase summary stays visible without nested scrolling. */}
+              <div className="flex-1 overflow-hidden">
                 <div className="p-5 space-y-5 pb-8">
 
                   {/* Titre + sous-titre */}
@@ -945,7 +954,11 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                         )}
                         {!loggedClient && (
                           <Button
-                            onClick={() => { setIsProductDetailOpen(false); onOpenWallet?.(); }}
+                            onClick={() => {
+                              setIsProductDetailOpen(false);
+                              if (onRequestAuth) onRequestAuth();
+                              else onOpenWallet?.();
+                            }}
                             variant="outline"
                             className="w-full h-12 rounded-2xl border-2 border-emerald-200 text-emerald-700 font-black flex items-center justify-center gap-2 hover:bg-emerald-50 active:scale-95 transition-all"
                           >

@@ -15,10 +15,11 @@ import { useClientData } from '../services/clientService';
 interface Props {
   loggedClient?: Client | null;
   onOpenWallet?: () => void;
+  onRequestAuth?: () => void;
 }
 
 
-export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
+export default function GiftCardsTab({ loggedClient, onOpenWallet, onRequestAuth }: Props) {
   const { categories: rawCategories, loading, error } = useFazerGiftCards();
   const { settings } = useSettingsCtx();
   const exchangeRate = settings?.exchangeRate || 146;
@@ -150,6 +151,7 @@ export default function GiftCardsTab({ loggedClient, onOpenWallet }: Props) {
           loggedClient={effectiveClient || null}
           onClose={() => setSelected(null)}
           onOpenWallet={onOpenWallet}
+           onRequestAuth={onRequestAuth}
         />
       )}
     </div>
@@ -163,9 +165,10 @@ interface GiftDialogProps {
   loggedClient: Client | null;
   onClose: () => void;
   onOpenWallet?: () => void;
+  onRequestAuth?: () => void;
 }
 
-export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, onOpenWallet }: GiftDialogProps) {
+export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, onOpenWallet, onRequestAuth }: GiftDialogProps) {
   const [visible, setVisible] = useState(true);
   const { offers, loading: offersLoading } = useFazerGiftCardOffers(category.category_id);
   const isAdmin = typeof localStorage !== 'undefined' && !!localStorage.getItem('rena_admin');
@@ -191,7 +194,12 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
 
   const handleOrder = async () => {
     if (!selectedOffer) return;
-    if (!loggedClient) { handleClose(); onOpenWallet?.(); return; }
+    if (!loggedClient) {
+      handleClose();
+      if (onRequestAuth) onRequestAuth();
+      else onOpenWallet?.();
+      return;
+    }
     if (balanceUSD < selectedOffer.price) {
       toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG.`); return;
     }
@@ -242,8 +250,7 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.93, opacity: 0 }}
             transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-            className="bg-white w-full rounded-3xl overflow-hidden flex flex-col"
-            style={{ maxWidth: 420 }}
+            className="bg-white w-[92vw] sm:w-[80vw] max-w-[720px] h-[80dvh] rounded-3xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -319,8 +326,8 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
                   ) : offers.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-6">Aucune offre disponible.</p>
                   ) : (
-                    <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
-                      <div className="grid grid-cols-2 gap-2 pr-1">
+                    <div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
                         {offers.map(offer => {
                           const htg = offerHTG(offer);
                           const isSelected = selectedOffer?.offer_id === offer.offer_id;
@@ -330,7 +337,7 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
                               key={offer.offer_id}
                               type="button"
                               onClick={() => setSelectedOffer(isSelected ? null : offer)}
-                              className={`relative rounded-2xl p-3 text-left border-2 transition-all active:scale-95 ${
+                              className={`relative rounded-xl p-2 text-left border-2 transition-all active:scale-95 ${
                                 isSelected
                                   ? 'border-rose-500 bg-rose-50 shadow-md shadow-rose-100'
                                   : canAfford
@@ -343,8 +350,8 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
                                   <CheckCircle2 className="h-2.5 w-2.5 text-white" />
                                 </div>
                               )}
-                              <p className="text-[11px] font-black text-gray-900 leading-tight pr-5">{offer.name}</p>
-                              <p className="text-sm font-black text-rose-600 mt-1 leading-none">{htg.toLocaleString()} HTG</p>
+                              <p className="text-[10px] font-black text-gray-900 leading-tight pr-4 line-clamp-2">{offer.name}</p>
+                              <p className="text-[11px] font-black text-rose-600 mt-1 leading-none">{htg.toLocaleString()} HTG</p>
                               {isAdmin && <p className="text-[9px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>}
                             </button>
                           );
@@ -375,7 +382,11 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
                       }
                     </button>
                   ) : (
-                    <button type="button" onClick={() => { handleClose(); onOpenWallet?.(); }}
+                    <button type="button" onClick={() => {
+                      handleClose();
+                      if (onRequestAuth) onRequestAuth();
+                      else onOpenWallet?.();
+                    }}
                       className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-black text-base flex items-center justify-center gap-2.5 shadow-lg shadow-rose-200 active:scale-[0.98]">
                       <Wallet className="h-5 w-5" /> Se connecter pour payer
                     </button>

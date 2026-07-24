@@ -42,10 +42,11 @@ type ValidState = 'idle' | 'loading' | 'ok' | 'error';
 interface Props {
   loggedClient?: Client | null;
   onOpenWallet?: () => void;
+  onRequestAuth?: () => void;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
+export default function GamesTab({ loggedClient, onOpenWallet, onRequestAuth }: Props) {
   const { categories, loading, error } = useFazerTopups();
   const validatableGames = useFazerValidatableGames();
   const priceOverrides = useFazerPriceOverrides();
@@ -248,6 +249,7 @@ export default function GamesTab({ loggedClient, onOpenWallet }: Props) {
           exchangeRate={exchangeRate}
           onClose={() => { setIsDialogOpen(false); setSelected(null); }}
           onOpenWallet={onOpenWallet}
+          onRequestAuth={onRequestAuth}
         />
       )}
     </div>
@@ -262,9 +264,10 @@ export interface DialogProps {
   exchangeRate: number;
   onClose: () => void;
   onOpenWallet?: () => void;
+  onRequestAuth?: () => void;
 }
 
-export function GameDialog({ category, priceOverrides, loggedClient, exchangeRate, onClose, onOpenWallet }: DialogProps) {
+export function GameDialog({ category, priceOverrides, loggedClient, exchangeRate, onClose, onOpenWallet, onRequestAuth }: DialogProps) {
   const isAdmin = typeof localStorage !== 'undefined' && !!localStorage.getItem('rena_admin');
   // AnimatePresence lives INSIDE the portal — needed for proper exit animation
   const [visible, setVisible] = useState(true);
@@ -323,7 +326,11 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
   // ── Place order ──
   const handleOrder = async () => {
     if (!selectedOffer) return;
-    if (!loggedClient) { onOpenWallet?.(); return; }
+    if (!loggedClient) {
+      if (onRequestAuth) onRequestAuth();
+      else onOpenWallet?.();
+      return;
+    }
     const playerFields: Record<string, string> = {};
     for (const f of fields) playerFields[f.key] = fieldValues[f.key] || '';
     if (fields.length > 0 && !Object.values(playerFields).some(v => v.trim())) {
@@ -377,8 +384,7 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 60, opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            className="bg-white w-full sm:rounded-3xl rounded-t-3xl overflow-hidden flex flex-col"
-            style={{ maxWidth: 540, maxHeight: '96vh', height: '92vh' }}
+            className="bg-white w-[92vw] sm:w-[80vw] max-w-[720px] h-[80dvh] rounded-3xl overflow-hidden flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* ── Header ── */}
@@ -413,7 +419,7 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
             </div>
 
             {/* ── Body ── */}
-            <div className="overflow-y-auto flex-1">
+            <div className="min-h-0 flex-1 overflow-hidden">
               {/* Step 1 — Grille d'offres */}
               <div className="px-4 pt-4 pb-2">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
@@ -424,8 +430,8 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
                 ) : offers.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-6">Aucune offre disponible.</p>
                 ) : (
-                  <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
-                    <div className="grid grid-cols-2 gap-2 pr-1">
+                  <div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
                       {offers.map(offer => {
                         const htg = offerHTG(offer);
                         const isSelected = selectedOffer?.offer_id === offer.offer_id;
@@ -438,7 +444,7 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
                               setSelectedOffer(isSelected ? null : offer);
                               if (!isSelected) { setValidState('idle'); setValidatedUsername(null); setFieldValues({}); }
                             }}
-                            className={`relative rounded-2xl p-3 text-left border-2 transition-all active:scale-95 ${
+                            className={`relative rounded-xl p-2 text-left border-2 transition-all active:scale-95 ${
                               isSelected
                                 ? 'border-purple-500 bg-purple-50 shadow-md shadow-purple-100'
                                 : canAfford
@@ -451,8 +457,8 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
                                 <CheckCircle2 className="h-2.5 w-2.5 text-white" />
                               </div>
                             )}
-                            <p className="text-[11px] font-black text-gray-900 leading-tight pr-5">{offer.name}</p>
-                            <p className="text-sm font-black text-purple-600 mt-1 leading-none">{htg.toLocaleString()} HTG</p>
+                            <p className="text-[10px] font-black text-gray-900 leading-tight pr-4 line-clamp-2">{offer.name}</p>
+                            <p className="text-[11px] font-black text-purple-600 mt-1 leading-none">{htg.toLocaleString()} HTG</p>
                             {isAdmin && <p className="text-[9px] text-gray-400 font-medium mt-0.5">≈ ${offer.price.toFixed(2)}</p>}
                           </button>
                         );
@@ -571,7 +577,11 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => { handleClose(); onOpenWallet?.(); }}
+                <button type="button" onClick={() => {
+                  handleClose();
+                  if (onRequestAuth) onRequestAuth();
+                  else onOpenWallet?.();
+                }}
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-base flex items-center justify-center gap-2.5 shadow-lg shadow-purple-200 active:scale-[0.98]">
                   <Wallet className="h-5 w-5" /> Se connecter pour payer
                 </button>

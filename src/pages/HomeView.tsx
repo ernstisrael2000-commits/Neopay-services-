@@ -578,15 +578,6 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         {/* gradient overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
 
-                        {/* lock overlay */}
-                        {!loggedClient && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
-                            <div className="h-9 w-9 rounded-full bg-white/90 flex items-center justify-center shadow-md">
-                              <LucideIcons.Lock className="h-4 w-4 text-gray-700" />
-                            </div>
-                          </div>
-                        )}
-
                         {/* name at bottom */}
                         <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5 pt-6">
                           <p className={`text-white font-black leading-tight drop-shadow ${isFeatured ? 'text-sm' : 'text-[11px] line-clamp-2'}`}>{item.name}</p>
@@ -671,6 +662,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           exchangeRate={exchangeRate}
           onClose={() => setSelectedGameCat(null)}
           onOpenWallet={onOpenWallet}
+          onRequestAuth={onRequestAuth}
         />
       )}
 
@@ -682,12 +674,13 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           loggedClient={effectiveClient || null}
           onClose={() => setSelectedGiftCat(null)}
           onOpenWallet={onOpenWallet}
+          onRequestAuth={onRequestAuth}
         />
       )}
 
       {/* ── Product quick-view modal ── */}
       <Dialog open={!!selectedItem} onOpenChange={(v) => { if (!v) setSelectedItem(null); }}>
-        <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden rounded-2xl">
+        <DialogContent className="w-[92vw] sm:w-[80vw] max-w-[720px] max-h-[80dvh] p-0 overflow-hidden rounded-2xl">
           {selectedItem && (
             <>
               <div className="relative aspect-[4/3] bg-gray-100">
