@@ -3,3 +3,4 @@
 - [Tailwind native binding on Replit](tailwind-oxide-linux.md) — @tailwindcss/oxide-linux-x64-gnu must be installed explicitly on Linux x64 Replit
 - [Settings Context optimization](settings-context.md) — useSettings() appelé dans 15+ composants créait des listeners Firestore redondants; migré vers SettingsProvider
 - [Analytics nested listeners fix](analytics-listeners.md) — analyticsService.ts avait 6 niveaux imbriqués de onSnapshot (fuite mémoire critique); corrigé avec listeners plats + pattern ref partagé
+- [VAPID push key pairing](vapid-push-pairing.md) — la clé publique push frontend doit venir de VAPID_PUBLIC_KEY et correspondre à une clé privée décodée de 32 octets
