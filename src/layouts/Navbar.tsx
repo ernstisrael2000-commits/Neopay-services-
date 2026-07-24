@@ -341,88 +341,13 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                             <p className="text-xs mt-1 text-gray-300">Tout est calme pour l'instant</p>
                           </div>
                         ) : (
-                          clientNotifs.slice(0, 20).map(notif => {
-                            const isCredentials = notif.type === 'purchase_credentials';
-                            const isApproved = notif.type === 'deposit_approved' || notif.type === 'withdrawal_approved';
-                            const isRejected = notif.type?.includes('rejected');
-                            const iconBg = isCredentials ? 'bg-violet-100' :
-                              notif.type === 'deposit_approved' ? 'bg-emerald-100' :
-                              notif.type === 'withdrawal_approved' ? 'bg-blue-100' :
-                              isRejected ? 'bg-red-100' : 'bg-gray-100';
-                            const titleColor = isCredentials ? 'text-violet-700' :
-                              isApproved ? 'text-emerald-700' : isRejected ? 'text-red-700' : 'text-gray-900';
-                            const meta = (notif as any).metadata;
-                            const [copiedField, setCopiedField] = React.useState<string | null>(null);
-                            const copyToClipboard = (text: string, field: string) => {
-                              navigator.clipboard.writeText(text).then(() => {
-                                setCopiedField(field);
-                                setTimeout(() => setCopiedField(null), 2000);
-                              });
-                            };
-                            return (
-                              <div
-                                key={notif.id}
-                                className={`flex flex-col gap-2 px-5 py-3.5 border-b last:border-0 transition-colors cursor-pointer ${notif.read ? 'hover:bg-gray-50' : isCredentials ? 'bg-violet-50/50 hover:bg-violet-50' : 'bg-blue-50/40 hover:bg-blue-50'}`}
-                                onClick={() => markClientNotificationRead(notif.id!)}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={`shrink-0 mt-0.5 h-9 w-9 rounded-2xl flex items-center justify-center ${iconBg}`}>
-                                    {isCredentials ? <Key className="h-4 w-4 text-violet-600" /> :
-                                     notif.type === 'deposit_approved' ? <TrendingUp className="h-4 w-4 text-emerald-600" /> :
-                                     notif.type === 'withdrawal_approved' ? <TrendingDown className="h-4 w-4 text-blue-600" /> :
-                                     isRejected ? <X className="h-4 w-4 text-red-600" /> :
-                                     <Info className="h-4 w-4 text-gray-500" />}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`text-xs font-black leading-snug ${notif.read ? 'text-gray-500' : titleColor}`}>{notif.title}</p>
-                                    <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">{notif.message}</p>
-                                    {notif.createdAt && (
-                                      <p className="text-[9px] text-gray-300 mt-1 font-semibold">
-                                        {new Date(notif.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {!notif.read && <div className="shrink-0 mt-2 h-2 w-2 rounded-full bg-primary animate-pulse" />}
-                                </div>
-
-                                {/* Credentials card */}
-                                {isCredentials && meta?.credentialEmail && (
-                                  <div className="ml-12 rounded-2xl overflow-hidden border border-violet-200 bg-white shadow-sm" onClick={e => e.stopPropagation()}>
-                                    <div className="bg-gradient-to-r from-violet-600 to-purple-700 px-3 py-1.5 flex items-center gap-1.5">
-                                      <Key className="h-3 w-3 text-white" />
-                                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Identifiants</span>
-                                    </div>
-                                    <div className="p-3 space-y-2">
-                                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-gray-50 border border-gray-100">
-                                        <div className="min-w-0">
-                                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Email</p>
-                                          <p className="text-xs font-black text-gray-900 font-mono truncate">{meta.credentialEmail}</p>
-                                        </div>
-                                        <button
-                                          onClick={() => copyToClipboard(meta.credentialEmail, 'email')}
-                                          className="shrink-0 h-7 w-7 rounded-lg bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors"
-                                        >
-                                          {copiedField === 'email' ? <Check className="h-3.5 w-3.5 text-violet-700" /> : <Copy className="h-3.5 w-3.5 text-violet-600" />}
-                                        </button>
-                                      </div>
-                                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-gray-50 border border-gray-100">
-                                        <div className="min-w-0">
-                                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mot de passe</p>
-                                          <p className="text-xs font-black text-gray-900 font-mono truncate">{meta.credentialPassword}</p>
-                                        </div>
-                                        <button
-                                          onClick={() => copyToClipboard(meta.credentialPassword, 'password')}
-                                          className="shrink-0 h-7 w-7 rounded-lg bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors"
-                                        >
-                                          {copiedField === 'password' ? <Check className="h-3.5 w-3.5 text-violet-700" /> : <Copy className="h-3.5 w-3.5 text-violet-600" />}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })
+                          clientNotifs.slice(0, 20).map(notif => (
+                            <ClientNotifItem
+                              key={notif.id}
+                              notif={notif}
+                              onRead={() => markClientNotificationRead(notif.id!)}
+                            />
+                          ))
                         )}
                       </div>
 
