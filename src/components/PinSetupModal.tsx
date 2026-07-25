@@ -6,8 +6,8 @@ import { toast } from '../hooks/use-toast';
 
 interface PinSetupModalProps {
   open: boolean;
-  role: 'agent' | 'affiliate';
-  /** agentCode for agents, affiliateId for affiliates */
+  role: 'agent' | 'affiliate' | 'admin';
+  /** agentCode for agents, affiliateId for affiliates, adminId for admins */
   identifier: string;
   onSuccess: () => void;
 }
@@ -112,10 +112,16 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
     }
     setLoading(true);
     try {
-      const url = role === 'agent' ? '/api/agent/set-pin' : '/api/affiliate/set-pin';
+      const url = role === 'agent'
+        ? '/api/agent/set-pin'
+        : role === 'affiliate'
+          ? '/api/affiliate/set-pin'
+          : '/api/admin/set-pin';
       const body = role === 'agent'
         ? { agentCode: identifier, pin: p }
-        : { affiliateId: identifier, pin: p };
+        : role === 'affiliate'
+          ? { affiliateId: identifier, pin: p }
+          : { adminId: identifier, pin: p };
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

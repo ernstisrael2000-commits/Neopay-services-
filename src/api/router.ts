@@ -5155,7 +5155,7 @@ router.post('/api/admin/verify-2fa', requireDb, async (req, res) => {
 
     const admin = serializeDoc(adminSnap);
     delete admin.password;
-    res.json({ success: true, admin, uid: result.extra?.uid });
+    res.json({ success: true, admin, uid: result.extra?.uid, hasPin: !!adminSnap.data()?.pinHash });
   } catch (e: any) {
     console.error('[admin/verify-2fa]', e);
     res.status(500).json({ error: 'Erreur de vérification.' });
@@ -5256,6 +5256,48 @@ router.post('/api/admin/link-google', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[admin/link-google]', e);
     res.status(500).json({ error: 'Erreur lors de la liaison du compte.' });
+  }
+});
+
+// ── Admin: check if PIN is configured ────────────────────────────────────────
+router.get('/api/admin/has-pin/:adminId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('admin_accounts').doc(req.params.adminId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
+    res.json({ hasPin: !!snap.data()?.pinHash });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: set / change PIN ───────────────────────────────────────────────────
+router.post('/api/admin/set-pin', requireDb, async (req, res) => {
+  try {
+    const { adminId, pin } = req.body;
+    if (!adminId || !pin) return res.status(400).json({ error: 'adminId et pin requis.' });
+    if (!/^\d{8}$/.test(String(pin))) return res.status(400).json({ error: 'Le PIN doit comporter exactement 8 chiffres.' });
+    const snap = await adminDb.collection('admin_accounts').doc(adminId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
+    await snap.ref.update({ pinHash: hashPin(String(pin)), updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: verify PIN (for sensitive operations) ──────────────────────────────
+router.post('/api/admin/verify-pin', requireDb, async (req, res) => {
+  try {
+    const { adminId, pin } = req.body;
+    if (!adminId || !pin) return res.status(400).json({ error: 'adminId et pin requis.' });
+    const snap = await adminDb.collection('admin_accounts').doc(adminId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
+    const data = snap.data()!;
+    if (!data.pinHash) return res.status(403).json({ error: 'Code PIN non configuré.' });
+    if (!verifyPin(String(pin), data.pinHash)) return res.status(401).json({ error: 'Code PIN incorrect.' });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

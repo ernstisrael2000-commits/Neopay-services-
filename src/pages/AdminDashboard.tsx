@@ -70,6 +70,7 @@ import { useAllClientTransactions, updateClientTransactionStatus, useAdminClient
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
 import AgentFeeHistory from './AgentFeeHistory';
+import PinSetupModal from '../components/PinSetupModal';
 import { 
   BarChart, 
   Bar, 
@@ -1148,6 +1149,17 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const { admins, loading: adminsLoading } = useAdminAccounts();
   const { logs, loading: logsLoading } = useAdminLogs(100);
   
+  // ── Admin PIN setup ──────────────────────────────────────────────────────────
+  const [showPinSetup, setShowPinSetup] = useState(false);
+
+  useEffect(() => {
+    if (!admin?.id) return;
+    fetch(`/api/admin/has-pin/${admin.id}`)
+      .then(r => r.json())
+      .then(data => { if (!data.hasPin) setShowPinSetup(true); })
+      .catch(() => {});
+  }, [admin?.id]);
+
   const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<AdminAccount | null>(null);
@@ -4584,6 +4596,14 @@ function EmailLogsPanel() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* ── PIN setup obligatoire pour les admins ── */}
+      <PinSetupModal
+        open={showPinSetup}
+        role="admin"
+        identifier={admin.id}
+        onSuccess={() => setShowPinSetup(false)}
+      />
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
         <div>
           <h1 className="text-3xl font-black text-dark tracking-tight flex items-center gap-3">
