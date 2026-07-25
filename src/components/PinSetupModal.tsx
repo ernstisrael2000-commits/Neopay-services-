@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { toast } from '../hooks/use-toast';
+import { toast } from 'sonner';
 
 interface PinSetupModalProps {
   open: boolean;
@@ -93,18 +93,18 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
   const confirmComplete = confirmPin.every(d => d !== '');
 
   const handleNext = () => {
-    if (!pinComplete) { toast({ title: 'Saisissez les 8 chiffres', variant: 'destructive' }); return; }
+    if (!pinComplete) { toast.error('Saisissez les 8 chiffres'); return; }
     setStep('confirm');
     setConfirmPin(['', '', '', '', '', '', '', '']);
     setTimeout(() => confirmRefs[0].current?.focus(), 100);
   };
 
   const handleSubmit = async () => {
-    if (!confirmComplete) { toast({ title: 'Confirmez les 8 chiffres', variant: 'destructive' }); return; }
+    if (!confirmComplete) { toast.error('Confirmez les 8 chiffres'); return; }
     const p = pin.join('');
     const c = confirmPin.join('');
     if (p !== c) {
-      toast({ title: 'Les codes ne correspondent pas', variant: 'destructive' });
+      toast.error('Les codes ne correspondent pas');
       setStep('confirm');
       setConfirmPin(['', '', '', '', '', '', '', '']);
       setTimeout(() => confirmRefs[0].current?.focus(), 100);
@@ -129,10 +129,10 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur serveur');
-      toast({ title: '✅ Code PIN créé avec succès !' });
+      toast.success('✅ Code PIN créé avec succès !');
       onSuccess();
     } catch (e: any) {
-      toast({ title: e.message || 'Erreur', variant: 'destructive' });
+      toast.error(e.message || 'Erreur');
     } finally {
       setLoading(false);
     }
