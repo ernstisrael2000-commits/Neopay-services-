@@ -14,6 +14,7 @@ import {
   emailFormationPurchase,
   emailAgentNewRequest, emailAgentProcessed,
   emailServiceCredentials,
+  send2FAOtp,
   ADMIN_EMAIL,
 } from '../lib/email.ts';
 
@@ -126,6 +127,80 @@ function serializeDoc(snap: FirebaseFirestore.DocumentSnapshot | FirebaseFiresto
     }
   }
   return result;
+}
+
+// ─── 2FA OTP helpers ──────────────────────────────────────────────────────────
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return email;
+  if (local.length <= 2) return local[0] + '*'.repeat(Math.max(1, local.length - 1)) + '@' + domain;
+  return local[0] + '*'.repeat(local.length - 2) + local[local.length - 1] + '@' + domain;
+}
+
+async function create2FASession(opts: {
+  role: string;
+  accountId: string;
+  email: string;
+  name: string;
+  extra?: Record<string, any>;
+}): Promise<{ sessionId: string; otpPlain: string }> {
+  const otpPlain = String(randomInt(100000, 999999));
+  const otpHash = createHash('sha256').update(otpPlain).digest('hex');
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min TTL
+
+  const ref = await adminDb.collection('otp_sessions').add({
+    role: opts.role,
+    accountId: opts.accountId,
+    email: opts.email,
+    name: opts.name,
+    otpHash,
+    attempts: 0,
+    expiresAt,
+    extra: opts.extra || {},
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { sessionId: ref.id, otpPlain };
+}
+
+async function verify2FASession(
+  sessionId: string,
+  code: string,
+  expectedRole?: string,
+): Promise<{ ok: boolean; error?: string; accountId?: string; role?: string; name?: string; email?: string; extra?: any }> {
+  const ref = adminDb.collection('otp_sessions').doc(sessionId);
+  const snap = await ref.get();
+
+  if (!snap.exists) return { ok: false, error: 'Session invalide ou expirée. Veuillez vous reconnecter.' };
+
+  const d = snap.data()!;
+  if (expectedRole && d.role !== expectedRole) return { ok: false, error: 'Session invalide.' };
+
+  const expiresAt = d.expiresAt?.toDate ? d.expiresAt.toDate() : new Date(d.expiresAt);
+  if (expiresAt < new Date()) {
+    await ref.delete().catch(() => {});
+    return { ok: false, error: 'Code expiré. Veuillez vous reconnecter.' };
+  }
+
+  const attempts = d.attempts || 0;
+  if (attempts >= 5) {
+    await ref.delete().catch(() => {});
+    return { ok: false, error: 'Trop de tentatives. Veuillez vous reconnecter.' };
+  }
+
+  const inputHash = createHash('sha256').update(code.trim()).digest('hex');
+  if (inputHash !== d.otpHash) {
+    await ref.update({ attempts: FieldValue.increment(1) });
+    const remaining = 4 - attempts;
+    return {
+      ok: false,
+      error: `Code incorrect. ${remaining} tentative${remaining !== 1 ? 's' : ''} restante${remaining !== 1 ? 's' : ''}.`,
+    };
+  }
+
+  await ref.delete().catch(() => {});
+  return { ok: true, accountId: d.accountId, role: d.role, name: d.name, email: d.email, extra: d.extra };
 }
 
 function sanitizeFormation(data: any): any {
@@ -1148,32 +1223,65 @@ router.get('/api/agent/lookup', requireDb, async (req, res) => {
 // claimed by the caller before writing the uid field.
 router.post('/api/agent/link-uid', requireDb, async (req, res) => {
   try {
-    const { agentId, uid, email } = req.body as { agentId?: string; uid?: string; email?: string };
-    if (!agentId || !uid || !email) {
-      return res.status(400).json({ error: 'agentId, uid et email sont requis.' });
+    const { uid, email } = req.body as { uid?: string; email?: string };
+    if (!uid || !email) {
+      return res.status(400).json({ error: 'uid et email sont requis.' });
     }
 
-    const agentRef = adminDb.collection('agents').doc(agentId);
-    const agentSnap = await agentRef.get();
-    if (!agentSnap.exists) {
-      return res.status(404).json({ error: 'Agent introuvable.' });
+    // Lookup agent by email (server-side, no agentId needed from client)
+    const snap = await adminDb.collection('agents').where('email', '==', email.toLowerCase()).limit(1).get();
+    if (snap.empty) {
+      return res.status(403).json({ error: "Aucun compte agent trouvé avec cet email." });
     }
 
-    const storedEmail: string | undefined = agentSnap.data()?.email;
-    if (!storedEmail || storedEmail.toLowerCase() !== email.toLowerCase()) {
-      return res.status(403).json({ error: "L'email ne correspond pas au compte agent." });
+    const agentDoc = snap.docs[0];
+    const agentData = agentDoc.data();
+
+    if (agentData.status === 'inactive') {
+      return res.status(403).json({ error: 'Ce compte agent est inactif.' });
     }
 
-    await agentRef.update({
-      uid,
-      email,
-      updatedAt: FieldValue.serverTimestamp(),
+    // Save uid to account
+    await agentDoc.ref.update({ uid, updatedAt: FieldValue.serverTimestamp() });
+
+    // ── 2FA: send OTP to agent email ─────────────────────────────────────────
+    const agentEmail: string = agentData.email || email;
+    if (!agentEmail) {
+      return res.status(422).json({ error: 'Aucun email configuré sur ce compte agent.' });
+    }
+
+    const { sessionId, otpPlain } = await create2FASession({
+      role: 'agent',
+      accountId: agentDoc.id,
+      email: agentEmail,
+      name: agentData.name || '',
     });
+    await send2FAOtp({ email: agentEmail, name: agentData.name || 'Agent', role: 'agent', otpCode: otpPlain, expiresMinutes: 5 });
 
-    return res.json({ ok: true });
+    return res.json({ pending2fa: true, sessionId, maskedEmail: maskEmail(agentEmail) });
   } catch (e: any) {
     console.error('[Agent link-uid]', e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: Verify 2FA OTP ─────────────────────────────────────────────────────
+router.post('/api/agent/verify-2fa', requireDb, async (req, res) => {
+  try {
+    const { sessionId, code } = req.body;
+    if (!sessionId || !code) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const result = await verify2FASession(sessionId, code, 'agent');
+    if (!result.ok) return res.status(401).json({ error: result.error });
+
+    const agentSnap = await adminDb.collection('agents').doc(result.accountId!).get();
+    if (!agentSnap.exists) return res.status(404).json({ error: 'Compte agent introuvable.' });
+
+    const agent = { id: agentSnap.id, ...agentSnap.data() };
+    res.json({ success: true, agent });
+  } catch (e: any) {
+    console.error('[agent/verify-2fa]', e);
+    res.status(500).json({ error: 'Erreur de vérification.' });
   }
 });
 
@@ -2364,6 +2472,128 @@ router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) =>
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate: Credential login (server-side, phase 1 → 2FA) ─────────────────
+router.post('/api/affiliate/login', requireDb, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Identifiants requis.' });
+
+    const snap = await adminDb.collection('affiliates')
+      .where('username', '==', username.trim())
+      .where('password', '==', password.trim())
+      .limit(1).get();
+
+    if (snap.empty) return res.status(401).json({ error: 'Identifiants incorrects.' });
+
+    const affDoc = snap.docs[0];
+    const affData = affDoc.data();
+    const email: string | undefined = affData.email || affData.info?.email;
+
+    if (!email) {
+      return res.status(422).json({ error: 'Aucun email configuré sur ce compte affilié. Contactez l\'administrateur.' });
+    }
+
+    const { sessionId, otpPlain } = await create2FASession({
+      role: 'affiliate',
+      accountId: affDoc.id,
+      email,
+      name: affData.name || username,
+    });
+    await send2FAOtp({ email, name: affData.name || username, role: 'affiliate', otpCode: otpPlain, expiresMinutes: 5 });
+
+    res.json({ pending2fa: true, sessionId, maskedEmail: maskEmail(email) });
+  } catch (e: any) {
+    console.error('[affiliate/login]', e);
+    res.status(500).json({ error: 'Erreur lors de la connexion.' });
+  }
+});
+
+// ── Affiliate: Google login (server-side, phase 1 → 2FA) ─────────────────────
+router.post('/api/affiliate/google-login', requireDb, async (req, res) => {
+  try {
+    const { uid, email, name } = req.body;
+    if (!uid || !email) return res.status(400).json({ error: 'uid et email requis.' });
+
+    // Look up affiliate by email
+    let affSnap = await adminDb.collection('affiliates').where('email', '==', email.toLowerCase()).limit(1).get();
+    if (affSnap.empty) {
+      affSnap = await adminDb.collection('affiliates').where('info.email', '==', email.toLowerCase()).limit(1).get();
+    }
+    if (affSnap.empty) return res.json({ noAccount: true });
+
+    const affDoc = affSnap.docs[0];
+    const affData = affDoc.data();
+    const affEmail: string = affData.email || affData.info?.email || email.toLowerCase();
+
+    // Save Google uid
+    await affDoc.ref.update({ uid, updatedAt: FieldValue.serverTimestamp() });
+
+    const { sessionId, otpPlain } = await create2FASession({
+      role: 'affiliate',
+      accountId: affDoc.id,
+      email: affEmail,
+      name: affData.name || name || '',
+    });
+    await send2FAOtp({ email: affEmail, name: affData.name || name || 'Affilié', role: 'affiliate', otpCode: otpPlain, expiresMinutes: 5 });
+
+    res.json({ pending2fa: true, sessionId, maskedEmail: maskEmail(affEmail) });
+  } catch (e: any) {
+    console.error('[affiliate/google-login]', e);
+    res.status(500).json({ error: 'Erreur lors de la connexion Google.' });
+  }
+});
+
+// ── Affiliate: Verify 2FA OTP ─────────────────────────────────────────────────
+router.post('/api/affiliate/verify-2fa', requireDb, async (req, res) => {
+  try {
+    const { sessionId, code } = req.body;
+    if (!sessionId || !code) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const result = await verify2FASession(sessionId, code, 'affiliate');
+    if (!result.ok) return res.status(401).json({ error: result.error });
+
+    const affSnap = await adminDb.collection('affiliates').doc(result.accountId!).get();
+    if (!affSnap.exists) return res.status(404).json({ error: 'Compte affilié introuvable.' });
+
+    const affiliate = { id: affSnap.id, ...affSnap.data() };
+    delete (affiliate as any).password;
+    res.json({ success: true, affiliate });
+  } catch (e: any) {
+    console.error('[affiliate/verify-2fa]', e);
+    res.status(500).json({ error: 'Erreur de vérification.' });
+  }
+});
+
+// ── Auth: Resend 2FA OTP (unified for all roles) ──────────────────────────────
+router.post('/api/auth/resend-2fa', requireDb, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'sessionId requis.' });
+
+    const snap = await adminDb.collection('otp_sessions').doc(sessionId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Session introuvable. Veuillez vous reconnecter.' });
+
+    const d = snap.data()!;
+    // Delete old session
+    await adminDb.collection('otp_sessions').doc(sessionId).delete().catch(() => {});
+
+    // Create fresh session
+    const { sessionId: newId, otpPlain } = await create2FASession({
+      role: d.role,
+      accountId: d.accountId,
+      email: d.email,
+      name: d.name,
+      extra: d.extra,
+    });
+    await send2FAOtp({ email: d.email, name: d.name, role: d.role as any, otpCode: otpPlain, expiresMinutes: 5 });
+
+    res.json({ success: true, sessionId: newId, maskedEmail: maskEmail(d.email) });
+  } catch (e: any) {
+    console.error('[auth/resend-2fa]', e);
+    res.status(500).json({ error: 'Erreur lors du renvoi du code.' });
   }
 });
 
@@ -4767,7 +4997,6 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
     if (!fullName || !password)
       return res.status(400).json({ error: 'Identifiants requis.' });
 
-    // SECURITY: capture IP for audit log
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
 
     const snap = await adminDb.collection('admin_accounts').where('fullName', '==', fullName).limit(1).get();
@@ -4801,17 +5030,52 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
       return res.status(401).json({ error: 'Code de connexion incorrect.' });
     }
 
-    await adminDoc.ref.update({ failedAttempts: 0, lockUntil: null, updatedAt: FieldValue.serverTimestamp() });
-    await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: true, ip: clientIp, timestamp: FieldValue.serverTimestamp() });
+    // ── 2FA: send OTP via email ──────────────────────────────────────────────
+    const email: string | undefined = adminData.email;
+    if (!email) {
+      return res.status(422).json({ error: 'Aucun email configuré sur ce compte. Contactez le super-administrateur pour associer un email à votre compte.' });
+    }
 
-    res.json({ success: true, admin: serializeDoc(adminDoc) });
+    await adminDoc.ref.update({ failedAttempts: 0, lockUntil: null, updatedAt: FieldValue.serverTimestamp() });
+
+    const { sessionId, otpPlain } = await create2FASession({ role: 'admin', accountId: adminDoc.id, email, name: adminData.fullName });
+    await send2FAOtp({ email, name: adminData.fullName, role: 'admin', otpCode: otpPlain, expiresMinutes: 5 });
+    await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, ip: clientIp, reason: '2fa_pending', timestamp: FieldValue.serverTimestamp() });
+
+    res.json({ pending2fa: true, sessionId, maskedEmail: maskEmail(email) });
   } catch (e: any) {
     console.error('[admin/login]', e);
     res.status(500).json({ error: 'Erreur lors de la connexion.' });
   }
 });
 
-// ── Admin: Verify Google login (server-side writes via Admin SDK) ─────────────
+// ── Admin: Verify 2FA OTP (phase 2 for both credential + Google logins) ──────
+router.post('/api/admin/verify-2fa', requireDb, async (req, res) => {
+  try {
+    const { sessionId, code } = req.body;
+    if (!sessionId || !code) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const result = await verify2FASession(sessionId, code, 'admin');
+    if (!result.ok) return res.status(401).json({ error: result.error });
+
+    const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+
+    // Fetch full admin doc (fresh, not cached in session)
+    const adminSnap = await adminDb.collection('admin_accounts').doc(result.accountId!).get();
+    if (!adminSnap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
+
+    await adminDb.collection('admin_login_logs').add({ adminName: result.name, success: true, ip: clientIp, reason: '2fa_verified', timestamp: FieldValue.serverTimestamp() });
+
+    const admin = serializeDoc(adminSnap);
+    delete admin.password;
+    res.json({ success: true, admin, uid: result.extra?.uid });
+  } catch (e: any) {
+    console.error('[admin/verify-2fa]', e);
+    res.status(500).json({ error: 'Erreur de vérification.' });
+  }
+});
+
+// ── Admin: Verify Google login → triggers 2FA (phase 1) ──────────────────────
 router.post('/api/admin/verify-google', requireDb, async (req, res) => {
   try {
     const { email, uid } = req.body;
@@ -4837,14 +5101,25 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
       }
     }
 
+    // Save uid/email to account if first Google login
     const updates: any = { failedAttempts: 0, updatedAt: FieldValue.serverTimestamp() };
     if (!adminData.uid) updates.uid = uid;
     if (!adminData.email) updates.email = email.toLowerCase();
     await adminDoc.ref.update(updates);
 
-    await adminDb.collection('admin_login_logs').add({ adminName: adminData.fullName, success: true, timestamp: FieldValue.serverTimestamp() });
+    // ── 2FA: send OTP to the Google email ───────────────────────────────────
+    const otpEmail = adminData.email || email.toLowerCase();
+    const { sessionId, otpPlain } = await create2FASession({
+      role: 'admin',
+      accountId: adminDoc.id,
+      email: otpEmail,
+      name: adminData.fullName,
+      extra: { uid }, // needed for admin_uids write after verify
+    });
+    await send2FAOtp({ email: otpEmail, name: adminData.fullName, role: 'admin', otpCode: otpPlain, expiresMinutes: 5 });
+    await adminDb.collection('admin_login_logs').add({ adminName: adminData.fullName, success: false, ip: clientIp, reason: '2fa_pending', timestamp: FieldValue.serverTimestamp() });
 
-    res.json({ success: true, admin: serializeDoc(adminDoc) });
+    res.json({ pending2fa: true, sessionId, maskedEmail: maskEmail(otpEmail) });
   } catch (e: any) {
     console.error('[admin/verify-google]', e);
     res.status(500).json({ error: 'Erreur vérification Google.' });
@@ -4878,10 +5153,19 @@ router.post('/api/admin/link-google', requireDb, async (req, res) => {
       failedAttempts: 0,
       updatedAt: FieldValue.serverTimestamp(),
     });
-    await adminDb.collection('admin_login_logs').add({ adminName: adminData.fullName, success: true, timestamp: FieldValue.serverTimestamp() });
+    await adminDb.collection('admin_login_logs').add({ adminName: adminData.fullName, success: false, reason: '2fa_pending', timestamp: FieldValue.serverTimestamp() });
 
-    const updated = await adminDoc.ref.get();
-    res.json({ success: true, admin: serializeDoc(updated) });
+    // ── 2FA ──────────────────────────────────────────────────────────────────
+    const { sessionId, otpPlain } = await create2FASession({
+      role: 'admin',
+      accountId: adminDoc.id,
+      email: email.toLowerCase(),
+      name: adminData.fullName,
+      extra: { uid },
+    });
+    await send2FAOtp({ email: email.toLowerCase(), name: adminData.fullName, role: 'admin', otpCode: otpPlain, expiresMinutes: 5 });
+
+    res.json({ pending2fa: true, sessionId, maskedEmail: maskEmail(email.toLowerCase()) });
   } catch (e: any) {
     console.error('[admin/link-google]', e);
     res.status(500).json({ error: 'Erreur lors de la liaison du compte.' });

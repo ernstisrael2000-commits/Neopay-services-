@@ -9,6 +9,9 @@ import { toast } from 'sonner';
 import { loginAdminWithGoogle, linkAdminGoogle } from '../services/adminService';
 import { isInIframe } from '../lib/google-auth';
 import { AdminAccount } from '../types';
+import OtpVerifyStep from './OtpVerifyStep';
+import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface AdminLoginProps {
   onLoginSuccess: (admin: AdminAccount) => void;
@@ -34,15 +37,63 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
   const [linkCode, setLinkCode] = useState('');
   const [linkLoading, setLinkLoading] = useState(false);
 
+  // 2FA state
+  const [pending2FA, setPending2FA] = useState<{ sessionId: string; maskedEmail: string } | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
   const inIframe = isInIframe();
 
+  // ── 2FA verify ──────────────────────────────────────────────────────────────
+  const handleOtpVerify = async (sessionId: string, code: string) => {
+    setOtpLoading(true);
+    setOtpError(null);
+    try {
+      const res = await fetch('/api/admin/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setOtpError(data.error || 'Code incorrect.');
+        return;
+      }
+      toast.success(`Bienvenue, ${data.admin.fullName} !`);
+      onLoginSuccess(data.admin);
+    } catch {
+      setOtpError('Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    const res = await fetch('/api/auth/resend-2fa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: pending2FA!.sessionId }),
+    });
+    const data = await res.json();
+    if (data.sessionId) {
+      setPending2FA({ sessionId: data.sessionId, maskedEmail: data.maskedEmail });
+      toast.success('Nouveau code envoyé.');
+    } else {
+      toast.error(data.error || 'Erreur lors du renvoi.');
+    }
+  };
+
+  // ── Google login ─────────────────────────────────────────────────────────────
   const handleGoogleLogin = async () => {
     if (inIframe) return;
     setLoading(true);
     setError(null);
     try {
       const result = await loginAdminWithGoogle();
-      if (result.success && result.admin) {
+      if (result.pending2fa && result.sessionId) {
+        setPending2FA({ sessionId: result.sessionId, maskedEmail: result.maskedEmail || '' });
+      } else if (result.success && result.admin) {
+        // Legacy fallback (admin without email — should not happen in prod)
         toast.success(`Bienvenue, ${result.admin.fullName} !`);
         onLoginSuccess(result.admin);
       } else if (result.googleEmail && result.googleUid && result.error) {
@@ -59,13 +110,18 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
     }
   };
 
+  // ── Link Google ──────────────────────────────────────────────────────────────
   const handleLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!linkCode.trim()) { toast.error('Entrez votre code de connexion.'); return; }
     setLinkLoading(true);
     try {
       const result = await linkAdminGoogle(linkCode.trim(), pendingEmail, pendingUid);
-      if (result.success && result.admin) {
+      if (result.pending2fa && result.sessionId) {
+        setShowLink(false);
+        setLinkCode('');
+        setPending2FA({ sessionId: result.sessionId, maskedEmail: result.maskedEmail || '' });
+      } else if (result.success && result.admin) {
         toast.success(`Compte lié. Bienvenue, ${result.admin.fullName} !`);
         onLoginSuccess(result.admin);
       } else {
@@ -77,6 +133,35 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
       setLinkLoading(false);
     }
   };
+
+  // ── 2FA step ─────────────────────────────────────────────────────────────────
+  if (pending2FA) {
+    return (
+      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gray-50/50">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-0 shadow-2xl rounded-[2.5rem] overflow-hidden bg-white">
+            <div className="h-3 bg-gradient-to-r from-blue-600 via-blue-700 to-blue-600" />
+            <CardContent className="px-8 py-10">
+              <OtpVerifyStep
+                maskedEmail={pending2FA.maskedEmail}
+                role="admin"
+                sessionId={pending2FA.sessionId}
+                onVerify={handleOtpVerify}
+                onResend={handleResend}
+                onBack={() => { setPending2FA(null); setOtpError(null); setShowLink(false); }}
+                loading={otpLoading}
+                error={otpError}
+              />
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gray-50/50">

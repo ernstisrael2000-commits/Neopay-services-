@@ -134,7 +134,7 @@ export const linkAdminGoogle = async (
   loginCode: string,
   googleEmail: string,
   googleUid: string
-): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
+): Promise<{ success: boolean; admin?: AdminAccount; error?: string; pending2fa?: boolean; sessionId?: string; maskedEmail?: string }> => {
   try {
     const res = await fetch('/api/admin/link-google', {
       method: 'POST',
@@ -143,6 +143,11 @@ export const linkAdminGoogle = async (
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { success: false, error: data.error || 'Erreur de liaison.' };
+
+    // 2FA pending: return session info for OTP step
+    if (data.pending2fa) {
+      return { success: false, pending2fa: true, sessionId: data.sessionId, maskedEmail: data.maskedEmail };
+    }
 
     const adminData = data.admin as AdminAccount;
     try {
@@ -162,7 +167,16 @@ export const linkAdminGoogle = async (
 
 // ── Admin Google Login ────────────────────────────────────────────────────────
 
-export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string; googleEmail?: string; googleUid?: string }> => {
+export const loginAdminWithGoogle = async (): Promise<{
+  success: boolean;
+  admin?: AdminAccount;
+  error?: string;
+  googleEmail?: string;
+  googleUid?: string;
+  pending2fa?: boolean;
+  sessionId?: string;
+  maskedEmail?: string;
+}> => {
   try {
     const result = await signInWithGooglePopup();
     const googleEmail = result.user.email?.toLowerCase() || '';
@@ -178,6 +192,11 @@ export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?
 
     if (!res.ok) {
       return { success: false, error: data.error || 'Accès refusé.', googleEmail, googleUid };
+    }
+
+    // 2FA pending
+    if (data.pending2fa) {
+      return { success: false, pending2fa: true, sessionId: data.sessionId, maskedEmail: data.maskedEmail, googleEmail, googleUid };
     }
 
     const adminData = data.admin as AdminAccount;

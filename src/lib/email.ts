@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+export type TwoFARole = 'admin' | 'agent' | 'affiliate';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
@@ -773,4 +774,40 @@ export async function emailServiceCredentials(opts: {
     </p>`
   );
   await send(clientEmail, `🔑 Vos identifiants ${productName} — Rena`, html, 'service_credentials');
+}
+
+// ── 2FA OTP ───────────────────────────────────────────────────────────────────
+export async function send2FAOtp(opts: {
+  email: string;
+  name: string;
+  role: TwoFARole;
+  otpCode: string;
+  expiresMinutes: number;
+}): Promise<void> {
+  const { email, name, role, otpCode, expiresMinutes } = opts;
+  const roleLabel = role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : 'Affilié';
+  const accentColor = role === 'admin' ? '#1e40af' : role === 'agent' ? '#0f172a' : '#7c3aed';
+
+  const html = baseHtml(`Code de vérification — ${roleLabel}`, accentColor, `
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+      Bonjour <strong>${name}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+      Votre code de vérification à deux étapes est :
+    </p>
+    <div style="margin:0 auto 24px;text-align:center;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:16px;padding:24px 32px;">
+      <span style="font-size:42px;font-weight:900;letter-spacing:12px;color:${accentColor};font-family:monospace;">${otpCode}</span>
+    </div>
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;text-align:center;">
+      Ce code expire dans <strong>${expiresMinutes} minutes</strong> et ne peut être utilisé qu'une seule fois.
+    </p>
+    <div style="margin:24px 0 0;padding:12px 16px;background:#fef2f2;border-radius:12px;border-left:4px solid #ef4444;">
+      <p style="margin:0;font-size:12px;color:#991b1b;line-height:1.6;">
+        ⚠️ Si vous n'avez pas tenté de vous connecter à l'espace <strong>${roleLabel}</strong> Rena,
+        ignorez ce message et changez votre mot de passe immédiatement.
+      </p>
+    </div>
+  `);
+
+  await send(email, `🔐 Code de vérification — Connexion ${roleLabel}`, html, '2fa_otp');
 }

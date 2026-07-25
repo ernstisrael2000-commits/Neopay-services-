@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
-import { loginAffiliate, submitAffiliateRequest } from '../services/affiliateService';
 import { loginWithGoogle } from '../services/authService';
+import { submitAffiliateRequest } from '../services/affiliateService';
 import { isInIframe } from '../lib/google-auth';
 import { toast } from 'sonner';
 import { Loader2, Lock, UserPlus, CheckCircle2, ExternalLink } from 'lucide-react';
@@ -20,6 +20,7 @@ import {
   DialogTrigger
 } from './ui/dialog';
 import { Textarea } from './ui/textarea';
+import OtpVerifyStep from './OtpVerifyStep';
 
 interface AffiliateLoginProps {
   onLogin: (affiliate: Affiliate) => void;
@@ -47,6 +48,11 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     message: ''
   });
   const [googleRegistration, setGoogleRegistration] = useState<{ uid: string; email: string } | null>(null);
+
+  // 2FA state
+  const [pending2FA, setPending2FA] = useState<{ sessionId: string; maskedEmail: string } | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +99,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     }
   };
 
+  // ── Credential login (server-side) ───────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanUsername = username.trim();
@@ -103,12 +110,18 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     }
     setLoading(true);
     try {
-      const affiliate = await loginAffiliate(cleanUsername, cleanPassword);
-      if (affiliate) {
-        toast.success(`Bienvenue, ${affiliate.name} !`);
-        onLogin(affiliate);
-      } else {
-        toast.error("Identifiants incorrects.");
+      const res = await fetch('/api/affiliate/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUsername, password: cleanPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Identifiants incorrects.");
+        return;
+      }
+      if (data.pending2fa) {
+        setPending2FA({ sessionId: data.sessionId, maskedEmail: data.maskedEmail });
       }
     } catch (error) {
       console.error(error);
@@ -118,12 +131,14 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     }
   };
 
+  // ── Google login ─────────────────────────────────────────────────────────────
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
       const result = await loginWithGoogle('affiliate');
-      if (result.noAccount) {
-        // No affiliate found — pre-fill registration form
+      if (result.pending2fa && result.sessionId) {
+        setPending2FA({ sessionId: result.sessionId, maskedEmail: result.maskedEmail || '' });
+      } else if (result.noAccount) {
         setGoogleRegistration({ uid: result.googleUid!, email: result.googleEmail! });
         setRegisterData(prev => ({
           ...prev,
@@ -134,9 +149,6 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
         toast.info("Aucun compte trouvé. Complétez votre demande d'inscription.");
       } else if (result.error) {
         toast.error(result.error);
-      } else if (result.affiliate) {
-        toast.success(`Bienvenue, ${result.affiliate.name} !`);
-        onLogin(result.affiliate);
       }
     } catch (error: any) {
       console.error(error);
@@ -145,6 +157,67 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
       setLoading(false);
     }
   };
+
+  // ── OTP verify ───────────────────────────────────────────────────────────────
+  const handleOtpVerify = async (sessionId: string, code: string) => {
+    setOtpLoading(true);
+    setOtpError(null);
+    try {
+      const res = await fetch('/api/affiliate/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setOtpError(data.error || 'Code incorrect.');
+        return;
+      }
+      toast.success(`Bienvenue, ${data.affiliate.name} !`);
+      onLogin(data.affiliate);
+    } catch {
+      setOtpError('Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    const res = await fetch('/api/auth/resend-2fa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: pending2FA!.sessionId }),
+    });
+    const data = await res.json();
+    if (data.sessionId) {
+      setPending2FA({ sessionId: data.sessionId, maskedEmail: data.maskedEmail });
+      toast.success('Nouveau code envoyé.');
+    } else {
+      toast.error(data.error || 'Erreur lors du renvoi.');
+    }
+  };
+
+  // ── 2FA step ─────────────────────────────────────────────────────────────────
+  if (pending2FA) {
+    return (
+      <div className="max-w-md mx-auto mt-20 px-4">
+        <Card className="shadow-xl border-0">
+          <CardContent className="pt-8 pb-8 px-8">
+            <OtpVerifyStep
+              maskedEmail={pending2FA.maskedEmail}
+              role="affiliate"
+              sessionId={pending2FA.sessionId}
+              onVerify={handleOtpVerify}
+              onResend={handleResend}
+              onBack={() => { setPending2FA(null); setOtpError(null); }}
+              loading={otpLoading}
+              error={otpError}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto mt-20 px-4">

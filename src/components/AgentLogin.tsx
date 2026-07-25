@@ -6,6 +6,7 @@ import { Loader2, ExternalLink, ShieldCheck, UserCheck, Sparkles } from 'lucide-
 import { motion } from 'motion/react';
 import { Agent } from '../types';
 import { Button } from './ui/button';
+import OtpVerifyStep from './OtpVerifyStep';
 
 interface AgentLoginProps {
   onLogin: (agent: Agent) => void;
@@ -13,23 +14,103 @@ interface AgentLoginProps {
 
 export default function AgentLogin({ onLogin }: AgentLoginProps) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 2FA state
+  const [pending2FA, setPending2FA] = useState<{ sessionId: string; maskedEmail: string } | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    setError(null);
     try {
       const result = await loginWithGoogle('agent');
-      if (result.error) {
+      if (result.pending2fa && result.sessionId) {
+        setPending2FA({ sessionId: result.sessionId, maskedEmail: result.maskedEmail || '' });
+      } else if (result.error) {
+        setError(result.error);
         toast.error(result.error);
-      } else if (result.agent) {
-        toast.success(`Bienvenue, Agent ${result.agent.name} !`);
-        onLogin(result.agent);
       }
     } catch (error: any) {
-      toast.error(error?.message || "Erreur connexion Google.");
+      const msg = error?.message || 'Erreur connexion Google.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleOtpVerify = async (sessionId: string, code: string) => {
+    setOtpLoading(true);
+    setOtpError(null);
+    try {
+      const res = await fetch('/api/agent/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setOtpError(data.error || 'Code incorrect.');
+        return;
+      }
+      toast.success(`Bienvenue, Agent ${data.agent.name} !`);
+      onLogin(data.agent);
+    } catch {
+      setOtpError('Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    const res = await fetch('/api/auth/resend-2fa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: pending2FA!.sessionId }),
+    });
+    const data = await res.json();
+    if (data.sessionId) {
+      setPending2FA({ sessionId: data.sessionId, maskedEmail: data.maskedEmail });
+      toast.success('Nouveau code envoyé.');
+    } else {
+      toast.error(data.error || 'Erreur lors du renvoi.');
+    }
+  };
+
+  // ── 2FA step ─────────────────────────────────────────────────────────────────
+  if (pending2FA) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center px-4">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
+        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className="relative w-full max-w-sm"
+        >
+          <div className="bg-white/[0.03] backdrop-blur-2xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)]">
+            <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-primary to-indigo-500" />
+            <div className="p-8">
+              <OtpVerifyStep
+                maskedEmail={pending2FA.maskedEmail}
+                role="agent"
+                sessionId={pending2FA.sessionId}
+                onVerify={handleOtpVerify}
+                onResend={handleResend}
+                onBack={() => { setPending2FA(null); setOtpError(null); }}
+                loading={otpLoading}
+                error={otpError}
+              />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center px-4">
@@ -96,6 +177,12 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
               )}
             </motion.button>
 
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                <p className="text-xs text-red-300 leading-relaxed">{error}</p>
+              </div>
+            )}
+
             {/* Iframe warning */}
             {isInIframe() && (
               <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
@@ -115,7 +202,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
                 Seuls les agents enregistrés par l'administrateur peuvent accéder à cet espace.
               </p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/15">
-                Système de Sécurité Rena
+                Système de Sécurité Rena · 2FA Activé
               </p>
             </div>
           </div>
