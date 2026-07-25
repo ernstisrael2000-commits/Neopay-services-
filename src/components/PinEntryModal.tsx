@@ -32,6 +32,15 @@ export default function PinEntryModal({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   const handleChange = (idx: number, val: string) => {
     const v = val.replace(/\D/, '');
     const next = [...digits];
@@ -73,7 +82,8 @@ export default function PinEntryModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
+            aria-hidden="true"
             onClick={onCancel}
           />
 
@@ -84,10 +94,13 @@ export default function PinEntryModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 16 }}
             transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-            className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className="fixed inset-0 z-[1001] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pin-entry-title"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-full sm:max-w-sm bg-white rounded-t-[2rem] sm:rounded-[2rem] overflow-hidden shadow-2xl">
+            <div className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-[2rem] shadow-2xl">
 
               {/* Header */}
               <div className="relative bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-900 px-6 pt-6 pb-8">
@@ -103,7 +116,7 @@ export default function PinEntryModal({
                     <Lock className="w-7 h-7 text-white" />
                   </div>
                   <div className="text-center">
-                    <h2 className="text-lg font-black text-white leading-tight">{title}</h2>
+                    <h2 id="pin-entry-title" className="text-lg font-black text-white leading-tight">{title}</h2>
                     <p className="text-white/60 text-xs mt-1 leading-relaxed max-w-[240px] mx-auto">{description}</p>
                   </div>
                 </div>

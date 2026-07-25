@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShieldCheck, Eye, EyeOff, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -72,6 +73,15 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
       setTimeout(() => confirmRefs[0].current?.focus(), 100);
     }
   }, [step]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   const handleDigit = (
     arr: string[], setArr: (v: string[]) => void,
@@ -147,7 +157,7 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
 
   const roleLabel = role === 'admin' ? 'administrateur' : role === 'agent' ? 'agent' : 'affilié';
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -157,7 +167,8 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-[1000] bg-black/70 backdrop-blur-sm"
+            aria-hidden="true"
           />
 
           {/* Modal */}
@@ -167,9 +178,12 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 20 }}
             transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className="fixed inset-0 z-[1001] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pin-setup-title"
           >
-            <div className="w-full sm:max-w-sm bg-white rounded-t-[2rem] sm:rounded-[2rem] overflow-hidden shadow-2xl">
+            <div className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white rounded-[2rem] shadow-2xl">
 
               {/* Header */}
               <div className="relative bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 px-6 pt-7 pb-9">
@@ -192,7 +206,7 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
                     <ShieldCheck className="w-7 h-7 text-white" />
                   </div>
                   <div className="text-center">
-                    <h2 className="text-lg font-black text-white">
+                    <h2 id="pin-setup-title" className="text-lg font-black text-white">
                       {step === 'create' ? 'Créer votre code PIN' : 'Confirmer le code PIN'}
                     </h2>
                     <p className="text-white/60 text-xs mt-1 leading-relaxed max-w-[240px] mx-auto">
@@ -301,6 +315,7 @@ export default function PinSetupModal({ open, role, identifier, onSuccess }: Pin
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

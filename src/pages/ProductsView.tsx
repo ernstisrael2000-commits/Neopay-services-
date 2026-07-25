@@ -468,8 +468,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
       {/* ── Card Recharge — Step 1 ── */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
-        <DialogContent className="w-[92vw] sm:w-[80vw] max-w-[720px] max-h-[80dvh] border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
-          <div className="bg-emerald-600 p-7 text-white relative overflow-hidden shrink-0">
+        <DialogContent className="w-full h-full max-w-none max-h-none rounded-none border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+          <div className="bg-emerald-600 p-5 sm:p-7 text-white relative overflow-hidden shrink-0">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
@@ -500,7 +500,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
             )}
           </div>
 
-          <div className="flex-1 overflow-hidden p-6 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Identifiant ou Nom complet</Label>
               <div className="relative">
@@ -602,8 +602,8 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
       {/* ── Card Recharge — Step 2 ── */}
       <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
-        <DialogContent className="w-[92vw] sm:w-[80vw] max-w-[720px] max-h-[80dvh] border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
-          <div className="bg-emerald-800 p-7 text-white shrink-0">
+        <DialogContent className="w-full h-full max-w-none max-h-none rounded-none border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+          <div className="bg-emerald-800 p-5 sm:p-7 text-white shrink-0">
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -648,7 +648,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
             })()}
           </div>
 
-          <div className="flex-1 overflow-hidden p-5 space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
             {(() => {
               const usd = parseFloat(rechargeAmountUSD || '0');
               const feeRulesS = selectedCardForRecharge?.feeRules || [];
@@ -726,22 +726,29 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22 }}
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-[400] bg-black/50 backdrop-blur-sm"
               onClick={() => setIsProductDetailOpen(false)}
             />
             {/* Centered fixed panel */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div className="fixed inset-0 z-[401] flex items-center justify-center pointer-events-none">
               <motion.div
                 key="product-panel"
                 initial={{ y: '100%', opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: '100%', opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-                className="relative pointer-events-auto bg-white rounded-[2rem] shadow-2xl w-full sm:w-[80vw] max-w-[720px] h-[80dvh] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
+                className="relative pointer-events-auto bg-white shadow-2xl w-full h-full max-w-none max-h-none flex flex-col overflow-hidden"
               >
               {/* Handle bar */}
-              <div className="flex justify-center pt-3 pb-1 shrink-0">
-                <div className="h-1 w-10 rounded-full bg-gray-200" />
+               <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0 border-b border-gray-100">
+                 <span className="text-xs font-black uppercase tracking-widest text-gray-400">Détails du produit</span>
+                 <button
+                   onClick={() => setIsProductDetailOpen(false)}
+                   className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                   aria-label="Fermer les détails du produit"
+                 >
+                   <X className="h-5 w-5 text-gray-700" />
+                 </button>
               </div>
 
               {/* Hero image */}
@@ -756,9 +763,10 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 {/* Close button */}
-                <button
+                 <button
                   onClick={() => setIsProductDetailOpen(false)}
-                  className="absolute top-4 right-4 z-10 h-9 w-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-black/60 transition-all"
+                   className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-black/60 transition-all"
+                   aria-label="Fermer les détails du produit"
                 >
                   <X className="h-4 w-4 text-white" />
                 </button>
@@ -980,7 +988,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
       {/* ── Payment Modal (WhatsApp) ── */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+        <DialogContent className="w-full h-full max-w-none max-h-none rounded-none border-0" showCloseButton={false}>
           <div className="bg-primary p-6 text-white rounded-t-[2rem]">
             <DialogHeader>
               <div className="flex items-center justify-between mb-3">

@@ -48,7 +48,7 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
-      <div className="fixed inset-0 z-[300] flex items-center justify-center p-2 sm:p-4 pointer-events-none">
+      <div className="fixed inset-0 z-[301] flex items-center justify-center p-2 sm:p-4 pointer-events-none">
         <DialogPrimitive.Popup
           data-slot="dialog-content"
           className={cn(

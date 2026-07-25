@@ -3360,17 +3360,19 @@ function EmailLogsPanel() {
   };
 
   const handleSaveProduct = async () => {
-    setIsSaving(true);
-    try {
-      await saveProduct(productFormData, editingProduct?.id);
-      toast.success(editingProduct ? "Produit mis à jour !" : "Produit ajouté !");
-      setIsProductDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'enregistrement.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin(editingProduct ? 'Modifier le produit' : 'Créer le produit', async () => {
+      setIsSaving(true);
+      try {
+        await saveProduct(productFormData, editingProduct?.id);
+        toast.success(editingProduct ? "Produit mis à jour !" : "Produit ajouté !");
+        setIsProductDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'enregistrement.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleOpenCardDialog = (card?: CardTopup) => {
@@ -3405,33 +3407,37 @@ function EmailLogsPanel() {
       toast.error("Le nom et le prix sont requis.");
       return;
     }
-    setIsSaving(true);
-    try {
-      await saveCardTopup(cardFormData, editingCard?.id);
-      toast.success(editingCard ? "Carte mise à jour." : "Carte ajoutée.");
-      setIsCardDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'enregistrement.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin(editingCard ? 'Modifier la carte' : 'Créer la carte', async () => {
+      setIsSaving(true);
+      try {
+        await saveCardTopup(cardFormData, editingCard?.id);
+        toast.success(editingCard ? "Carte mise à jour." : "Carte ajoutée.");
+        setIsCardDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'enregistrement.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleConfirmDeleteCard = async () => {
     if (!cardToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteCardTopup(cardToDelete.id);
-      toast.success("Carte supprimée.");
-      setIsCardDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setCardToDelete(null);
-    }
+    await withAdminPin('Supprimer la carte', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteCardTopup(cardToDelete.id);
+        toast.success("Carte supprimée.");
+        setIsCardDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setCardToDelete(null);
+      }
+    });
   };
 
   const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3487,18 +3493,20 @@ function EmailLogsPanel() {
       toast.error("Veuillez remplir les champs obligatoires.");
       return;
     }
-    setIsSaving(true);
-    try {
-      await saveGame(gameFormData, editingGame?.id);
-      toast.success(editingGame ? "Jeu mis à jour !" : "Jeu ajouté !");
-      setIsGameDialogOpen(false);
-    } catch (error: any) {
-      console.error('Save game error:', error);
-      const isPermission = error.message?.includes('permissions');
-      toast.error(isPermission ? "Erreur de permissions (Droits admin requis)" : `Erreur lors de l'enregistrement: ${error.message || 'Erreur inconnue'}`);
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin(editingGame ? 'Modifier le jeu' : 'Créer le jeu', async () => {
+      setIsSaving(true);
+      try {
+        await saveGame(gameFormData, editingGame?.id);
+        toast.success(editingGame ? "Jeu mis à jour !" : "Jeu ajouté !");
+        setIsGameDialogOpen(false);
+      } catch (error: any) {
+        console.error('Save game error:', error);
+        const isPermission = error.message?.includes('permissions');
+        toast.error(isPermission ? "Erreur de permissions (Droits admin requis)" : `Erreur lors de l'enregistrement: ${error.message || 'Erreur inconnue'}`);
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const updateCatalogItem = (id: string, updates: any) => {
@@ -3526,18 +3534,20 @@ function EmailLogsPanel() {
 
   const handleConfirmDeleteGame = async () => {
     if (!gameToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteGame(gameToDelete.id);
-      toast.success("Jeu supprimé.");
-      setIsGameDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setGameToDelete(null);
-    }
+    await withAdminPin('Supprimer le jeu', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteGame(gameToDelete.id);
+        toast.success("Jeu supprimé.");
+        setIsGameDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setGameToDelete(null);
+      }
+    });
   };
 
   const handleGameImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3560,117 +3570,131 @@ function EmailLogsPanel() {
   };
 
   const handleAwardPrizes = async () => {
-    setIsAwarding(true);
-    try {
-      const winners = await awardMonthlyPrizes();
-      if (winners.length > 0) {
-        let message = "Prix décernés avec succès ! ";
-        winners.forEach((w, i) => {
-          const prize = i === 0 ? 500 : i === 1 ? 250 : 150;
-          message += `${i+1}er: ${w.name} (+${prize} G) | `;
-        });
-        toast.success(message, { duration: 6000 });
-      } else {
-        toast.info("Aucun affilié éligible pour les prix ce mois-ci.");
+    await withAdminPin('Distribuer les prix mensuels', async () => {
+      setIsAwarding(true);
+      try {
+        const winners = await awardMonthlyPrizes();
+        if (winners.length > 0) {
+          let message = "Prix décernés avec succès ! ";
+          winners.forEach((w, i) => {
+            const prize = i === 0 ? 500 : i === 1 ? 250 : 150;
+            message += `${i+1}er: ${w.name} (+${prize} G) | `;
+          });
+          toast.success(message, { duration: 6000 });
+        } else {
+          toast.info("Aucun affilié éligible pour les prix ce mois-ci.");
+        }
+      } catch (error) {
+        toast.error("Erreur lors de la distribution des prix.");
+      } finally {
+        setIsAwarding(false);
       }
-    } catch (error) {
-      toast.error("Erreur lors de la distribution des prix.");
-    } finally {
-      setIsAwarding(false);
-    }
+    });
   };
 
   const handleClearWinners = async () => {
-    setIsClearingWinners(true);
-    try {
-      await clearMonthlyWinners();
-      toast.success("Classement vidé !");
-    } catch (error) {
-      toast.error("Erreur lors de la réinitialisation.");
-    } finally {
-      setIsClearingWinners(false);
-    }
+    await withAdminPin('Réinitialiser le classement', async () => {
+      setIsClearingWinners(true);
+      try {
+        await clearMonthlyWinners();
+        toast.success("Classement vidé !");
+      } catch (error) {
+        toast.error("Erreur lors de la réinitialisation.");
+      } finally {
+        setIsClearingWinners(false);
+      }
+    });
   };
 
   const handleToggleWinnerStatus = async (affiliate: Affiliate) => {
-    try {
-      await saveAffiliate({ isMonthlyWinner: !affiliate.isMonthlyWinner }, affiliate.id);
-      toast.success(affiliate.isMonthlyWinner ? "Retiré du classement" : "Ajouté au classement");
-    } catch (error) {
-      toast.error("Erreur lors de la modification.");
-    }
+    await withAdminPin(affiliate.isMonthlyWinner ? 'Retirer du classement' : 'Ajouter au classement', async () => {
+      try {
+        await saveAffiliate({ isMonthlyWinner: !affiliate.isMonthlyWinner }, affiliate.id);
+        toast.success(affiliate.isMonthlyWinner ? "Retiré du classement" : "Ajouté au classement");
+      } catch (error) {
+        toast.error("Erreur lors de la modification.");
+      }
+    });
   };
 
   const handleConfirmDeleteProduct = async () => {
     if (!productToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteProduct(productToDelete.id);
-      toast.success("Produit supprimé.");
-      setIsProductDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setProductToDelete(null);
-    }
+    await withAdminPin('Supprimer le produit', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteProduct(productToDelete.id);
+        toast.success("Produit supprimé.");
+        setIsProductDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setProductToDelete(null);
+      }
+    });
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
-    setUploadProgress(0);
-    try {
-      const url = await uploadLogo(file, (p) => setUploadProgress(p));
-      await updateSettings({ logoUrl: url });
-      toast.success("Logo mis à jour !");
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors du téléchargement du logo.");
-    } finally {
-      setUploading(false);
+    await withAdminPin('Modifier le logo', async () => {
+      setUploading(true);
       setUploadProgress(0);
-    }
+      try {
+        const url = await uploadLogo(file, (p) => setUploadProgress(p));
+        await updateSettings({ logoUrl: url });
+        toast.success("Logo mis à jour !");
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors du téléchargement du logo.");
+      } finally {
+        setUploading(false);
+        setUploadProgress(0);
+      }
+    });
   };
 
   const handleSliderImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsSliderUploading(true);
-    setUploadProgress(0);
-    try {
-      const compressedBlob = await compressImage(file);
-      const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
-      const url = await uploadLogo(compressedFile, (p) => setUploadProgress(p));
-      await saveSliderImage(url, sliderTitle, sliderDescription);
-      setSliderTitle('');
-      setSliderDescription('');
-      toast.success("Image slider ajoutée !");
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors du téléchargement de l'image.");
-    } finally {
-      setIsSliderUploading(false);
+    await withAdminPin('Ajouter une image au slider', async () => {
+      setIsSliderUploading(true);
       setUploadProgress(0);
-    }
+      try {
+        const compressedBlob = await compressImage(file);
+        const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+        const url = await uploadLogo(compressedFile, (p) => setUploadProgress(p));
+        await saveSliderImage(url, sliderTitle, sliderDescription);
+        setSliderTitle('');
+        setSliderDescription('');
+        toast.success("Image slider ajoutée !");
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors du téléchargement de l'image.");
+      } finally {
+        setIsSliderUploading(false);
+        setUploadProgress(0);
+      }
+    });
   };
 
   const handleConfirmDeleteSliderImage = async () => {
     if (!sliderImageToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteSliderImage(sliderImageToDelete.id);
-      toast.success("Image supprimée.");
-      setIsSliderImageDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setSliderImageToDelete(null);
-    }
+    await withAdminPin('Supprimer l’image du slider', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteSliderImage(sliderImageToDelete.id);
+        toast.success("Image supprimée.");
+        setIsSliderImageDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setSliderImageToDelete(null);
+      }
+    });
   };
 
   const handleSaveSliderUrl = async () => {
@@ -3678,39 +3702,43 @@ function EmailLogsPanel() {
       toast.error("Veuillez entrer une URL valide.");
       return;
     }
-    setIsSaving(true);
-    try {
-      await saveSliderImage(tempSliderImageUrl.trim(), sliderTitle, sliderDescription);
-      setTempSliderImageUrl('');
-      setSliderTitle('');
-      setSliderDescription('');
-      toast.success("Image ajoutée via lien !");
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'ajout de l'image.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Ajouter une image au slider', async () => {
+      setIsSaving(true);
+      try {
+        await saveSliderImage(tempSliderImageUrl.trim(), sliderTitle, sliderDescription);
+        setTempSliderImageUrl('');
+        setSliderTitle('');
+        setSliderDescription('');
+        toast.success("Image ajoutée via lien !");
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'ajout de l'image.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleUpdateSliderImage = async () => {
     if (!editingSliderImage?.id) return;
-    setIsSaving(true);
-    try {
-      await updateSliderImage(editingSliderImage.id, {
-        url: editingSliderImage.url,
-        title: editingSliderImage.title,
-        description: editingSliderImage.description
-      });
-      toast.success("Image slider mise à jour !");
-      setIsSliderImageEditDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la mise à jour.");
-    } finally {
-      setIsSaving(false);
-      setEditingSliderImage(null);
-    }
+    await withAdminPin('Modifier l’image du slider', async () => {
+      setIsSaving(true);
+      try {
+        await updateSliderImage(editingSliderImage.id, {
+          url: editingSliderImage.url,
+          title: editingSliderImage.title,
+          description: editingSliderImage.description
+        });
+        toast.success("Image slider mise à jour !");
+        setIsSliderImageEditDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la mise à jour.");
+      } finally {
+        setIsSaving(false);
+        setEditingSliderImage(null);
+      }
+    });
   };
 
   const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3740,18 +3768,20 @@ function EmailLogsPanel() {
 
   const handleConfirmDelete = async () => {
     if (!parcelToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteParcel(parcelToDelete.id);
-      toast.success("Colis supprimé avec succès.");
-      setIsDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setParcelToDelete(null);
-    }
+    await withAdminPin('Supprimer le colis', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteParcel(parcelToDelete.id);
+        toast.success("Colis supprimé avec succès.");
+        setIsDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setParcelToDelete(null);
+      }
+    });
   };
 
   const handleSaveAffiliate = async (formData: Partial<Affiliate>) => {
@@ -3760,17 +3790,19 @@ function EmailLogsPanel() {
       return;
     }
 
-    setIsSaving(true);
-    try {
-      await saveAffiliate(formData, editingAffiliate?.id);
-      toast.success(editingAffiliate ? "Affilié mis à jour !" : "Affilié ajouté !");
-      setIsAffiliateDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'enregistrement.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin(editingAffiliate ? 'Modifier l’affilié' : 'Créer l’affilié', async () => {
+      setIsSaving(true);
+      try {
+        await saveAffiliate(formData, editingAffiliate?.id);
+        toast.success(editingAffiliate ? "Affilié mis à jour !" : "Affilié ajouté !");
+        setIsAffiliateDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'enregistrement.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleOpenAffiliateDeleteDialog = (affiliate: Affiliate) => {
@@ -3780,18 +3812,20 @@ function EmailLogsPanel() {
 
   const handleConfirmAffiliateDelete = async () => {
     if (!affiliateToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteAffiliate(affiliateToDelete.id);
-      toast.success("Affilié supprimé avec succès.");
-      setIsAffiliateDeleteConfirmOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setAffiliateToDelete(null);
-    }
+    await withAdminPin('Supprimer l’affilié', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteAffiliate(affiliateToDelete.id);
+        toast.success("Affilié supprimé avec succès.");
+        setIsAffiliateDeleteConfirmOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setAffiliateToDelete(null);
+      }
+    });
   };
 
   const handleOpenNavButtonDialog = (button?: NavButton) => {
@@ -3817,33 +3851,37 @@ function EmailLogsPanel() {
       toast.error("Le libellé et l'URL sont requis.");
       return;
     }
-    setIsSaving(true);
-    try {
-      await saveNavButton(navButtonFormData, editingNavButton?.id);
-      toast.success(editingNavButton ? "Bouton mis à jour !" : "Bouton ajouté !");
-      setIsNavButtonDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'enregistrement.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin(editingNavButton ? 'Modifier le bouton de navigation' : 'Créer le bouton de navigation', async () => {
+      setIsSaving(true);
+      try {
+        await saveNavButton(navButtonFormData, editingNavButton?.id);
+        toast.success(editingNavButton ? "Bouton mis à jour !" : "Bouton ajouté !");
+        setIsNavButtonDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'enregistrement.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleConfirmDeleteNavButton = async () => {
     if (!navButtonToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteNavButton(navButtonToDelete.id);
-      toast.success("Bouton supprimé.");
-      setIsNavButtonDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setNavButtonToDelete(null);
-    }
+    await withAdminPin('Supprimer le bouton de navigation', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteNavButton(navButtonToDelete.id);
+        toast.success("Bouton supprimé.");
+        setIsNavButtonDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally {
+        setIsDeleting(false);
+        setNavButtonToDelete(null);
+      }
+    });
   };
 
   const handleAddAgent = async () => {
@@ -3944,24 +3982,25 @@ function EmailLogsPanel() {
   const handleApproveAllTransfers = async () => {
     const pending = walletTransactions.filter(t => t.type === 'transfer' && t.status === 'pending');
     if (pending.length === 0) return;
+    await withAdminPin('Approuver tous les transferts', async () => {
+      setIsSaving(true);
+      let successCount = 0;
+      let failCount = 0;
 
-    setIsSaving(true);
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const tx of pending) {
-      try {
-        await approveTransfer(tx);
-        successCount++;
-      } catch (err) {
-        failCount++;
+      for (const tx of pending) {
+        try {
+          await approveTransfer(tx);
+          successCount++;
+        } catch (err) {
+          failCount++;
+        }
       }
-    }
 
-    if (successCount > 0) toast.success(`${successCount} transferts approuvés automatiquement.`);
-    if (failCount > 0) console.error(`${failCount} transferts ont échoué lors de l'auto-approbation (solde insuffisant).`);
-    setIsSaving(false);
-    setNextAutoApproveIn(60);
+      if (successCount > 0) toast.success(`${successCount} transferts approuvés automatiquement.`);
+      if (failCount > 0) console.error(`${failCount} transferts ont échoué lors de l'auto-approbation (solde insuffisant).`);
+      setIsSaving(false);
+      setNextAutoApproveIn(60);
+    });
   };
 
   useEffect(() => {
@@ -3994,47 +4033,50 @@ function EmailLogsPanel() {
       return;
     }
 
-    try {
-      await updateWithdrawalStatus(request.id!, status);
-      toast.success(`Demande approuvée !`);
-      
-      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Rena Affilié.\n\nCordialement,\nL'équipe Rena`;
-      
-      toast.success("Message de confirmation prêt.");
-      console.log("Message pour l'affilié:", message);
-      
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la mise à jour du statut.");
-    }
+    await withAdminPin('Approuver le retrait affilié', async () => {
+      try {
+        await updateWithdrawalStatus(request.id!, status);
+        toast.success(`Demande approuvée !`);
+        const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Rena Affilié.\n\nCordialement,\nL'équipe Rena`;
+        toast.success("Message de confirmation prêt.");
+        console.log("Message pour l'affilié:", message);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la mise à jour du statut.");
+      }
+    });
   };
 
   const handleConfirmRejectionBase = async () => {
     if (!withdrawalToReject?.id || !rejectionReason.trim()) return;
-    setIsSaving(true);
-    try {
-      await updateWithdrawalStatus(withdrawalToReject.id, 'rejected', rejectionReason);
-      toast.success("Demande rejetée.");
-      setIsWithdrawalRejectionDialogOpen(false);
-      setWithdrawalToReject(null);
-      setRejectionReason('');
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors du rejet.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Rejeter le retrait affilié', async () => {
+      setIsSaving(true);
+      try {
+        await updateWithdrawalStatus(withdrawalToReject.id, 'rejected', rejectionReason);
+        toast.success("Demande rejetée.");
+        setIsWithdrawalRejectionDialogOpen(false);
+        setWithdrawalToReject(null);
+        setRejectionReason('');
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors du rejet.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleToggleWithdrawals = async () => {
     if (!settings) return;
-    try {
-      await updateSettings({ withdrawalsEnabled: !settings.withdrawalsEnabled });
-      toast.success(settings.withdrawalsEnabled ? "Demandes de retrait désactivées." : "Demandes de retrait réactivées.");
-      setIsWithdrawalToggleConfirmOpen(false);
-    } catch (error) {
-      toast.error("Erreur lors de la mise à jour des paramètres.");
-    }
+    await withAdminPin(settings.withdrawalsEnabled ? 'Désactiver les retraits' : 'Activer les retraits', async () => {
+      try {
+        await updateSettings({ withdrawalsEnabled: !settings.withdrawalsEnabled });
+        toast.success(settings.withdrawalsEnabled ? "Demandes de retrait désactivées." : "Demandes de retrait réactivées.");
+        setIsWithdrawalToggleConfirmOpen(false);
+      } catch (error) {
+        toast.error("Erreur lors de la mise à jour des paramètres.");
+      }
+    });
   };
 
   const handleToggleLockEdits = async () => {
@@ -4048,60 +4090,64 @@ function EmailLogsPanel() {
       }
     }
 
-    try {
-      await updateSettings({ lockAffiliateEdits: !settings.lockAffiliateEdits });
-      toast.success(settings.lockAffiliateEdits ? "Modifications déverrouillées." : "Modifications verrouillées.");
-      setIsUnlockDialogOpen(false);
-      setLockCodeInput('');
-    } catch (error) {
-      toast.error("Erreur lors de la mise à jour des paramètres.");
-    }
+    await withAdminPin(settings.lockAffiliateEdits ? 'Déverrouiller les modifications' : 'Verrouiller les modifications', async () => {
+      try {
+        await updateSettings({ lockAffiliateEdits: !settings.lockAffiliateEdits });
+        toast.success(settings.lockAffiliateEdits ? "Modifications déverrouillées." : "Modifications verrouillées.");
+        setIsUnlockDialogOpen(false);
+        setLockCodeInput('');
+      } catch (error) {
+        toast.error("Erreur lors de la mise à jour des paramètres.");
+      }
+    });
   };
 
   const handleQuickCredit = async () => {
     if (!selectedAffiliateForCredit || quickCreditAmount === 0) return;
-    setIsSaving(true);
-    try {
-      const exchangeRate = settings?.exchangeRate || 146;
-      const usdAmount = Number((quickCreditAmount / exchangeRate).toFixed(2));
-      const newBalance = (selectedAffiliateForCredit.balance || 0) + usdAmount;
-      const newEarnings = (selectedAffiliateForCredit.totalEarnings || 0) + (usdAmount > 0 ? usdAmount : 0);
-      
-      await saveAffiliate({
-        balance: newBalance,
-        totalEarnings: newEarnings,
-        updatedAt: serverTimestamp()
-      }, selectedAffiliateForCredit.id);
+    await withAdminPin('Créditer le compte affilié', async () => {
+      setIsSaving(true);
+      try {
+        const exchangeRate = settings?.exchangeRate || 146;
+        const usdAmount = Number((quickCreditAmount / exchangeRate).toFixed(2));
+        const newBalance = (selectedAffiliateForCredit.balance || 0) + usdAmount;
+        const newEarnings = (selectedAffiliateForCredit.totalEarnings || 0) + (usdAmount > 0 ? usdAmount : 0);
+        
+        await saveAffiliate({
+          balance: newBalance,
+          totalEarnings: newEarnings,
+          updatedAt: serverTimestamp()
+        }, selectedAffiliateForCredit.id);
 
-      // Record Transaction for transparency
-      await addDoc(collection(db, 'wallet_transactions'), {
-        affiliateId: selectedAffiliateForCredit.id,
-        type: 'deposit',
-        amount: usdAmount,
-        status: 'completed',
-        description: `Dépôt Admin (${quickCreditAmount.toLocaleString()} HTG @ ${exchangeRate})`,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      
-      toast.success(`Le compte de ${selectedAffiliateForCredit.name} a été crédité de ${usdAmount} $ (${quickCreditAmount} G).`);
-      setIsQuickCreditDialogOpen(false);
-      setQuickCreditAmount(0);
-      setSelectedAffiliateForCredit(null);
-    } catch (error) {
-      console.error("Credit error:", error);
-      toast.error("Erreur lors du crédit du compte.");
-    } finally {
-      setIsSaving(false);
-    }
+        await addDoc(collection(db, 'wallet_transactions'), {
+          affiliateId: selectedAffiliateForCredit.id,
+          type: 'deposit',
+          amount: usdAmount,
+          status: 'completed',
+          description: `Dépôt Admin (${quickCreditAmount.toLocaleString()} HTG @ ${exchangeRate})`,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        
+        toast.success(`Le compte de ${selectedAffiliateForCredit.name} a été crédité de ${usdAmount} $ (${quickCreditAmount} G).`);
+        setIsQuickCreditDialogOpen(false);
+        setQuickCreditAmount(0);
+        setSelectedAffiliateForCredit(null);
+      } catch (error) {
+        console.error("Credit error:", error);
+        toast.error("Erreur lors du crédit du compte.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleAffiliateRequestAction = async (request: AffiliateRequest, status: 'approved' | 'rejected') => {
-    try {
-      await updateAffiliateRequestStatus(request.id!, status);
-      toast.success(`Demande d'inscription ${status === 'approved' ? 'approuvée' : 'rejetée'} !`);
-      
-      if (status === 'approved') {
+    await withAdminPin(status === 'approved' ? 'Approuver la demande d’affiliation' : 'Rejeter la demande d’affiliation', async () => {
+      try {
+        await updateAffiliateRequestStatus(request.id!, status);
+        toast.success(`Demande d'inscription ${status === 'approved' ? 'approuvée' : 'rejetée'} !`);
+        
+        if (status === 'approved') {
         // Open the affiliate dialog with pre-filled data
         setEditingAffiliate(null);
         setAffiliateFormData({
@@ -4120,12 +4166,13 @@ function EmailLogsPanel() {
           grandparentAffiliateId: '',
           additionalSponsors: []
         });
-        setIsAffiliateDialogOpen(true);
+          setIsAffiliateDialogOpen(true);
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la mise à jour de la demande.");
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la mise à jour de la demande.");
-    }
+    });
   };
 
   const handleSave = async () => {
@@ -6389,14 +6436,7 @@ function EmailLogsPanel() {
                                 <Button 
                                   size="sm" 
                                   className="bg-emerald-600 hover:bg-emerald-700 h-8 text-[10px] font-black uppercase px-3"
-                                  onClick={async () => {
-                                    try {
-                                      await updateWalletTransactionStatus(tx.id!, 'approved');
-                                      toast.success("Dépôt approuvé !");
-                                    } catch (e) {
-                                      toast.error("Erreur.");
-                                    }
-                                  }}
+                                  onClick={() => handleWalletTxAction(tx.id!, 'approved')}
                                 >
                                   Valider
                                 </Button>
@@ -6404,14 +6444,7 @@ function EmailLogsPanel() {
                                   size="sm" 
                                   variant="destructive"
                                   className="h-8 text-[10px] font-black uppercase px-3"
-                                  onClick={async () => {
-                                    try {
-                                      await updateWalletTransactionStatus(tx.id!, 'rejected');
-                                      toast.success("Dépôt rejeté !");
-                                    } catch (e) {
-                                      toast.error("Erreur.");
-                                    }
-                                  }}
+                                  onClick={() => handleWalletTxAction(tx.id!, 'rejected')}
                                 >
                                   Refuser
                                 </Button>
