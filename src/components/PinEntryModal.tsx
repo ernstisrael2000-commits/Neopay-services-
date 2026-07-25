@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lock, Eye, EyeOff, X, ShieldCheck } from 'lucide-react';
 import { Button } from './ui/button';
@@ -61,7 +62,7 @@ export default function PinEntryModal({
 
   const complete = digits.every(d => d !== '');
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -72,7 +73,7 @@ export default function PinEntryModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm"
             onClick={onCancel}
           />
 
@@ -83,7 +84,7 @@ export default function PinEntryModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 16 }}
             transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
             onClick={e => e.stopPropagation()}
           >
             <div className="w-full sm:max-w-sm bg-white rounded-t-[2rem] sm:rounded-[2rem] overflow-hidden shadow-2xl">
@@ -185,6 +186,7 @@ export default function PinEntryModal({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

@@ -114,6 +114,20 @@ function AppInner() {
     }
   }, []);
 
+  // Preload heavy dashboards during idle time so there's no white-page flash on login
+  useEffect(() => {
+    const preload = () => {
+      import('./pages/AdminDashboard').catch(() => {});
+      import('./pages/AgentDashboard').catch(() => {});
+    };
+    if (typeof (window as any).requestIdleCallback === 'function') {
+      (window as any).requestIdleCallback(preload, { timeout: 5000 });
+    } else {
+      const t = setTimeout(preload, 3000);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
   // Bootstrap Super Admin — deferred so it doesn't compete with initial render
   useEffect(() => {
     const t = setTimeout(() => {

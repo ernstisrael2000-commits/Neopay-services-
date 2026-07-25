@@ -16,8 +16,9 @@ import {
 } from '../services/clientService';
 import { loginAdminWithGoogle, linkAdminGoogle } from '../services/adminService';
 import { Client, AdminAccount } from '../types';
+import OtpVerifyStep from './OtpVerifyStep';
 
-type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google';
+type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google' | 'admin-2fa';
 
 interface UserAuthModalProps {
   open: boolean;
@@ -121,6 +122,11 @@ export default function UserAuthModal({
   const [linkCode, setLinkCode] = useState('');
   const [showLinkPassword, setShowLinkPassword] = useState(false);
 
+  // Admin 2FA state
+  const [adminPending2FA, setAdminPending2FA] = useState<{ sessionId: string; maskedEmail: string } | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
   const resetForms = () => {
     setLoginEmail(''); setLoginPassword('');
     setRegName(''); setRegPhone(''); setRegEmail(''); setRegPassword(''); setRegSponsor('');
@@ -128,6 +134,7 @@ export default function UserAuthModal({
     setShowPassword(false); setGoogleError(null);
     setPendingGoogleEmail(''); setPendingGoogleUid('');
     setLinkFullName(''); setLinkPassword(''); setLinkCode(''); setShowLinkPassword(false);
+    setAdminPending2FA(null); setOtpLoading(false); setOtpError(null);
     setView('choice');
     setLoading(false);
   };
@@ -261,24 +268,38 @@ export default function UserAuthModal({
     setTimeout(async () => {
       try {
         const result = await loginAdminWithGoogle();
-        if (!result.success || !result.admin) {
-          setLoading(false);
-          // If google account not yet linked, offer the link flow
-          if (result.googleEmail && result.googleUid) {
-            setPendingGoogleEmail(result.googleEmail);
-            setPendingGoogleUid(result.googleUid);
-            setView('admin-link-google');
-          } else {
-            setGoogleError(result.error || "Accès refusé.");
-            setView('admin-access');
-          }
+        setLoading(false);
+
+        // 1. 2FA required (account found, OTP sent) — must check BEFORE "not linked"
+        if (result.pending2fa && result.sessionId) {
+          setAdminPending2FA({ sessionId: result.sessionId, maskedEmail: result.maskedEmail || '' });
+          setOtpError(null);
+          setView('admin-2fa');
           onOpenChange(true);
           return;
         }
-        toast.success(`Bienvenue Admin, ${result.admin.fullName} !`);
-        onAdminLogin(result.admin);
-        setLoading(false);
-        resetForms();
+
+        // 2. Successful direct login (legacy path — no 2FA)
+        if (result.success && result.admin) {
+          toast.success(`Bienvenue Admin, ${result.admin.fullName} !`);
+          onAdminLogin(result.admin);
+          resetForms();
+          return;
+        }
+
+        // 3. Account not linked yet — offer link flow
+        if (result.googleEmail && result.googleUid) {
+          setPendingGoogleEmail(result.googleEmail);
+          setPendingGoogleUid(result.googleUid);
+          setView('admin-link-google');
+          onOpenChange(true);
+          return;
+        }
+
+        // 4. Generic error
+        setGoogleError(result.error || "Accès refusé.");
+        setView('admin-access');
+        onOpenChange(true);
       } catch (err: any) {
         setLoading(false);
         setGoogleError(err.message || "Erreur lors de la connexion Google.");
@@ -288,6 +309,51 @@ export default function UserAuthModal({
     }, 150);
   };
 
+  // ── Admin 2FA verify ─────────────────────────────────────────────────────
+  const handleAdminOtpVerify = async (sessionId: string, code: string) => {
+    setOtpLoading(true);
+    setOtpError(null);
+    try {
+      const res = await fetch('/api/admin/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setOtpError(data.error || 'Code incorrect.');
+        return;
+      }
+      toast.success(`Bienvenue Admin, ${data.admin.fullName} !`);
+      onAdminLogin(data.admin);
+      handleClose(false);
+    } catch {
+      setOtpError('Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleAdminResend2FA = async () => {
+    if (!adminPending2FA) return;
+    try {
+      const res = await fetch('/api/auth/resend-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: adminPending2FA.sessionId }),
+      });
+      const data = await res.json();
+      if (data.sessionId) {
+        setAdminPending2FA({ sessionId: data.sessionId, maskedEmail: data.maskedEmail || adminPending2FA.maskedEmail });
+        toast.success('Nouveau code envoyé.');
+      } else {
+        toast.error(data.error || 'Erreur lors du renvoi.');
+      }
+    } catch {
+      toast.error('Erreur réseau.');
+    }
+  };
+
   // ── Link Google to existing admin account ────────────────────────────────
   const handleLinkGoogle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -295,6 +361,14 @@ export default function UserAuthModal({
     setLoading(true);
     try {
       const result = await linkAdminGoogle(linkCode.trim(), pendingGoogleEmail, pendingGoogleUid);
+      setLoading(false);
+      // After linking, 2FA OTP is sent — redirect to OTP view
+      if (result.pending2fa && result.sessionId) {
+        setAdminPending2FA({ sessionId: result.sessionId, maskedEmail: result.maskedEmail || '' });
+        setOtpError(null);
+        setView('admin-2fa');
+        return;
+      }
       if (!result.success || !result.admin) {
         toast.error(result.error || "Identifiants incorrects.");
         return;
@@ -303,9 +377,8 @@ export default function UserAuthModal({
       onAdminLogin(result.admin);
       resetForms();
     } catch (err: any) {
-      toast.error(err.message || "Erreur lors de la liaison.");
-    } finally {
       setLoading(false);
+      toast.error(err.message || "Erreur lors de la liaison.");
     }
   };
 
@@ -628,6 +701,41 @@ export default function UserAuthModal({
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><UserPlus className="h-5 w-5 mr-2" />Créer mon compte</>}
               </Button>
             </form>
+          </div>
+        )}
+
+        {/* ── ADMIN 2FA — OTP verification after Google login / link ── */}
+        {view === 'admin-2fa' && adminPending2FA && (
+          <div>
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
+              <button
+                onClick={() => { setView('admin-access'); setAdminPending2FA(null); setOtpError(null); }}
+                className="flex items-center gap-1 text-white/60 hover:text-white text-sm mb-4 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" /> Retour
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+                  <ShieldCheck className="h-6 w-6 text-amber-400" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-black text-white">Vérification en deux étapes</DialogTitle>
+                  <DialogDescription className="text-white/60 text-xs mt-0.5">Administration Rena</DialogDescription>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-white">
+              <OtpVerifyStep
+                maskedEmail={adminPending2FA.maskedEmail}
+                role="admin"
+                sessionId={adminPending2FA.sessionId}
+                onVerify={handleAdminOtpVerify}
+                onResend={handleAdminResend2FA}
+                onBack={() => { setView('admin-access'); setAdminPending2FA(null); setOtpError(null); }}
+                loading={otpLoading}
+                error={otpError}
+              />
+            </div>
           </div>
         )}
 
