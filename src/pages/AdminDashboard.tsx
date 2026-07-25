@@ -2577,6 +2577,7 @@ function EmailLogsPanel() {
     } catch (e: any) { toast.error(e.message || 'Erreur.'); }
     finally { setFFPacksSaving(false); }
   });
+  };
 
   const fetchFFTransactions = async (agentId?: string) => {
     setFFTxsLoading(true);
