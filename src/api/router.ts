@@ -1,6 +1,6 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
-import { createHash, createHmac, randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomBytes, timingSafeEqual, scryptSync } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -201,6 +201,24 @@ async function verify2FASession(
 
   await ref.delete().catch(() => {});
   return { ok: true, accountId: d.accountId, role: d.role, name: d.name, email: d.email, extra: d.extra };
+}
+
+// ── PIN security helpers ──────────────────────────────────────────────────────
+function hashPin(pin: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(pin, salt, 32).toString('hex');
+  return `${salt}$${hash}`;
+}
+
+function verifyPin(pin: string, stored: string): boolean {
+  try {
+    const [salt, storedHash] = stored.split('$');
+    if (!salt || !storedHash) return false;
+    const hash = scryptSync(pin, salt, 32);
+    return timingSafeEqual(Buffer.from(storedHash, 'hex'), hash);
+  } catch {
+    return false;
+  }
 }
 
 function sanitizeFormation(data: any): any {
@@ -1005,7 +1023,7 @@ router.get('/api/agent/client-search', requireDb, async (req, res) => {
 // ── Agent: direct client deposit or withdrawal ────────────────────────────────
 router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
   try {
-    const { agentCode, clientId, type, amount, note } = req.body;
+    const { agentCode, clientId, type, amount, note, pin } = req.body;
     if (!agentCode || !clientId || !type || !amount)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
@@ -1019,6 +1037,8 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
     const agentRef = agentSnap.docs[0].ref;
     const agentData = agentSnap.docs[0].data();
     if (agentData.status === 'inactive') return res.status(403).json({ error: 'Agent inactif.' });
+    if (!agentData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), agentData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
     // Get client
     const clientRef = adminDb.collection('clients').doc(clientId);
@@ -1971,10 +1991,63 @@ router.post('/api/agent/withdrawal-request/:txId/reject', requireDb, async (req,
   }
 });
 
+// ── Agent: set / change PIN ───────────────────────────────────────────────────
+router.post('/api/agent/set-pin', requireDb, async (req, res) => {
+  try {
+    const { agentCode, pin } = req.body;
+    if (!agentCode || !pin) return res.status(400).json({ error: 'agentCode et pin requis.' });
+    if (!/^\d{8}$/.test(String(pin))) return res.status(400).json({ error: 'Le PIN doit comporter exactement 8 chiffres.' });
+    const snap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    await snap.docs[0].ref.update({ pinHash: hashPin(String(pin)), updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: check if PIN is configured ────────────────────────────────────────
+router.get('/api/agent/has-pin/:agentCode', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('agents').where('agentCode', '==', req.params.agentCode).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    res.json({ hasPin: !!snap.docs[0].data().pinHash });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate: set / change PIN ───────────────────────────────────────────────
+router.post('/api/affiliate/set-pin', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, pin } = req.body;
+    if (!affiliateId || !pin) return res.status(400).json({ error: 'affiliateId et pin requis.' });
+    if (!/^\d{8}$/.test(String(pin))) return res.status(400).json({ error: 'Le PIN doit comporter exactement 8 chiffres.' });
+    const ref = adminDb.collection('affiliates').doc(affiliateId);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    await ref.update({ pinHash: hashPin(String(pin)), updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate: check if PIN is configured ─────────────────────────────────────
+router.get('/api/affiliate/has-pin/:affiliateId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('affiliates').doc(req.params.affiliateId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    res.json({ hasPin: !!snap.data()?.pinHash });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Agent: personal deposit (client deposits into agent wallet) ───────────────
 router.post('/api/agent/personal-deposit', requireDb, async (req, res) => {
   try {
-    const { agentCode, amount, method, accountNumber, accountName, message } = req.body;
+    const { agentCode, amount, method, accountNumber, accountName, message, pin } = req.body;
     if (!agentCode || !amount || !method) return res.status(400).json({ error: 'Champs requis manquants.' });
     const usd = Number(amount);
     if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
@@ -1984,6 +2057,8 @@ router.post('/api/agent/personal-deposit', requireDb, async (req, res) => {
     const agentDoc = agentSnap.docs[0];
     const agentData = agentDoc.data();
     if (agentData.status === 'inactive') return res.status(400).json({ error: 'Agent inactif.' });
+    if (!agentData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), agentData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
     const txRef = adminDb.collection('agent_personal_transactions').doc();
     const batch = adminDb.batch();
@@ -2036,7 +2111,7 @@ router.post('/api/agent/personal-deposit', requireDb, async (req, res) => {
 // ── Agent: personal withdrawal (agent withdraws from own commission balance) ──
 router.post('/api/agent/personal-withdrawal', requireDb, async (req, res) => {
   try {
-    const { agentCode, amount, method, accountNumber, accountName, message } = req.body;
+    const { agentCode, amount, method, accountNumber, accountName, message, pin } = req.body;
     if (!agentCode || !amount || !method || !accountNumber) return res.status(400).json({ error: 'Champs requis manquants.' });
     const usd = Number(amount);
     if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
@@ -2046,6 +2121,8 @@ router.post('/api/agent/personal-withdrawal', requireDb, async (req, res) => {
     const agentDoc = agentSnap.docs[0];
     const agentData = agentDoc.data();
     if (agentData.status === 'inactive') return res.status(400).json({ error: 'Agent inactif.' });
+    if (!agentData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), agentData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
     const commissionBalance = Number(agentData.commissionBalance || 0);
     if (commissionBalance < usd) return res.status(400).json({ error: `Solde commissions insuffisant. Disponible: $${commissionBalance.toFixed(2)}` });
@@ -2661,7 +2738,7 @@ router.get('/api/affiliate/client-search', requireDb, async (req, res) => {
 // ── Affiliate as Agent: direct deposit or withdrawal for client ────────────────
 router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
   try {
-    const { affiliateId, clientId, type, amount, note } = req.body;
+    const { affiliateId, clientId, type, amount, note, pin } = req.body;
     if (!affiliateId || !clientId || !type || !amount)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
@@ -2672,6 +2749,8 @@ router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
     const affSnap = await affRef.get();
     if (!affSnap.exists) return res.status(403).json({ error: 'Affilié introuvable.' });
     const affData = affSnap.data()!;
+    if (!affData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), affData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
     const clientRef = adminDb.collection('clients').doc(clientId);
     const clientSnap = await clientRef.get();
@@ -2762,7 +2841,7 @@ router.get('/api/affiliate/client-withdrawal-requests/:affiliateId', requireDb, 
 router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (req, res) => {
   try {
     const { txId } = req.params;
-    const { affiliateId } = req.body;
+    const { affiliateId, pin } = req.body;
     if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
 
     const txRef = adminDb.collection('client_transactions').doc(txId);
@@ -2776,6 +2855,8 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
     const affSnap = await affRef.get();
     if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
     const affData = affSnap.data()!;
+    if (!affData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), affData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
     const clientRef = adminDb.collection('clients').doc(txData.clientId);
     const clientSnap = await clientRef.get();
@@ -2893,7 +2974,7 @@ router.get('/api/affiliate/client-deposit-requests/:affiliateId', requireDb, asy
 router.post('/api/affiliate/client-deposit/:txId/confirm', requireDb, async (req, res) => {
   try {
     const { txId } = req.params;
-    const { affiliateId } = req.body;
+    const { affiliateId, pin } = req.body;
     if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
 
     const txRef = adminDb.collection('client_transactions').doc(txId);
@@ -2907,6 +2988,8 @@ router.post('/api/affiliate/client-deposit/:txId/confirm', requireDb, async (req
     const affSnap = await affRef.get();
     if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
     const affData = affSnap.data()!;
+    if (!affData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), affData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
     const amount = txData.amount;
     if ((affData.balance || 0) < amount)
       return res.status(400).json({ error: 'Solde affilié insuffisant pour confirmer ce dépôt.' });
@@ -3042,7 +3125,7 @@ router.post('/api/affiliate/submit-client-deposit', requireDb, async (req, res) 
 // ── Affiliate: submit own deposit request (with walletType) ──────────────────
 router.post('/api/affiliate/submit-deposit', requireDb, async (req, res) => {
   try {
-    const { affiliateId, amount, method, walletType } = req.body;
+    const { affiliateId, amount, method, walletType, pin } = req.body;
     if (!affiliateId || !amount || !method)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
@@ -3052,6 +3135,8 @@ router.post('/api/affiliate/submit-deposit', requireDb, async (req, res) => {
     const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
     if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
     const affData = affSnap.data()!;
+    if (!affData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), affData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
     const isCommissions = walletType === 'commissions';
     const walletLabel = isCommissions ? 'Wallet Commissions' : 'Wallet Principal';
 
@@ -3080,7 +3165,7 @@ router.post('/api/affiliate/submit-deposit', requireDb, async (req, res) => {
 // ── Affiliate: submit own withdrawal (personal) ───────────────────────────────
 router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
   try {
-    const { affiliateId, amount, method, accountNumber, walletType } = req.body;
+    const { affiliateId, amount, method, accountNumber, walletType, pin } = req.body;
     if (!affiliateId || !amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
@@ -3090,6 +3175,8 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
     const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
     if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
     const affData = affSnap.data()!;
+    if (!affData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), affData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
     const isCommissions = walletType === 'commissions';
     const walletField = isCommissions ? 'totalEarnings' : 'balance';
     const walletBalance = Number(affData[walletField] || 0);
@@ -6955,6 +7042,7 @@ router.get('/api/agent/client-deposit-requests/:agentId', requireDb, async (req,
 // ── Agent: approve client deposit request ─────────────────────────────────────
 router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, res) => {
   try {
+    const { pin } = req.body;
     const reqRef = adminDb.collection('client_agent_deposit_requests').doc(req.params.reqId);
     const reqSnap = await reqRef.get();
     if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
@@ -6962,6 +7050,12 @@ router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, r
     if (reqData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
 
     const agentRef = adminDb.collection('agents').doc(reqData.agentId);
+    // Verify PIN before executing
+    const agentPreSnap = await agentRef.get();
+    if (!agentPreSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentPreData = agentPreSnap.data()!;
+    if (!agentPreData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+    if (!pin || !verifyPin(String(pin), agentPreData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
     const clientRef = adminDb.collection('clients').doc(reqData.clientId);
 
     // Load fee settings for commission calculation
@@ -7064,12 +7158,19 @@ router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, r
 // ── Agent: reject client deposit request ──────────────────────────────────────
 router.post('/api/agent/client-deposit/:reqId/reject', requireDb, async (req, res) => {
   try {
-    const { reason } = req.body;
+    const { reason, pin } = req.body;
     const reqRef = adminDb.collection('client_agent_deposit_requests').doc(req.params.reqId);
     const reqSnap = await reqRef.get();
     if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
     const reqData = reqSnap.data()!;
     if (reqData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+    // Verify PIN before rejecting
+    const agentRejectSnap = await adminDb.collection('agents').doc(reqData.agentId).get();
+    if (agentRejectSnap.exists) {
+      const agentRejectData = agentRejectSnap.data()!;
+      if (!agentRejectData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
+      if (!pin || !verifyPin(String(pin), agentRejectData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
+    }
 
     const batch = adminDb.batch();
     batch.update(reqRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });

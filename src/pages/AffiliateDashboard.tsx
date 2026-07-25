@@ -106,6 +106,9 @@ import { apiFetch } from '../lib/apiFetch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettingsCtx } from '../contexts/SettingsContext';
+import PinSetupModal from '../components/PinSetupModal';
+import PinEntryModal from '../components/PinEntryModal';
+import { usePinGuard } from '../hooks/usePinGuard';
 
 type Tab = 'accueil' | 'concours' | 'filleuls' | 'historique' | 'profil';
 
@@ -154,6 +157,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   // General
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
+
+  // PIN security
+  const { pinModalOpen, pinModalTitle, pinModalDesc, requirePin, handlePinConfirm, handlePinCancel } = usePinGuard();
+  const [pinSetupOpen, setPinSetupOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
 
@@ -295,6 +302,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (activeTab === 'accueil') fetchRequests();
   }, [activeTab]);
 
+  // Check if affiliate has a PIN set; show setup modal on first login
+  useEffect(() => {
+    if (!affiliateId) return;
+    fetch(`/api/affiliate/has-pin/${encodeURIComponent(affiliateId)}`)
+      .then(r => r.json())
+      .then(d => { if (!d.hasPin) setPinSetupOpen(true); })
+      .catch(() => {});
+  }, [affiliateId]);
+
   // (Camera permission is no longer requested on mount — affiliates have no QR scan feature)
 
   // Direct transaction (deposit or withdrawal)
@@ -302,12 +318,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     const usd = parseFloat(directAmount);
     if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
     if (!phoneClient) { toast.error('Recherchez un client d\'abord.'); return; }
+    let pinDT: string;
+    try { pinDT = await requirePin('Confirmer la transaction', `Saisissez votre PIN pour effectuer ce ${type === 'deposit' ? 'dépôt' : 'retrait'} pour ${phoneClient.name}.`); }
+    catch { return; }
     setDirectSubmitting(true);
     try {
       await apiFetch('/api/affiliate/client-direct-tx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ affiliateId, clientId: phoneClient.clientId, type, amount: usd, note: directNote.trim() || undefined }),
+        body: JSON.stringify({ affiliateId, clientId: phoneClient.clientId, type, amount: usd, note: directNote.trim() || undefined, pin: pinDT }),
       });
       const label = type === 'deposit' ? 'Dépôt' : 'Retrait';
       toast.success(`${label} de $${usd.toFixed(2)} ${type === 'deposit' ? 'crédité' : 'débité'} pour ${phoneClient.name} !`);
@@ -318,11 +337,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   // Confirm/reject withdrawal request
   const handleConfirmWithdrawal = async (txId: string) => {
+    let pinCW: string;
+    try { pinCW = await requirePin('Confirmer le retrait', 'Saisissez votre PIN pour confirmer ce retrait client.'); }
+    catch { return; }
     setProcessingRequestId(txId);
     try {
       await apiFetch(`/api/affiliate/client-withdrawal/${txId}/confirm`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ affiliateId }),
+        body: JSON.stringify({ affiliateId, pin: pinCW }),
       });
       toast.success('Retrait confirmé ! Solde mis à jour.');
       fetchRequests();
@@ -345,11 +367,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   // Confirm/reject deposit request
   const handleConfirmDeposit = async (txId: string) => {
+    let pinCD: string;
+    try { pinCD = await requirePin('Confirmer le dépôt', 'Saisissez votre PIN pour confirmer ce dépôt client.'); }
+    catch { return; }
     setProcessingRequestId(txId);
     try {
       await apiFetch(`/api/affiliate/client-deposit/${txId}/confirm`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ affiliateId }),
+        body: JSON.stringify({ affiliateId, pin: pinCD }),
       });
       toast.success('Dépôt confirmé ! Client crédité.');
       fetchRequests();
@@ -548,6 +573,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (amount < minWithdrawUSD) { toast.error(`Montant minimum: ${(20 / exchangeRate).toFixed(2)} $`); return; }
     if (withdrawMethod === 'Agent' && !verifiedAgentNameWithdraw) { toast.error('Agent non identifié.'); return; }
     if (withdrawMethod !== 'Physical' && withdrawMethod !== 'Agent' && !accountNumber.trim()) { toast.error('Numéro de compte requis.'); return; }
+    let pinHW: string;
+    try { pinHW = await requirePin('Confirmer le retrait', 'Saisissez votre PIN pour soumettre ce retrait.'); }
+    catch { return; }
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/affiliate/submit-withdrawal', {
@@ -559,6 +587,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           method: withdrawMethod,
           accountNumber: withdrawMethod === 'Physical' ? 'Bureau Juvénat' : withdrawMethod === 'Agent' ? `Agent: ${agentCodeWithdraw}` : accountNumber.trim(),
           walletType: withdrawWallet,
+          pin: pinHW,
         }),
       });
       const data = await res.json();
@@ -589,6 +618,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
     if (depositMethod === 'Agent' && !verifiedAgentName) { toast.error('Agent non identifiable.'); return; }
+    let pinDR: string;
+    try { pinDR = await requirePin('Confirmer le dépôt', 'Saisissez votre PIN pour soumettre cette demande de dépôt.'); }
+    catch { return; }
     setIsSubmitting(true);
     try {
       const walletLabel = depositWallet === 'commissions' ? 'Wallet Commissions' : 'Wallet Principal';
@@ -599,7 +631,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         const res = await fetch('/api/affiliate/submit-deposit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ affiliateId, amount, method: depositMethod, walletType: depositWallet }),
+          body: JSON.stringify({ affiliateId, amount, method: depositMethod, walletType: depositWallet, pin: pinDR }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
@@ -1706,6 +1738,20 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         </div>
       </div>, document.body)}
 
+      {/* PIN modals */}
+      <PinSetupModal
+        open={pinSetupOpen}
+        role="affiliate"
+        identifier={affiliateId}
+        onSuccess={() => setPinSetupOpen(false)}
+      />
+      <PinEntryModal
+        open={pinModalOpen}
+        title={pinModalTitle}
+        description={pinModalDesc}
+        onConfirm={handlePinConfirm}
+        onCancel={handlePinCancel}
+      />
     </div>
   );
 }

@@ -30,6 +30,9 @@ import {
   QrCode, Scan, LayoutGrid, ListOrdered, Banknote, MinusCircle, Check, Gamepad2, Trophy,
 } from 'lucide-react';
 import FreeFireResellerSection from '../components/agent/FreeFireResellerSection';
+import PinSetupModal from '../components/PinSetupModal';
+import PinEntryModal from '../components/PinEntryModal';
+import { usePinGuard } from '../hooks/usePinGuard';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -130,6 +133,10 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // PIN security
+  const { pinModalOpen, pinModalTitle, pinModalDesc, requirePin, handlePinConfirm, handlePinCancel } = usePinGuard();
+  const [pinSetupOpen, setPinSetupOpen] = useState(false);
 
   // Direct tx state (deposit/withdraw by phone, name or wallet ID)
   const [clientSearch, setClientSearch] = useState('');
@@ -287,6 +294,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     loadStats();
   }, [agent?.agentCode, agent?.id]);
 
+  // Check if agent has a PIN set; show setup modal on first login
+  useEffect(() => {
+    if (!agent?.agentCode) return;
+    fetch(`/api/agent/has-pin/${encodeURIComponent(agent.agentCode)}`)
+      .then(r => r.json())
+      .then(d => { if (!d.hasPin) setPinSetupOpen(true); })
+      .catch(() => {});
+  }, [agent?.agentCode]);
+
   useEffect(() => {
     if (activeSection === 'commissions') loadFeeRecords();
     if (activeSection === 'clients' || activeSection === 'overview') loadTransactions();
@@ -318,9 +334,12 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
   // Client deposit requests: approve / reject
   const handleApproveClientDeposit = async (req: any) => {
+    let pin: string;
+    try { pin = await requirePin('Approuver le dépôt', `Saisissez votre PIN pour approuver le dépôt de ${req.clientName}.`); }
+    catch { return; }
     setClientDepReqActionLoading(req.id);
     try {
-      const res = await apiFetch(`/api/agent/client-deposit/${req.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const res = await apiFetch(`/api/agent/client-deposit/${req.id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
       toast.success(`Dépôt de ${req.clientName} approuvé !`);
       setClientDepositReqs(prev => prev.filter(r => r.id !== req.id));
     } catch (e: any) { toast.error(e.message || 'Solde agent insuffisant ou erreur.'); }
@@ -328,9 +347,12 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   };
 
   const handleRejectClientDeposit = async (req: any) => {
+    let pin: string;
+    try { pin = await requirePin('Refuser le dépôt', `Saisissez votre PIN pour refuser la demande de ${req.clientName}.`); }
+    catch { return; }
     setClientDepReqActionLoading(req.id);
     try {
-      await apiFetch(`/api/agent/client-deposit/${req.id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      await apiFetch(`/api/agent/client-deposit/${req.id}/reject`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
       toast.success('Demande refusée.');
       setClientDepositReqs(prev => prev.filter(r => r.id !== req.id));
     } catch (e: any) { toast.error(e.message || 'Erreur.'); }
@@ -377,12 +399,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     const usd = parseFloat(pAmount);
     if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
     if (!agent?.agentCode) return;
+    let pinPD: string;
+    try { pinPD = await requirePin('Dépôt personnel', 'Saisissez votre PIN pour soumettre cette demande de dépôt.'); }
+    catch { return; }
     setPSubmitting(true);
     try {
       const res = await fetch('/api/agent/personal-deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: pMethod, accountNumber: pAccount || undefined, accountName: pAccountName || undefined, message: pMessage || undefined }),
+        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: pMethod, accountNumber: pAccount || undefined, accountName: pAccountName || undefined, message: pMessage || undefined, pin: pinPD }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
@@ -402,12 +427,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (!agent?.agentCode) return;
     const available = agent.commissionBalance || 0;
     if (usd > available) { toast.error(`Solde commissions insuffisant. Disponible: $${available.toFixed(2)}`); return; }
+    let pinPW: string;
+    try { pinPW = await requirePin('Retrait commissions', 'Saisissez votre PIN pour confirmer ce retrait.'); }
+    catch { return; }
     setPSubmitting(true);
     try {
       const res = await fetch('/api/agent/personal-withdrawal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: pMethod, accountNumber: pAccount, accountName: pAccountName || undefined, message: pMessage || undefined }),
+        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: pMethod, accountNumber: pAccount, accountName: pAccountName || undefined, message: pMessage || undefined, pin: pinPW }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
@@ -489,12 +517,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
     const usd = htg / rate;
     if (agent.balance < usd) { toast.error('Solde agent insuffisant pour ce dépôt.'); return; }
+    let pinCT: string;
+    try { pinCT = await requirePin('Confirmer la transaction', `Saisissez votre PIN pour effectuer cette transaction pour ${foundClient.name}.`); }
+    catch { return; }
     setSubmitting(true);
     try {
       await apiFetch('/api/agent/client-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined, paymentMethod: txPaymentMethod }),
+        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined, paymentMethod: txPaymentMethod, pin: pinCT }),
       });
       setAgentSuccessModal({ type: 'deposit', clientName: foundClient.name, htg, usd });
       setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote(''); setTxPaymentMethod('MonCash');
@@ -1937,6 +1968,21 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
       {/* ── Ernst AI Assistant ── */}
       <ErnstChat agentName={agent.name} />
+
+      {/* PIN modals */}
+      <PinSetupModal
+        open={pinSetupOpen}
+        role="agent"
+        identifier={agent?.agentCode || ''}
+        onSuccess={() => setPinSetupOpen(false)}
+      />
+      <PinEntryModal
+        open={pinModalOpen}
+        title={pinModalTitle}
+        description={pinModalDesc}
+        onConfirm={handlePinConfirm}
+        onCancel={handlePinCancel}
+      />
 
     </div>
   );
