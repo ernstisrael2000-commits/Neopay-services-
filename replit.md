@@ -9,61 +9,66 @@ Application web multi-rôles (clients, affiliés, agents, admins) pour la gestio
 | Frontend | React 19, Vite 6, Tailwind CSS 4, shadcn/ui |
 | Backend | Express 4, Node 20 (tsx) |
 | Base de données | Cloud Firestore (named DB) |
-| Auth | Firebase Auth (clients) + credentials Firestore (admin/affiliate/agent) |
-| Email | Resend (RESEND_API_KEY) |
-| IA | Groq (GROQ_API_KEY) |
-| Paiements | NowPayments (NOWPAYMENTS_API_KEY) + MonCash/NatCash (Haïti) |
-| Push | Web Push / FCM — VAPID keys configurées |
+| Auth | Firebase Auth (clients) + credentials Firestore (admin/affilié/agent) |
+| Email | Resend |
+| Push | Web Push (VAPID) |
+| Paiements | NowPayments (crypto), FazerCards |
+| IA | Groq |
 
-## Démarrer
+## Démarrage sur Replit
 
 ```bash
 npm install
-npm run dev        # → http://localhost:5000
+npm run dev        # Développement → http://localhost:5000
 npm run build      # Build production
 npm run start      # Production
 ```
 
-## Variables d'environnement
+Le serveur expose le port **5000** (Express + Vite SSR proxy).
 
-Toutes gérées via Replit Secrets / Env Vars.
+## Variables d'environnement (Secrets Replit)
 
 | Variable | Obligatoire | Description |
 |----------|-------------|-------------|
-| `FIREBASE_SERVICE_ACCOUNT` | ✅ | JSON du compte de service Firebase Admin |
-| `RESEND_API_KEY` | ✅ | Clé API Resend pour les emails |
-| `GROQ_API_KEY` | ✅ | Clé API Groq pour l'IA |
-| `NOWPAYMENTS_API_KEY` | ✅ | Clé API NowPayments |
-| `FIRESTORE_DB_ID` | ✅ (env var) | `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2` |
-| `VAPID_PUBLIC_KEY` | ✅ (env var) | Clé publique VAPID pour Push |
-| `VAPID_PRIVATE_KEY` | ✅ (secret) | Clé privée VAPID (base64, 32 octets) — ⚠️ doit être 32 octets décodés |
-| `NOWPAYMENTS_IPN_SECRET` | ✅ (secret) | Secret IPN NowPayments pour validation webhooks |
-| `FAZERCARDS_API_KEY` | ✅ (secret) | Clé API FazerCards |
-| `APP_URL` | ✅ (env var) | URL publique de l'app |
-| `RECAPTCHA_SECRET_KEY` | ❌ | Clé secrète reCAPTCHA v2 |
-| `MONCASH_SECRET_KEY` | ❌ | Clé secrète MonCash |
-| `SMTP_USER` / `SMTP_PASS` | ❌ | Gmail SMTP (remplacé par Resend) |
+| `FIREBASE_SERVICE_ACCOUNT` | ✅ | JSON compte de service Firebase Admin |
+| `ADMIN_SECRET` | ✅ | Mot de passe admin (accès routes /admin) |
+| `RESEND_API_KEY` | ✅ | Clé API Resend (emails) |
+| `NOWPAYMENTS_API_KEY` | ✅ | Clé API NowPayments (crypto) |
+| `NOWPAYMENTS_IPN_SECRET` | ✅ | Secret IPN NowPayments (webhooks) |
+| `FAZERCARDS_API_KEY` | ✅ | Clé API FazerCards |
+| `GROQ_API_KEY` | ✅ | Clé API Groq (IA) |
+| `VAPID_PUBLIC_KEY` | ✅ | Clé publique VAPID (push) |
+| `VAPID_PRIVATE_KEY` | ✅ | Clé privée VAPID (push) |
 
-## Firebase
+## Variables d'environnement (non-secrets)
 
-- **Projet** : `gen-lang-client-0739219145`
+| Variable | Valeur | Description |
+|----------|--------|-------------|
+| `FIRESTORE_DB_ID` | `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2` | ID de la base Firestore nommée |
+| `FROM_EMAIL` | `noreply@rena.ht` | Adresse expéditeur emails |
+| `PORT` | `5000` | Port du serveur Express |
+
+## Firestore
+
 - **Base de données nommée** : `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`
-- **Console** : https://console.firebase.google.com/project/gen-lang-client-0739219145
+- **Projet Firebase** : `gen-lang-client-0739219145`
+- **Règles** : `database/firestore.rules`
 
-## Structure
+## Structure du projet
 
 ```
-src/pages/      — Vues et dashboards
-src/layouts/    — Navbar, BottomNav
-src/components/ — Composants réutilisables
-src/hooks/      — Hooks React
-src/services/   — Services Firestore client
-src/lib/        — Firebase, email, utilitaires
-src/types/      — Types TypeScript
-database/       — Règles Firestore & Storage
-docs/           — Documentation complète
+src/pages/        — Vues et dashboards (HomeView, AdminDashboard, etc.)
+src/layouts/      — Navbar, BottomNav
+src/components/   — Composants UI réutilisables
+src/hooks/        — Hooks React personnalisés
+src/services/     — Services Firestore client
+src/lib/          — Firebase, email, utilitaires
+src/types/        — Types TypeScript
+src/api/router.ts — Routes Express (API backend)
+database/         — Règles Firestore & Storage
+docs/             — Documentation complète
 ```
 
-## User Preferences
+## User preferences
 
-- Langue de communication : Français
+- Langue : Français
