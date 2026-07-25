@@ -2597,92 +2597,101 @@ function EmailLogsPanel() {
   const [isDeletingAgent, setIsDeletingAgent] = useState(false);
   const handleDeleteAgent = async () => {
     if (!agentToDelete) return;
-    setIsDeletingAgent(true);
-    try {
-      const res = await fetch(`/api/admin/agent/${agentToDelete.id}`, {
-        method: 'DELETE',
-        headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-      });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur lors de la suppression.'); return; }
-      toast.success(`Agent "${agentToDelete.name}" supprimé.`);
-      setAgentToDelete(null);
-      // Refresh lists
-      fetchFFResellerAgents();
-    } catch { toast.error('Erreur réseau.'); }
-    finally { setIsDeletingAgent(false); }
+    await withAdminPin('Supprimer l\'agent', async () => {
+      setIsDeletingAgent(true);
+      try {
+        const res = await fetch(`/api/admin/agent/${agentToDelete.id}`, {
+          method: 'DELETE',
+          headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+        });
+        const data = await res.json();
+        if (!res.ok) { toast.error(data.error || 'Erreur lors de la suppression.'); return; }
+        toast.success(`Agent "${agentToDelete.name}" supprimé.`);
+        setAgentToDelete(null);
+        fetchFFResellerAgents();
+      } catch { toast.error('Erreur réseau.'); }
+      finally { setIsDeletingAgent(false); }
+    });
   };
 
   const handleFFToggle = async (agent: any) => {
-    setFFToggleLoading(agent.agentId || agent.id);
-    try {
-      const res = await fetch('/api/admin/reseller/ff/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-        body: JSON.stringify({ agentId: agent.agentId || agent.id, agentName: agent.agentName || agent.name || '', enabled: !agent.enabled }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success(agent.enabled ? 'Compte désactivé.' : 'Compte activé !');
-      fetchFFResellerAgents();
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setFFToggleLoading(null); }
+    await withAdminPin(agent.enabled ? 'Désactiver le compte FF' : 'Activer le compte FF', async () => {
+      setFFToggleLoading(agent.agentId || agent.id);
+      try {
+        const res = await fetch('/api/admin/reseller/ff/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          body: JSON.stringify({ agentId: agent.agentId || agent.id, agentName: agent.agentName || agent.name || '', enabled: !agent.enabled }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success(agent.enabled ? 'Compte désactivé.' : 'Compte activé !');
+        fetchFFResellerAgents();
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setFFToggleLoading(null); }
+    });
   };
 
   const handleFFCreditAdjust = async () => {
     const amount = ffUseCustom ? parseInt(ffCustomAmount) : ffSelectedPack?.diamonds;
     if (!ffCreditAgent || !amount || isNaN(amount) || amount <= 0) { toast.error('Sélectionnez un pack ou entrez un montant.'); return; }
-    setFFCreditLoading(true);
-    try {
-      const res = await fetch('/api/admin/reseller/ff/credit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-        body: JSON.stringify({
-          agentId: ffCreditAgent.agentId || ffCreditAgent.id,
-          agentName: ffCreditAgent.agentName || ffCreditAgent.name || '',
-          amount, operation: ffCreditOp, note: ffCreditNote,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success(ffCreditOp === 'add'
-        ? `+${amount.toLocaleString()} 💎 ajoutés à ${ffCreditAgent.agentName || ffCreditAgent.name} !`
-        : `-${amount.toLocaleString()} 💎 retirés.`);
-      setFFCreditDialogOpen(false);
-      setFFSelectedPack(null); setFFCustomAmount(''); setFFCreditNote(''); setFFCreditAgent(null); setFFUseCustom(false);
-      fetchFFResellerAgents();
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setFFCreditLoading(false); }
+    await withAdminPin('Ajuster les crédits FF', async () => {
+      setFFCreditLoading(true);
+      try {
+        const res = await fetch('/api/admin/reseller/ff/credit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          body: JSON.stringify({
+            agentId: ffCreditAgent.agentId || ffCreditAgent.id,
+            agentName: ffCreditAgent.agentName || ffCreditAgent.name || '',
+            amount, operation: ffCreditOp, note: ffCreditNote,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success(ffCreditOp === 'add'
+          ? `+${amount.toLocaleString()} 💎 ajoutés à ${ffCreditAgent.agentName || ffCreditAgent.name} !`
+          : `-${amount.toLocaleString()} 💎 retirés.`);
+        setFFCreditDialogOpen(false);
+        setFFSelectedPack(null); setFFCustomAmount(''); setFFCreditNote(''); setFFCreditAgent(null); setFFUseCustom(false);
+        fetchFFResellerAgents();
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setFFCreditLoading(false); }
+    });
   };
 
   const handleTeacherWithdrawalAction = async (id: string, action: 'approve' | 'reject') => {
-    setApprovingTeacherTx(id);
-    try {
-      const res = await fetch(`/api/admin/teacher-withdrawals/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success(action === 'approve' ? 'Retrait approuvé !' : 'Retrait rejeté.');
-      fetchTeacherWithdrawals();
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setApprovingTeacherTx(null); }
+    await withAdminPin(action === 'approve' ? 'Approuver le retrait professeur' : 'Rejeter le retrait professeur', async () => {
+      setApprovingTeacherTx(id);
+      try {
+        const res = await fetch(`/api/admin/teacher-withdrawals/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success(action === 'approve' ? 'Retrait approuvé !' : 'Retrait rejeté.');
+        fetchTeacherWithdrawals();
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setApprovingTeacherTx(null); }
+    });
   };
 
   const handleSaveTeacherFee = async () => {
     const fee = Number(teacherFeeInput);
     if (isNaN(fee) || fee < 0 || fee > 100) { toast.error('Frais invalides (0-100%).'); return; }
-    setSavingTeacherFee(true);
-    try {
-      const res = await fetch('/api/admin/teacher-fee', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fee }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      setTeacherFee(fee);
-      toast.success('Frais de retrait mis à jour !');
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setSavingTeacherFee(false); }
+    await withAdminPin('Modifier les frais de retrait professeur', async () => {
+      setSavingTeacherFee(true);
+      try {
+        const res = await fetch('/api/admin/teacher-fee', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fee }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        setTeacherFee(fee);
+        toast.success('Frais de retrait mis à jour !');
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setSavingTeacherFee(false); }
+    });
   };
 
   const [isManualCommissionOpen, setIsManualCommissionOpen] = useState(false);
@@ -2694,23 +2703,25 @@ function EmailLogsPanel() {
 
   const handleManualCommission = async () => {
     if (!manualCommissionAffiliateId || !manualCommissionHTG) return;
-    setIsSubmittingManualCommission(true);
-    try {
-      const res = await fetch('/api/admin/affiliate/manual-commission', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ affiliateId: manualCommissionAffiliateId, amountHTG: Number(manualCommissionHTG), reason: manualCommissionReason }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success(`Commission de ${manualCommissionHTG} HTG envoyée à ${manualCommissionAffiliateName} !`);
-      setIsManualCommissionOpen(false);
-      setManualCommissionHTG('');
-      setManualCommissionReason('');
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de l\'envoi de la commission.');
-    } finally {
-      setIsSubmittingManualCommission(false);
-    }
+    await withAdminPin('Envoyer une commission manuelle', async () => {
+      setIsSubmittingManualCommission(true);
+      try {
+        const res = await fetch('/api/admin/affiliate/manual-commission', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ affiliateId: manualCommissionAffiliateId, amountHTG: Number(manualCommissionHTG), reason: manualCommissionReason }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success(`Commission de ${manualCommissionHTG} HTG envoyée à ${manualCommissionAffiliateName} !`);
+        setIsManualCommissionOpen(false);
+        setManualCommissionHTG('');
+        setManualCommissionReason('');
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur lors de l\'envoi de la commission.');
+      } finally {
+        setIsSubmittingManualCommission(false);
+      }
+    });
   };
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
   const [affiliateFormData, setAffiliateFormData] = useState<Partial<Affiliate>>({
@@ -2820,68 +2831,74 @@ function EmailLogsPanel() {
   }, []);
 
   const handleAffiliateReqAction = async (reqId: string, action: 'approve' | 'decline') => {
-    setAffiliateReqActionLoading(reqId);
-    try {
-      const res = await fetch(`/api/admin/affiliate-requests/${reqId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
-      toast.success(action === 'approve' ? 'Dépôt affilié approuvé !' : 'Demande refusée.');
-      setAffiliateClientRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: action === 'approve' ? 'approved' : 'declined' } : r));
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    } finally {
-      setAffiliateReqActionLoading(null);
-    }
+    await withAdminPin(action === 'approve' ? 'Approuver la demande affilié' : 'Refuser la demande affilié', async () => {
+      setAffiliateReqActionLoading(reqId);
+      try {
+        const res = await fetch(`/api/admin/affiliate-requests/${reqId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+        toast.success(action === 'approve' ? 'Dépôt affilié approuvé !' : 'Demande refusée.');
+        setAffiliateClientRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: action === 'approve' ? 'approved' : 'declined' } : r));
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      } finally {
+        setAffiliateReqActionLoading(null);
+      }
+    });
   };
 
   const handlePurchaseAction = async (
     notifId: string, transactionId: string, clientId: string,
     amount: number, directSponsorId: string | null, action: 'approve' | 'decline'
   ) => {
-    setPurchaseActionLoading(notifId);
-    try {
-      if (action === 'approve') {
-        await approvePurchaseRequest(notifId, transactionId, clientId, amount, directSponsorId);
-        toast.success('Achat approuvé !');
-      } else {
-        await declinePurchaseRequest(notifId, transactionId);
-        toast.success('Achat refusé.');
+    await withAdminPin(action === 'approve' ? 'Approuver l\'achat' : 'Refuser l\'achat', async () => {
+      setPurchaseActionLoading(notifId);
+      try {
+        if (action === 'approve') {
+          await approvePurchaseRequest(notifId, transactionId, clientId, amount, directSponsorId);
+          toast.success('Achat approuvé !');
+        } else {
+          await declinePurchaseRequest(notifId, transactionId);
+          toast.success('Achat refusé.');
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      } finally {
+        setPurchaseActionLoading(null);
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    } finally {
-      setPurchaseActionLoading(null);
-    }
+    });
   };
 
   const handleApproveWithCredentials = async () => {
     if (!credentialNotif) return;
-    setCredentialLoading(true);
-    try {
-      const creds = credentialEmail.trim() && credentialPassword.trim()
-        ? { email: credentialEmail.trim(), password: credentialPassword.trim() }
-        : null;
-      await approvePurchaseRequest(
-        credentialNotif.id!,
-        credentialNotif.transactionId,
-        credentialNotif.clientId,
-        credentialNotif.amount,
-        credentialNotif.directSponsorId || null,
-        creds,
-        credentialNotif.productName || '',
-      );
-      toast.success(creds ? '✅ Service approuvé avec identifiants envoyés !' : '✅ Service approuvé !');
-      setCredentialsModalOpen(false);
-      setCredentialNotif(null);
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    } finally {
-      setCredentialLoading(false);
-    }
+    await withAdminPin('Approuver le service avec identifiants', async () => {
+      setCredentialLoading(true);
+      try {
+        const creds = credentialEmail.trim() && credentialPassword.trim()
+          ? { email: credentialEmail.trim(), password: credentialPassword.trim() }
+          : null;
+        await approvePurchaseRequest(
+          credentialNotif.id!,
+          credentialNotif.transactionId,
+          credentialNotif.clientId,
+          credentialNotif.amount,
+          credentialNotif.directSponsorId || null,
+          creds,
+          credentialNotif.productName || '',
+        );
+        toast.success(creds ? '✅ Service approuvé avec identifiants envoyés !' : '✅ Service approuvé !');
+        setCredentialsModalOpen(false);
+        setCredentialNotif(null);
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      } finally {
+        setCredentialLoading(false);
+      }
+    });
   };
 
   const openPromoDialog = (target: any | null = null) => {
@@ -2896,59 +2913,67 @@ function EmailLogsPanel() {
 
   const handleSavePromoCode = async () => {
     if (!promoCode.trim() || !promoDiscount) { toast.error('Code et réduction requis.'); return; }
-    setPromoSaving(true);
-    try {
-      await savePromoCode({
-        code: promoCode.trim(),
-        serviceName: promoServiceName.trim(),
-        discountPercent: Number(promoDiscount),
-        maxUses: Number(promoMaxUses) || 0,
-        active: promoActive,
-      }, promoEditTarget?.id);
-      toast.success(promoEditTarget ? 'Code modifié !' : 'Code créé !');
-      setPromoDialogOpen(false);
-      refreshPromoCodes();
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    } finally {
-      setPromoSaving(false);
-    }
+    await withAdminPin(promoEditTarget ? 'Modifier le code promo' : 'Créer le code promo', async () => {
+      setPromoSaving(true);
+      try {
+        await savePromoCode({
+          code: promoCode.trim(),
+          serviceName: promoServiceName.trim(),
+          discountPercent: Number(promoDiscount),
+          maxUses: Number(promoMaxUses) || 0,
+          active: promoActive,
+        }, promoEditTarget?.id);
+        toast.success(promoEditTarget ? 'Code modifié !' : 'Code créé !');
+        setPromoDialogOpen(false);
+        refreshPromoCodes();
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      } finally {
+        setPromoSaving(false);
+      }
+    });
   };
 
   const handleDeletePromoCode = async () => {
     if (!promoDeleteTarget) return;
-    try {
-      await deletePromoCode(promoDeleteTarget.id);
-      toast.success('Code supprimé.');
-      setPromoDeleteTarget(null);
-      refreshPromoCodes();
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    }
+    await withAdminPin('Supprimer le code promo', async () => {
+      try {
+        await deletePromoCode(promoDeleteTarget.id);
+        toast.success('Code supprimé.');
+        setPromoDeleteTarget(null);
+        refreshPromoCodes();
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      }
+    });
   };
 
   const handleClientTxAction = async (txId: string, status: 'approved' | 'rejected') => {
-    setClientTxActionLoading(txId);
-    try {
-      await updateClientTransactionStatus(txId, status);
-      toast.success(status === 'approved' ? 'Transaction approuvée !' : 'Transaction rejetée.');
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    } finally {
-      setClientTxActionLoading(null);
-    }
+    await withAdminPin(status === 'approved' ? 'Approuver la transaction' : 'Rejeter la transaction', async () => {
+      setClientTxActionLoading(txId);
+      try {
+        await updateClientTransactionStatus(txId, status);
+        toast.success(status === 'approved' ? 'Transaction approuvée !' : 'Transaction rejetée.');
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      } finally {
+        setClientTxActionLoading(null);
+      }
+    });
   };
 
   const handleWalletTxAction = async (txId: string, status: 'approved' | 'rejected') => {
-    setClientTxActionLoading(txId);
-    try {
-      await updateWalletTransactionStatus(txId, status);
-      toast.success(status === 'approved' ? 'Dépôt approuvé !' : 'Dépôt refusé.');
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors du traitement.');
-    } finally {
-      setClientTxActionLoading(null);
-    }
+    await withAdminPin(status === 'approved' ? 'Approuver le dépôt' : 'Refuser le dépôt', async () => {
+      setClientTxActionLoading(txId);
+      try {
+        await updateWalletTransactionStatus(txId, status);
+        toast.success(status === 'approved' ? 'Dépôt approuvé !' : 'Dépôt refusé.');
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur lors du traitement.');
+      } finally {
+        setClientTxActionLoading(null);
+      }
+    });
   };
 
   const filteredClientTransactions = React.useMemo(() => {
@@ -3013,18 +3038,20 @@ function EmailLogsPanel() {
   }, []);
 
   const handleAgentDepositAction = async (txId: string, action: 'approve' | 'reject') => {
-    setAgentDepositActionLoading(txId);
-    try {
-      const res = await fetch(`/api/admin/agent-personal-deposit/${txId}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
-      toast.success(action === 'approve' ? 'Dépôt agent approuvé !' : 'Dépôt agent refusé.');
-      setAgentPersonalDeposits(prev => prev.filter(t => t.id !== txId));
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur.');
-    } finally {
-      setAgentDepositActionLoading(null);
-    }
+    await withAdminPin(action === 'approve' ? 'Approuver le dépôt agent' : 'Refuser le dépôt agent', async () => {
+      setAgentDepositActionLoading(txId);
+      try {
+        const res = await fetch(`/api/admin/agent-personal-deposit/${txId}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+        toast.success(action === 'approve' ? 'Dépôt agent approuvé !' : 'Dépôt agent refusé.');
+        setAgentPersonalDeposits(prev => prev.filter(t => t.id !== txId));
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur.');
+      } finally {
+        setAgentDepositActionLoading(null);
+      }
+    });
   };
 
   const [agentSearch, setAgentSearch] = useState('');
@@ -3202,28 +3229,32 @@ function EmailLogsPanel() {
 
   const handleSaveFormation = async () => {
     if (!formationFormData.title) { toast.error('Le titre est requis.'); return; }
-    setIsSaving(true);
-    try {
-      await saveAdminFormation(formationFormData, editingFormation?.id);
-      toast.success(editingFormation ? 'Formation mise à jour !' : 'Formation créée !');
-      setIsFormationDialogOpen(false);
-      refreshFormations();
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de la sauvegarde.');
-    } finally { setIsSaving(false); }
+    await withAdminPin(editingFormation ? 'Modifier la formation' : 'Créer la formation', async () => {
+      setIsSaving(true);
+      try {
+        await saveAdminFormation(formationFormData, editingFormation?.id);
+        toast.success(editingFormation ? 'Formation mise à jour !' : 'Formation créée !');
+        setIsFormationDialogOpen(false);
+        refreshFormations();
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur lors de la sauvegarde.');
+      } finally { setIsSaving(false); }
+    });
   };
 
   const handleConfirmDeleteFormation = async () => {
     if (!formationToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteAdminFormation(formationToDelete.id);
-      toast.success('Formation supprimée.');
-      setIsFormationDeleteDialogOpen(false);
-      refreshFormations();
-    } catch (err: any) {
-      toast.error(err.message || 'Erreur lors de la suppression.');
-    } finally { setIsDeleting(false); setFormationToDelete(null); }
+    await withAdminPin('Supprimer la formation', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteAdminFormation(formationToDelete.id);
+        toast.success('Formation supprimée.');
+        setIsFormationDeleteDialogOpen(false);
+        refreshFormations();
+      } catch (err: any) {
+        toast.error(err.message || 'Erreur lors de la suppression.');
+      } finally { setIsDeleting(false); setFormationToDelete(null); }
+    });
   };
 
   const addFormationModule = () => {
@@ -3820,87 +3851,94 @@ function EmailLogsPanel() {
       toast.error("Le nom et l'email Google sont requis.");
       return;
     }
-    setIsSaving(true);
-    try {
-      const code = await createAgent(agentName, agentPhone, agentEmail.trim().toLowerCase());
-      toast.success(`Agent créé ! Code: ${code}. L'agent peut maintenant se connecter avec Google.`);
-      setIsAgentDialogOpen(false);
-      setAgentName('');
-      setAgentPhone('');
-      setAgentEmail('');
-    } catch (error) {
-      toast.error("Erreur lors de la création de l'agent.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Créer un agent', async () => {
+      setIsSaving(true);
+      try {
+        const code = await createAgent(agentName, agentPhone, agentEmail.trim().toLowerCase());
+        toast.success(`Agent créé ! Code: ${code}. L'agent peut maintenant se connecter avec Google.`);
+        setIsAgentDialogOpen(false);
+        setAgentName('');
+        setAgentPhone('');
+        setAgentEmail('');
+      } catch (error) {
+        toast.error("Erreur lors de la création de l'agent.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleUpdateAgentBalanceAction = async (type: 'credit' | 'debit') => {
     if (!selectedAgentForBalance?.id || !balanceAdjustment) return;
     const amount = parseFloat(balanceAdjustment);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Montant invalide.");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const res = await fetch(`/api/admin/agent/${selectedAgentForBalance.id}/wallet/adjust`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, wallet: agentWalletType, amount, note: agentWalletNote }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
-      const walletLabel = agentWalletType === 'commission' ? 'Wallet Affilié' : 'Wallet Agent';
-      toast.success(`${walletLabel} mis à jour.`);
-      setIsAgentBalanceDialogOpen(false);
-      setBalanceAdjustment('');
-      setAgentWalletNote('');
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la mise à jour.");
-    } finally {
-      setIsSaving(false);
-    }
+    if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
+    await withAdminPin(type === 'credit' ? 'Créditer le wallet agent' : 'Débiter le wallet agent', async () => {
+      setIsSaving(true);
+      try {
+        const res = await fetch(`/api/admin/agent/${selectedAgentForBalance.id}/wallet/adjust`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, wallet: agentWalletType, amount, note: agentWalletNote }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+        const walletLabel = agentWalletType === 'commission' ? 'Wallet Affilié' : 'Wallet Agent';
+        toast.success(`${walletLabel} mis à jour.`);
+        setIsAgentBalanceDialogOpen(false);
+        setBalanceAdjustment('');
+        setAgentWalletNote('');
+      } catch (error: any) {
+        toast.error(error.message || "Erreur lors de la mise à jour.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleToggleAgentLock = async (agent: Agent) => {
     if (!agent.id) return;
-    setIsSaving(true);
-    try {
-      const res = await fetch(`/api/admin/agent/${agent.id}/toggle-lock`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
-      toast.success(data.walletLocked ? '🔒 Wallet Agent verrouillé.' : '🔓 Wallet Agent déverrouillé.');
-    } catch (error: any) {
-      toast.error(error.message || "Erreur.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Verrouiller / déverrouiller le wallet agent', async () => {
+      setIsSaving(true);
+      try {
+        const res = await fetch(`/api/admin/agent/${agent.id}/toggle-lock`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+        toast.success(data.walletLocked ? '🔒 Wallet Agent verrouillé.' : '🔓 Wallet Agent déverrouillé.');
+      } catch (error: any) {
+        toast.error(error.message || "Erreur.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleApproveTransferAction = async (tx: WalletTransaction) => {
-    setIsSaving(true);
-    try {
-      await approveTransfer(tx);
-      toast.success("Transfert approuvé !");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de l'approbation.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Approuver le transfert', async () => {
+      setIsSaving(true);
+      try {
+        await approveTransfer(tx);
+        toast.success("Transfert approuvé !");
+      } catch (error: any) {
+        toast.error(error.message || "Erreur lors de l'approbation.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleRejectTransferAction = async (tx: WalletTransaction) => {
     if (!tx.id) return;
-    setIsSaving(true);
-    try {
-      await rejectTransfer(tx.id);
-      toast.success("Transfert rejeté.");
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors du rejet.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Rejeter le transfert', async () => {
+      setIsSaving(true);
+      try {
+        await rejectTransfer(tx.id);
+        toast.success("Transfert rejeté.");
+      } catch (error: any) {
+        toast.error(error.message || "Erreur lors du rejet.");
+      } finally {
+        setIsSaving(false);
+      }
+    });
   };
 
   const handleApproveAllTransfers = async () => {
