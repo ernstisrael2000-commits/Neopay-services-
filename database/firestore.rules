@@ -114,16 +114,19 @@ service cloud.firestore {
     }
 
     match /wallet_transactions/{transactionId} {
+      // SECURITY: read kept open for dashboards (no PII beyond amounts/status).
+      // write is server-only via Admin SDK — clients cannot create or modify records.
       allow read: if true;
-      allow create: if true;
-      allow update: if true;
+      allow create: if false;
+      allow update: if false;
       allow delete: if isAdmin();
     }
 
     match /agents/{agentId} {
       allow read: if true;
       allow create: if isAdmin() && isValidAgent(request.resource.data);
-      allow update: if isAdmin() || (isAgent() && request.auth.uid == agentId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'updatedAt']));
+      // SECURITY: agents cannot update their own balance from client — backend only.
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -173,7 +176,12 @@ service cloud.firestore {
     match /affiliates/{affiliateId} {
       allow read: if true; 
       allow create: if isAdmin() && isValidAffiliate(request.resource.data);
-      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'referredClients', 'points', 'monthlyReferredClients', 'monthlySales', 'isMonthlyWinner', 'updatedAt', 'level', 'directRevenue', 'indirectRevenue', 'totalEarnings', 'totalWithdrawn', 'walletId']));
+      // SECURITY: balance/financial fields must only be updated by Admin SDK (backend).
+      // Any authenticated user was previously able to update balance — fixed below.
+      allow update: if isAdmin() || (
+        isAuthenticated() && request.auth.uid == affiliateId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['walletId', 'updatedAt'])
+      );
       allow delete: if isAdmin();
     }
 
@@ -246,8 +254,10 @@ service cloud.firestore {
     }
 
     match /client_transactions/{txId} {
+      // SECURITY: only Admin SDK (backend) may create records.
+      // Clients must never be able to inject fake transaction entries.
       allow read: if true;
-      allow create: if true;
+      allow create: if false;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }

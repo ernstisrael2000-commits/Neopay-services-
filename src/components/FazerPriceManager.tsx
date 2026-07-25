@@ -7,7 +7,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 
-const ADMIN_SECRET = 'rena-admin-2024';
+const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024';
 
 async function loadOverrides(): Promise<Record<string, number>> {
   const r = await fetch('/api/fazer/price-overrides');

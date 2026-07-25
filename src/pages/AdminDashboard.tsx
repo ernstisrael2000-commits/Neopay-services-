@@ -1230,7 +1230,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setLoadingPaymentRequests(true);
     try {
       const res = await fetch('/api/admin/formations/payment-requests', {
-        headers: { 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
       });
       const json = await res.json();
       setFormationPaymentRequests(json.requests || []);
@@ -1246,7 +1246,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     try {
       const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({ action: 'approve' }),
       });
       if (!res.ok) throw new Error('Erreur');
@@ -1262,7 +1262,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     try {
       const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({ action: 'reject' }),
       });
       if (!res.ok) throw new Error('Erreur');
@@ -1303,7 +1303,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setLoadingCertificates(true);
     try {
       const url = fId ? `/api/admin/formations/certificates?formationId=${fId}` : '/api/admin/formations/certificates';
-      const res = await fetch(url, { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const res = await fetch(url, { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
       const data = await res.json();
       setCertificates(data.certificates || []);
     } catch { toast.error('Impossible de charger les certificats.'); }
@@ -1313,7 +1313,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const fetchCertStudents = async (fId: string) => {
     setLoadingCertStudents(true);
     try {
-      const res = await fetch(`/api/admin/formations/${fId}/students`, { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const res = await fetch(`/api/admin/formations/${fId}/students`, { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
       const data = await res.json();
       setCertStudents(data.students || []);
     } catch { toast.error('Impossible de charger les étudiants.'); }
@@ -1327,7 +1327,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setCertIssuanceForm(null);
     try {
       const res = await fetch('/api/admin/formations/certificate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({
           userId: student.userId, userName: student.userName, userEmail: student.userEmail,
           formationId: selectedCertFormationId, formationTitle: formation?.title || '',
@@ -1346,7 +1346,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const handleRevokeCertificate = async (certId: string) => {
     setRevokingCertId(certId);
     try {
-      await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
       toast.success('Certificat révoqué.');
       fetchCertificates(selectedCertFormationId || undefined);
     } catch { toast.error('Erreur lors de la révocation.'); }
@@ -1357,7 +1357,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setUpdatingCertPdf(certId);
     try {
       const res = await fetch(`/api/admin/formations/certificate/${certId}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({ pdfUrl }),
       });
       if (!res.ok) throw new Error('Erreur');
@@ -2518,7 +2518,7 @@ function EmailLogsPanel() {
   const fetchFFResellerAgents = async () => {
     setFFResellerLoading(true);
     try {
-      const res = await fetch('/api/admin/reseller/ff/agents', { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const res = await fetch('/api/admin/reseller/ff/agents', { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
       const data = await res.json();
       setFFResellerAgents(data.accounts || []);
       ffResellerLoaded.current = true;
@@ -2529,7 +2529,7 @@ function EmailLogsPanel() {
   const fetchFFPacks = async () => {
     setFFPacksLoading(true);
     try {
-      const res = await fetch('/api/admin/reseller/ff/packs', { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const res = await fetch('/api/admin/reseller/ff/packs', { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
       const data = await res.json();
       if (data.packs?.length) { setFFCreditPacks(data.packs); ffPacksLoaded.current = true; }
     } catch { /* use defaults */ }
@@ -2541,7 +2541,7 @@ function EmailLogsPanel() {
     try {
       const res = await fetch('/api/admin/reseller/ff/packs', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({ packs: ffEditingPacks }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
@@ -2558,7 +2558,7 @@ function EmailLogsPanel() {
       const url = agentId
         ? `/api/admin/reseller/ff/transactions?agentId=${encodeURIComponent(agentId)}&limit=100`
         : '/api/admin/reseller/ff/transactions?limit=100';
-      const res = await fetch(url, { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const res = await fetch(url, { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
       const data = await res.json();
       setFFTxs(data.transactions || []);
     } catch { toast.error('Erreur chargement transactions Free Fire.'); }
@@ -2574,7 +2574,7 @@ function EmailLogsPanel() {
     try {
       const res = await fetch(`/api/admin/agent/${agentToDelete.id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erreur lors de la suppression.'); return; }
@@ -2591,7 +2591,7 @@ function EmailLogsPanel() {
     try {
       const res = await fetch('/api/admin/reseller/ff/toggle', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({ agentId: agent.agentId || agent.id, agentName: agent.agentName || agent.name || '', enabled: !agent.enabled }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
@@ -2608,7 +2608,7 @@ function EmailLogsPanel() {
     try {
       const res = await fetch('/api/admin/reseller/ff/credit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
         body: JSON.stringify({
           agentId: ffCreditAgent.agentId || ffCreditAgent.id,
           agentName: ffCreditAgent.agentName || ffCreditAgent.name || '',

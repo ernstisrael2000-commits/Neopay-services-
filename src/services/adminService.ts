@@ -23,7 +23,7 @@ async function adminApi(method: string, path: string, body?: object): Promise<an
     method,
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-secret': 'rena-admin-2024',
+      'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024'),
     },
   };
   if (body) opts.body = JSON.stringify(body);

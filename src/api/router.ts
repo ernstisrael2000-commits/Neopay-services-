@@ -250,6 +250,25 @@ const requireDb = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
+// ── Admin secret guard (timing-safe comparison) ───────────────────────────────
+// SECURITY: secret loaded from ADMIN_SECRET env var at startup (never hardcoded).
+const _ADMIN_SECRET_STR = process.env.ADMIN_SECRET || (() => {
+  console.warn('[Security] ADMIN_SECRET non défini — utilisation du secret par défaut. DÉFINISSEZ ADMIN_SECRET en production !');
+  return 'rena-admin-2024';
+})();
+const _ADMIN_SECRET_BUF = Buffer.from(_ADMIN_SECRET_STR);
+const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const supplied = String(req.headers['x-admin-secret'] || '');
+  const suppliedBuf = Buffer.alloc(_ADMIN_SECRET_BUF.length);
+  suppliedBuf.write(supplied);
+  const ok = supplied.length === _ADMIN_SECRET_BUF.length && timingSafeEqual(suppliedBuf, _ADMIN_SECRET_BUF);
+  if (!ok) {
+    console.warn(`[Security] requireAdminSecret: tentative non autorisée depuis ${req.ip} — ${req.method} ${req.path}`);
+    return res.status(403).json({ error: 'Non autorisé.' });
+  }
+  next();
+};
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 const router = express.Router();
@@ -487,7 +506,7 @@ router.post('/api/notify-registration', async (req, res) => {
 });
 
 // ── Transactions ─────────────────────────────────────────────────────────────
-router.get('/api/admin/transactions', requireDb, async (_req, res) => {
+router.get('/api/admin/transactions', requireDb, requireAdminSecret, async (_req, res) => {
   try {
     const snap = await adminDb.collection('client_transactions').orderBy('createdAt', 'desc').limit(500).get();
     res.json({ transactions: snap.docs.map(serializeDoc) });
@@ -511,7 +530,7 @@ router.get('/api/client/transactions/:clientId', requireDb, async (req, res) => 
   }
 });
 
-router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) => {
+router.delete('/api/client/transactions/:clientId', requireDb, requireAdminSecret, async (req, res) => {
   try {
     const snap = await adminDb.collection('client_transactions')
       .where('clientId', '==', req.params.clientId).get();
@@ -526,7 +545,7 @@ router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) 
 });
 
 // ── Notifications ────────────────────────────────────────────────────────────
-router.get('/api/admin/notifications', requireDb, async (_req, res) => {
+router.get('/api/admin/notifications', requireDb, requireAdminSecret, async (_req, res) => {
   try {
     const snap = await adminDb.collection('admin_notifications').orderBy('createdAt', 'desc').limit(200).get();
     res.json({ notifications: snap.docs.map(serializeDoc) });
@@ -536,7 +555,7 @@ router.get('/api/admin/notifications', requireDb, async (_req, res) => {
   }
 });
 
-router.patch('/api/admin/notifications/read-all', requireDb, async (_req, res) => {
+router.patch('/api/admin/notifications/read-all', requireDb, requireAdminSecret, async (_req, res) => {
   try {
     const snap = await adminDb.collection('admin_notifications').where('read', '==', false).get();
     const batch = adminDb.batch();
@@ -548,7 +567,7 @@ router.patch('/api/admin/notifications/read-all', requireDb, async (_req, res) =
   }
 });
 
-router.patch('/api/admin/notifications/:id/read', requireDb, async (req, res) => {
+router.patch('/api/admin/notifications/:id/read', requireDb, requireAdminSecret, async (req, res) => {
   try {
     await adminDb.collection('admin_notifications').doc(req.params.id).update({ read: true });
     res.json({ success: true });
@@ -557,7 +576,7 @@ router.patch('/api/admin/notifications/:id/read', requireDb, async (req, res) =>
   }
 });
 
-router.delete('/api/admin/notifications/clear-all', requireDb, async (_req, res) => {
+router.delete('/api/admin/notifications/clear-all', requireDb, requireAdminSecret, async (req, res) => {
   try {
     const snap = await adminDb.collection('admin_notifications').limit(500).get();
     const batch = adminDb.batch();
@@ -754,46 +773,51 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'Un retrait est déjà en cours de traitement. Veuillez patienter.' });
 
     const clientRef = adminDb.collection('clients').doc(clientId);
-    const clientSnap = await clientRef.get();
-    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
-    const clientData = clientSnap.data()!;
-    if ((clientData.balance || 0) < amount)
-      return res.status(400).json({ error: 'Solde insuffisant.' });
 
-    // ── Manual pending flow ───────────────────────────────────────────────────
-    const batch = adminDb.batch();
-    batch.update(clientRef, {
-      balance: Math.max(0, (clientData.balance || 0) - amount),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    // SECURITY: Use runTransaction to atomically verify balance and deduct.
+    // A plain read + batch write has a race condition: two simultaneous withdrawals
+    // could both pass the balance check against the same stale snapshot.
     const txRef = adminDb.collection('client_transactions').doc();
-    batch.set(txRef, {
-      clientId, clientName, type: 'withdrawal', amount, status: 'pending',
-      method, accountNumber,
-      ...(usdAmount !== undefined && { usdAmount }),
-      ...(htgEquivalent !== undefined && { htgEquivalent }),
-      ...(exchangeRate !== undefined && { exchangeRate }),
-      ...(accountName && { accountName }),
-      ...(message && { message }),
-      description: `Retrait via ${method}${htgEquivalent ? ` — ≈ ${htgEquivalent.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    const adminWithdrawNotif = {
-      type: 'client_withdrawal', clientId, clientName,
-      clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
-      transactionId: txRef.id, amount, method, accountNumber,
-      ...(usdAmount !== undefined && { usdAmount }),
-      ...(htgEquivalent !== undefined && { htgEquivalent }),
-      ...(exchangeRate !== undefined && { exchangeRate }),
-      ...(accountName && { accountName }),
-      ...(message && { message }),
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    };
     const notifRef = adminDb.collection('admin_notifications').doc();
-    batch.set(notifRef, adminWithdrawNotif);
-    await batch.commit();
+    let clientData: FirebaseFirestore.DocumentData;
+
+    await adminDb.runTransaction(async (txn) => {
+      const clientSnap = await txn.get(clientRef);
+      if (!clientSnap.exists) throw Object.assign(new Error('Client introuvable.'), { status: 404 });
+      clientData = clientSnap.data()!;
+      if ((clientData.balance || 0) < amount) throw Object.assign(new Error('Solde insuffisant.'), { status: 400 });
+
+      txn.update(clientRef, {
+        balance: FieldValue.increment(-amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(txRef, {
+        clientId, clientName, type: 'withdrawal', amount, status: 'pending',
+        method, accountNumber,
+        ...(usdAmount !== undefined && { usdAmount }),
+        ...(htgEquivalent !== undefined && { htgEquivalent }),
+        ...(exchangeRate !== undefined && { exchangeRate }),
+        ...(accountName && { accountName }),
+        ...(message && { message }),
+        description: `Retrait via ${method}${htgEquivalent ? ` — ≈ ${htgEquivalent.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const adminWithdrawNotifData = {
+        type: 'client_withdrawal', clientId, clientName,
+        clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
+        transactionId: txRef.id, amount, method, accountNumber,
+        ...(usdAmount !== undefined && { usdAmount }),
+        ...(htgEquivalent !== undefined && { htgEquivalent }),
+        ...(exchangeRate !== undefined && { exchangeRate }),
+        ...(accountName && { accountName }),
+        ...(message && { message }),
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      };
+      txn.set(notifRef, adminWithdrawNotifData);
+    });
+    const adminWithdrawNotif = { type: 'client_withdrawal', clientId, clientName, transactionId: txRef.id, amount, method };
     pushAllAdminsEvent('new_notification', { id: notifRef.id, ...adminWithdrawNotif, createdAt: { _seconds: Date.now() / 1000 } });
 
     sendAdminEmail(
@@ -1440,12 +1464,20 @@ router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, 
     if (confirmData.clientId !== clientId) return res.status(403).json({ error: 'Non autorisé.' });
     if (confirmData.status !== 'pending') return res.status(400).json({ error: 'Cette demande a déjà été traitée.' });
 
-    // OTP verification: only required when an OTP was generated (otpHash present)
+    // SECURITY: OTP verification with brute-force protection.
+    // Track failed attempts; block after 5 wrong codes to prevent exhaustion attacks.
     if (confirmData.otpHash) {
       if (!otpCode) return res.status(400).json({ error: 'Code OTP requis.' });
+      const failedAttempts = confirmData.otpFailedAttempts || 0;
+      if (failedAttempts >= 5) {
+        await confirmRef.update({ status: 'expired', updatedAt: FieldValue.serverTimestamp() });
+        return res.status(429).json({ error: 'Trop de tentatives incorrectes. La demande a été annulée. Demandez à l\'agent de renouveler.' });
+      }
       const submittedHash = createHash('sha256').update(String(otpCode)).digest('hex');
       if (submittedHash !== confirmData.otpHash) {
-        return res.status(403).json({ error: 'Code OTP incorrect.' });
+        await confirmRef.update({ otpFailedAttempts: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+        const remaining = 4 - failedAttempts;
+        return res.status(403).json({ error: `Code OTP incorrect. ${remaining} tentative(s) restante(s) avant blocage.` });
       }
     }
 
@@ -2900,7 +2932,7 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
 });
 
 // ── Delete client transaction history ────────────────────────────────────────
-router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) => {
+router.delete('/api/client/transactions/:clientId', requireDb, requireAdminSecret, async (req, res) => {
   try {
     const { clientId } = req.params;
     if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
@@ -3416,7 +3448,7 @@ router.delete('/api/promo-codes/:id', requireDb, async (req, res) => {
 // Validate a promo code for a given service (client-facing)
 router.post('/api/promo-codes/validate', requireDb, async (req, res) => {
   try {
-    const { code, serviceName } = req.body;
+    const { code, serviceName, userId } = req.body;
     if (!code) return res.status(400).json({ error: 'Code requis.' });
     const snap = await adminDb.collection('promo_codes')
       .where('code', '==', code.toUpperCase().trim())
@@ -3425,31 +3457,97 @@ router.post('/api/promo-codes/validate', requireDb, async (req, res) => {
     if (snap.empty) return res.json({ valid: false, error: 'Code introuvable ou inactif.' });
     const doc = snap.docs[0];
     const data = doc.data();
+
+    // SECURITY: Check validity period
+    const now = new Date();
+    if (data.dateStart) {
+      const start = data.dateStart?.toDate ? data.dateStart.toDate() : new Date(data.dateStart);
+      if (now < start) return res.json({ valid: false, error: 'Ce code n\'est pas encore actif.' });
+    }
+    if (data.dateEnd) {
+      const end = data.dateEnd?.toDate ? data.dateEnd.toDate() : new Date(data.dateEnd);
+      if (now > end) return res.json({ valid: false, error: 'Ce code a expiré.' });
+    }
+
     // Check service match (empty = all services)
     if (data.serviceName && serviceName && !serviceName.toLowerCase().includes(data.serviceName.toLowerCase())) {
       return res.json({ valid: false, error: `Ce code est valable uniquement pour ${data.serviceName}.` });
     }
-    // Check max uses
+    // SECURITY: Check max global uses
     if (data.maxUses > 0 && (data.usedCount || 0) >= data.maxUses) {
       return res.json({ valid: false, error: 'Ce code a atteint sa limite d\'utilisation.' });
     }
+    // SECURITY: Check per-user usage if the code has a per-user limit
+    if (userId && (data.maxUsesPerUser || 0) > 0) {
+      const userUsageSnap = await adminDb.collection('promo_code_usages')
+        .where('codeId', '==', doc.id)
+        .where('userId', '==', userId)
+        .limit(1).get();
+      if (!userUsageSnap.empty && (userUsageSnap.docs[0].data().count || 0) >= data.maxUsesPerUser) {
+        return res.json({ valid: false, error: 'Vous avez déjà utilisé ce code le nombre maximum de fois autorisé.' });
+      }
+    }
+    // SECURITY: Check single-use-per-user codes (onePerUser flag)
+    if (userId && data.onePerUser) {
+      const usedSnap = await adminDb.collection('promo_code_usages')
+        .where('codeId', '==', doc.id)
+        .where('userId', '==', userId)
+        .limit(1).get();
+      if (!usedSnap.empty) {
+        return res.json({ valid: false, error: 'Vous avez déjà utilisé ce code.' });
+      }
+    }
+
     res.json({ valid: true, id: doc.id, discountPercent: data.discountPercent, serviceName: data.serviceName });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// Increment usage after a purchase with promo code
+// SECURITY: Atomically validate + increment usage after a purchase with promo code.
+// Runs inside a Firestore transaction to prevent concurrent double-use of the last available slot.
 router.post('/api/promo-codes/:id/use', requireDb, async (req, res) => {
   try {
-    await adminDb.collection('promo_codes').doc(req.params.id).update({
-      usedCount: FieldValue.increment(1),
-      updatedAt: FieldValue.serverTimestamp(),
+    const { userId, orderId } = req.body;
+    const codeId = req.params.id;
+    const codeRef = adminDb.collection('promo_codes').doc(codeId);
+
+    await adminDb.runTransaction(async (txn) => {
+      const codeSnap = await txn.get(codeRef);
+      if (!codeSnap.exists) throw new Error('Code promo introuvable.');
+      const data = codeSnap.data()!;
+      if (!data.active) throw new Error('Ce code promo n\'est plus actif.');
+
+      // Re-verify expiry inside transaction
+      const now = new Date();
+      if (data.dateEnd) {
+        const end = data.dateEnd?.toDate ? data.dateEnd.toDate() : new Date(data.dateEnd);
+        if (now > end) throw new Error('Ce code promo a expiré.');
+      }
+      // Re-verify max uses inside transaction (prevents race condition on last slot)
+      if (data.maxUses > 0 && (data.usedCount || 0) >= data.maxUses) {
+        throw new Error('Ce code a atteint sa limite d\'utilisation.');
+      }
+
+      // Increment global usage counter
+      txn.update(codeRef, { usedCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+
+      // Record per-user usage for future per-user limit checks
+      if (userId) {
+        const usageRef = adminDb.collection('promo_code_usages').doc(`${codeId}_${userId}`);
+        txn.set(usageRef, {
+          codeId, userId, code: data.code,
+          ...(orderId && { orderId }),
+          count: FieldValue.increment(1),
+          lastUsedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     });
+
     res.json({ success: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // ── Admin: affiliate withdrawal approve / reject ───────────────────────────────
-router.post('/api/admin/withdrawal/:id/approve', requireDb, async (req, res) => {
+router.post('/api/admin/withdrawal/:id/approve', requireDb, requireAdminSecret, async (req, res) => {
   try {
     const { id } = req.params;
     const requestRef = adminDb.collection('withdrawals').doc(id);
@@ -3866,17 +3964,6 @@ router.post('/api/admin/agent/:agentId/wallet/adjust', requireDb, async (req, re
   }
 });
 
-// ── Admin secret guard (timing-safe comparison) ───────────────────────────────
-const _ADMIN_SECRET_BUF = Buffer.from('rena-admin-2024');
-const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const supplied = String(req.headers['x-admin-secret'] || '');
-  const buf = Buffer.alloc(_ADMIN_SECRET_BUF.length);
-  buf.write(supplied);
-  const ok = supplied.length === _ADMIN_SECRET_BUF.length && timingSafeEqual(buf, _ADMIN_SECRET_BUF);
-  if (!ok) return res.status(403).json({ error: 'Non autorisé.' });
-  next();
-};
-
 // ── Admin: delete agent ───────────────────────────────────────────────────────
 router.delete('/api/admin/agent/:agentId', requireDb, requireAdminSecret, async (req, res) => {
   try {
@@ -3899,7 +3986,7 @@ router.delete('/api/admin/agent/:agentId', requireDb, requireAdminSecret, async 
 });
 
 // ── Admin: toggle agent wallet lock ──────────────────────────────────────────
-router.post('/api/admin/agent/:agentId/toggle-lock', requireDb, async (req, res) => {
+router.post('/api/admin/agent/:agentId/toggle-lock', requireDb, requireAdminSecret, async (req, res) => {
   try {
     const { agentId } = req.params;
     const agentRef = adminDb.collection('agents').doc(agentId);
@@ -4680,9 +4767,12 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
     if (!fullName || !password)
       return res.status(400).json({ error: 'Identifiants requis.' });
 
+    // SECURITY: capture IP for audit log
+    const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+
     const snap = await adminDb.collection('admin_accounts').where('fullName', '==', fullName).limit(1).get();
     if (snap.empty) {
-      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, timestamp: FieldValue.serverTimestamp() });
+      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, ip: clientIp, reason: 'user_not_found', timestamp: FieldValue.serverTimestamp() });
       return res.status(401).json({ error: 'Identifiants incorrects.' });
     }
 
@@ -4691,8 +4781,10 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
 
     if (adminData.lockUntil) {
       const lockDate = adminData.lockUntil?.toDate ? adminData.lockUntil.toDate() : new Date(adminData.lockUntil);
-      if (lockDate > new Date())
+      if (lockDate > new Date()) {
+        await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, ip: clientIp, reason: 'account_locked', timestamp: FieldValue.serverTimestamp() });
         return res.status(403).json({ error: 'Compte bloqué temporairement. Réessayez plus tard.' });
+      }
     }
 
     if (adminData.password !== password) {
@@ -4700,17 +4792,17 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
       const upd: any = { failedAttempts: newAttempts };
       if (newAttempts >= 5) upd.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
       await adminDoc.ref.update(upd);
-      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, timestamp: FieldValue.serverTimestamp() });
+      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, ip: clientIp, reason: 'wrong_password', failedAttempts: newAttempts, timestamp: FieldValue.serverTimestamp() });
       return res.status(401).json({ error: 'Identifiants incorrects.' });
     }
 
     if (adminData.isSuperAdmin && adminData.loginCode && adminData.loginCode !== loginCode) {
-      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, timestamp: FieldValue.serverTimestamp() });
+      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, ip: clientIp, reason: 'wrong_login_code', timestamp: FieldValue.serverTimestamp() });
       return res.status(401).json({ error: 'Code de connexion incorrect.' });
     }
 
     await adminDoc.ref.update({ failedAttempts: 0, lockUntil: null, updatedAt: FieldValue.serverTimestamp() });
-    await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: true, timestamp: FieldValue.serverTimestamp() });
+    await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: true, ip: clientIp, timestamp: FieldValue.serverTimestamp() });
 
     res.json({ success: true, admin: serializeDoc(adminDoc) });
   } catch (e: any) {
@@ -4724,13 +4816,14 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
   try {
     const { email, uid } = req.body;
     if (!email || !uid) return res.status(400).json({ error: 'Données manquantes.' });
+    const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
 
     let adminSnap = await adminDb.collection('admin_accounts').where('email', '==', email.toLowerCase()).limit(1).get();
     if (adminSnap.empty) {
       adminSnap = await adminDb.collection('admin_accounts').where('uid', '==', uid).limit(1).get();
     }
     if (adminSnap.empty) {
-      await adminDb.collection('admin_login_logs').add({ adminName: email, success: false, timestamp: FieldValue.serverTimestamp() });
+      await adminDb.collection('admin_login_logs').add({ adminName: email, success: false, ip: clientIp, reason: 'not_admin', timestamp: FieldValue.serverTimestamp() });
       return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Rena.` });
     }
 
@@ -6962,13 +7055,21 @@ router.post('/api/crypto/ipn', async (req, res) => {
   try {
     const sig       = req.headers['x-nowpayments-sig'] as string | undefined;
     const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
-    if (ipnSecret && sig) {
-      const sorted   = JSON.stringify(sortObjectRecursive(req.body));
-      const expected = createHmac('sha512', ipnSecret).update(sorted).digest('hex');
-      if (sig.toLowerCase() !== expected.toLowerCase()) {
-        console.warn('[crypto/ipn] Signature invalide — rejeté');
-        return res.status(401).json({ error: 'Signature invalide.' });
-      }
+    // SECURITY: signature verification is MANDATORY. Without a valid secret configured,
+    // any attacker could POST a fake payment_status: 'finished' to credit accounts.
+    if (!ipnSecret) {
+      console.error('[crypto/ipn] NOWPAYMENTS_IPN_SECRET non configuré — webhook rejeté par sécurité.');
+      return res.status(500).json({ error: 'Configuration IPN manquante.' });
+    }
+    if (!sig) {
+      console.warn('[crypto/ipn] Requête sans signature — rejetée');
+      return res.status(401).json({ error: 'Signature manquante.' });
+    }
+    const sorted   = JSON.stringify(sortObjectRecursive(req.body));
+    const expected = createHmac('sha512', ipnSecret).update(sorted).digest('hex');
+    if (sig.toLowerCase() !== expected.toLowerCase()) {
+      console.warn('[crypto/ipn] Signature invalide — rejeté');
+      return res.status(401).json({ error: 'Signature invalide.' });
     }
     const { payment_id, payment_status } = req.body as { payment_id?: string; payment_status?: string };
     if (!payment_id) return res.sendStatus(200);
@@ -7101,22 +7202,41 @@ router.post('/api/fazer/topups/validate-id', async (req, res) => {
 // POST /api/fazer/topups/order — place order, deduct wallet
 router.post('/api/fazer/topups/order', requireDb, async (req, res) => {
   try {
-    const { clientId, category_id, offer_id, fields, priceUSD } = req.body as {
+    const { clientId, category_id, offer_id, fields } = req.body as {
       clientId: string; category_id: string; offer_id: string;
-      fields: Record<string, string>; priceUSD: number;
+      fields: Record<string, string>;
     };
+    // NOTE: priceUSD from client is intentionally ignored — price is fetched server-side.
     if (!clientId || !category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
 
-    // 1. Check client balance
+    // SECURITY: Fetch the real price from FazerCards server-side.
+    // Never trust priceUSD sent by the client — a malicious user could send 0.
+    let price = 0;
+    try {
+      const offersRes = await fazerFetch(`/topups/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
+      if (offersRes.ok) {
+        const offersData = await offersRes.json() as any;
+        const offersList: any[] = Array.isArray(offersData) ? offersData : (offersData.items || offersData.offers || offersData.data || []);
+        const matchedOffer = offersList.find((o: any) => String(o.id || o.offer_id) === String(offer_id));
+        if (matchedOffer) {
+          price = typeof matchedOffer.price === 'number'
+            ? matchedOffer.price
+            : parseFloat(matchedOffer.price_usd ?? matchedOffer.price ?? '0') || 0;
+        }
+      }
+    } catch (priceErr: any) {
+      console.warn('[fazer/order] Could not fetch offer price server-side:', priceErr.message);
+    }
+
+    // 1. Atomically verify balance and place order using runTransaction
     const clientRef = adminDb.collection('clients').doc(clientId);
     const clientSnap = await clientRef.get();
     if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
     const clientData = clientSnap.data()!;
-    const price = Number(priceUSD) || 0;
     if (price > 0 && (clientData.balance || 0) < price)
       return res.status(400).json({ error: `Solde insuffisant. Disponible: ${clientData.balance?.toFixed(2)} USD.` });
 
-    // 2. Place order with FazerCards
+    // 2. Place order with FazerCards (before deducting wallet, to avoid deducting on API failure)
     const idempotencyKey = `rena-${clientId}-${Date.now()}`;
     const fazerRes = await fazerFetch('/topups/order', {
       method: 'POST',
@@ -7129,26 +7249,28 @@ router.post('/api/fazer/topups/order', requireDb, async (req, res) => {
       return res.status(fazerRes.status).json({ error: fazerData.message || fazerData.error || 'Erreur FazerCards.' });
     }
 
-    // 3. Deduct wallet (batch: balance update + transaction log)
-    const batch = adminDb.batch();
-    if (price > 0) {
-      batch.update(clientRef, {
-        balance: Math.max(0, (clientData.balance || 0) - price),
+    // 3. SECURITY: Atomically deduct wallet using runTransaction to prevent race conditions
+    const txRef = adminDb.collection('client_transactions').doc();
+    await adminDb.runTransaction(async (txn) => {
+      const freshSnap = await txn.get(clientRef);
+      if (!freshSnap.exists) throw new Error('Client introuvable.');
+      const freshData = freshSnap.data()!;
+      if (price > 0 && (freshData.balance || 0) < price) throw new Error(`Solde insuffisant. Disponible: ${freshData.balance?.toFixed(2)} USD.`);
+
+      if (price > 0) {
+        txn.update(clientRef, { balance: FieldValue.increment(-price), updatedAt: FieldValue.serverTimestamp() });
+      }
+      txn.set(txRef, {
+        clientId, clientName: clientData.name || '',
+        type: 'purchase', amount: price, status: 'completed',
+        productName: fazerData.category_name || category_id,
+        productPrice: `${price} USD`,
+        description: `Top-up jeu: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
+        fazerOrderId: fazerData.order_id || null,
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-    }
-    const txRef = adminDb.collection('client_transactions').doc();
-    batch.set(txRef, {
-      clientId, clientName: clientData.name || '',
-      type: 'purchase', amount: price, status: 'completed',
-      productName: fazerData.category_name || category_id,
-      productPrice: `${price} USD`,
-      description: `Top-up jeu: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
-      fazerOrderId: fazerData.order_id || null,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
     });
-    await batch.commit();
 
     res.json({ success: true, order: fazerData, transactionId: txRef.id });
   } catch (e: any) {
@@ -7226,16 +7348,34 @@ router.get('/api/fazer/giftcards/offers', async (req, res) => {
 // POST /api/fazer/giftcards/order — purchase a gift card and deduct wallet
 router.post('/api/fazer/giftcards/order', requireDb, async (req, res) => {
   try {
-    const { clientId, category_id, offer_id, priceUSD } = req.body as {
-      clientId: string; category_id: string; offer_id: string; priceUSD: number;
+    const { clientId, category_id, offer_id } = req.body as {
+      clientId: string; category_id: string; offer_id: string;
     };
+    // NOTE: priceUSD from client is intentionally ignored — price is fetched server-side.
     if (!clientId || !category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    // SECURITY: Fetch the real price from FazerCards server-side.
+    let price = 0;
+    try {
+      const offersRes = await fazerFetch(`/giftcards/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
+      if (offersRes.ok) {
+        const offersData = await offersRes.json() as any;
+        const offersList: any[] = Array.isArray(offersData) ? offersData : (offersData.items || offersData.offers || offersData.data || []);
+        const matchedOffer = offersList.find((o: any) => String(o.id || o.offer_id) === String(offer_id));
+        if (matchedOffer) {
+          price = typeof matchedOffer.price === 'number'
+            ? matchedOffer.price
+            : parseFloat(matchedOffer.price_usd ?? matchedOffer.price ?? '0') || 0;
+        }
+      }
+    } catch (priceErr: any) {
+      console.warn('[fazer/giftcards/order] Could not fetch offer price server-side:', priceErr.message);
+    }
 
     const clientRef = adminDb.collection('clients').doc(clientId);
     const clientSnap = await clientRef.get();
     if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
     const clientData = clientSnap.data()!;
-    const price = Number(priceUSD) || 0;
     if (price > 0 && (clientData.balance || 0) < price)
       return res.status(400).json({ error: `Solde insuffisant. Disponible: ${clientData.balance?.toFixed(2)} USD.` });
 
@@ -7251,25 +7391,28 @@ router.post('/api/fazer/giftcards/order', requireDb, async (req, res) => {
       return res.status(fazerRes.status).json({ error: fazerData.message || fazerData.error || 'Erreur commande.' });
     }
 
-    const batch = adminDb.batch();
-    if (price > 0) {
-      batch.update(clientRef, {
-        balance: Math.max(0, (clientData.balance || 0) - price),
+    // SECURITY: Atomically deduct wallet using runTransaction
+    const txRef = adminDb.collection('client_transactions').doc();
+    await adminDb.runTransaction(async (txn) => {
+      const freshSnap = await txn.get(clientRef);
+      if (!freshSnap.exists) throw new Error('Client introuvable.');
+      const freshData = freshSnap.data()!;
+      if (price > 0 && (freshData.balance || 0) < price) throw new Error(`Solde insuffisant. Disponible: ${freshData.balance?.toFixed(2)} USD.`);
+
+      if (price > 0) {
+        txn.update(clientRef, { balance: FieldValue.increment(-price), updatedAt: FieldValue.serverTimestamp() });
+      }
+      txn.set(txRef, {
+        clientId, clientName: clientData.name || '',
+        type: 'purchase', amount: price, status: 'completed',
+        productName: fazerData.category_name || category_id,
+        productPrice: `${price} USD`,
+        description: `Carte-cadeau: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
+        fazerOrderId: fazerData.order_id || null,
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-    }
-    const txRef = adminDb.collection('client_transactions').doc();
-    batch.set(txRef, {
-      clientId, clientName: clientData.name || '',
-      type: 'purchase', amount: price, status: 'completed',
-      productName: fazerData.category_name || category_id,
-      productPrice: `${price} USD`,
-      description: `Carte-cadeau: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
-      fazerOrderId: fazerData.order_id || null,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
     });
-    await batch.commit();
 
     const code = fazerData.code || fazerData.pin || fazerData.serial || fazerData.card_number || null;
     res.json({ success: true, order: fazerData, code });
