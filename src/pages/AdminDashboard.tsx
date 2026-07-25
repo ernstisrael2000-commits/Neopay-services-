@@ -2576,7 +2576,7 @@ function EmailLogsPanel() {
       toast.success('Packs de diamants mis à jour !');
     } catch (e: any) { toast.error(e.message || 'Erreur.'); }
     finally { setFFPacksSaving(false); }
-  };
+  });
 
   const fetchFFTransactions = async (agentId?: string) => {
     setFFTxsLoading(true);
