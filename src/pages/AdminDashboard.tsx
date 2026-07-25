@@ -71,6 +71,8 @@ import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
 import AgentFeeHistory from './AgentFeeHistory';
 import PinSetupModal from '../components/PinSetupModal';
+import PinEntryModal from '../components/PinEntryModal';
+import { usePinGuard } from '../hooks/usePinGuard';
 import { 
   BarChart, 
   Bar, 
@@ -1151,6 +1153,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   
   // ── Admin PIN setup ──────────────────────────────────────────────────────────
   const [showPinSetup, setShowPinSetup] = useState(false);
+  const { pinModalOpen, pinModalTitle, pinModalDesc, requirePin, handlePinConfirm, handlePinCancel } = usePinGuard();
 
   useEffect(() => {
     if (!admin?.id) return;
@@ -1159,6 +1162,21 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       .then(data => { if (!data.hasPin) setShowPinSetup(true); })
       .catch(() => {});
   }, [admin?.id]);
+
+  const withAdminPin = async (title: string, action: () => Promise<void>) => {
+    let pin: string;
+    try { pin = await requirePin(title, 'Saisissez votre code PIN pour confirmer cette action.'); }
+    catch { return; }
+    try {
+      const vRes = await fetch('/api/admin/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: admin.id, pin }),
+      });
+      if (!vRes.ok) { const d = await vRes.json(); toast.error(d.error || 'Code PIN incorrect.'); return; }
+    } catch { toast.error('Erreur de vérification PIN.'); return; }
+    await action();
+  };
 
   const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
@@ -1196,22 +1214,26 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   const handleSaveService = async () => {
     if (!serviceFormData.label.trim()) { toast.error('Le libellé est requis.'); return; }
-    setSavingService(true);
-    try {
-      await saveOnlineSubService({ ...serviceFormData }, editingService?.id);
-      toast.success(editingService ? 'Service mis à jour !' : 'Service ajouté !');
-      setIsServiceDialogOpen(false);
-    } catch { toast.error('Erreur lors de la sauvegarde.'); }
-    finally { setSavingService(false); }
+    await withAdminPin('Enregistrer le service', async () => {
+      setSavingService(true);
+      try {
+        await saveOnlineSubService({ ...serviceFormData }, editingService?.id);
+        toast.success(editingService ? 'Service mis à jour !' : 'Service ajouté !');
+        setIsServiceDialogOpen(false);
+      } catch { toast.error('Erreur lors de la sauvegarde.'); }
+      finally { setSavingService(false); }
+    });
   };
 
   const handleDeleteService = async (id: string) => {
-    setDeletingServiceId(id);
-    try {
-      await deleteOnlineSubService(id);
-      toast.success('Service supprimé.');
-    } catch { toast.error('Erreur lors de la suppression.'); }
-    finally { setDeletingServiceId(null); }
+    await withAdminPin('Supprimer le service', async () => {
+      setDeletingServiceId(id);
+      try {
+        await deleteOnlineSubService(id);
+        toast.success('Service supprimé.');
+      } catch { toast.error('Erreur lors de la suppression.'); }
+      finally { setDeletingServiceId(null); }
+    });
   };
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -1254,35 +1276,39 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   useEffect(() => { fetchFormationPaymentRequests(); }, []);
 
   const handleApprovePaymentRequest = async (id: string) => {
-    setProcessingPaymentId(id);
-    try {
-      const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-        body: JSON.stringify({ action: 'approve' }),
-      });
-      if (!res.ok) throw new Error('Erreur');
-      toast.success('Accès au cours activé !');
-      fetchFormationPaymentRequests();
-    } catch { toast.error('Erreur lors de l\'approbation.'); } finally {
-      setProcessingPaymentId(null);
-    }
+    await withAdminPin('Approuver la demande de paiement', async () => {
+      setProcessingPaymentId(id);
+      try {
+        const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          body: JSON.stringify({ action: 'approve' }),
+        });
+        if (!res.ok) throw new Error('Erreur');
+        toast.success('Accès au cours activé !');
+        fetchFormationPaymentRequests();
+      } catch { toast.error('Erreur lors de l\'approbation.'); } finally {
+        setProcessingPaymentId(null);
+      }
+    });
   };
 
   const handleRejectPaymentRequest = async (id: string) => {
-    setProcessingPaymentId(id);
-    try {
-      const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-        body: JSON.stringify({ action: 'reject' }),
-      });
-      if (!res.ok) throw new Error('Erreur');
-      toast.success('Demande rejetée.');
-      fetchFormationPaymentRequests();
-    } catch { toast.error('Erreur lors du rejet.'); } finally {
-      setProcessingPaymentId(null);
-    }
+    await withAdminPin('Rejeter la demande de paiement', async () => {
+      setProcessingPaymentId(id);
+      try {
+        const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          body: JSON.stringify({ action: 'reject' }),
+        });
+        if (!res.ok) throw new Error('Erreur');
+        toast.success('Demande rejetée.');
+        fetchFormationPaymentRequests();
+      } catch { toast.error('Erreur lors du rejet.'); } finally {
+        setProcessingPaymentId(null);
+      }
+    });
   };
 
   const [isFormationDialogOpen, setIsFormationDialogOpen] = useState(false);
@@ -1334,50 +1360,56 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   const handleIssueCertificate = async (student: any, pdfUrl?: string) => {
     if (!selectedCertFormationId) return;
-    const formation = adminFormations.find((f: any) => f.id === selectedCertFormationId);
-    setIssuingCertId(student.userId);
-    setCertIssuanceForm(null);
-    try {
-      const res = await fetch('/api/admin/formations/certificate', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-        body: JSON.stringify({
-          userId: student.userId, userName: student.userName, userEmail: student.userEmail,
-          formationId: selectedCertFormationId, formationTitle: formation?.title || '',
-          issuedBy: admin?.fullName || 'Admin',
-          ...(pdfUrl ? { pdfUrl } : {}),
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur');
-      toast.success(`Certificat émis pour ${student.userName} !`);
-      fetchCertificates(selectedCertFormationId);
-    } catch (e: any) { toast.error(e.message); }
-    finally { setIssuingCertId(''); }
+    await withAdminPin('Émettre le certificat', async () => {
+      const formation = adminFormations.find((f: any) => f.id === selectedCertFormationId);
+      setIssuingCertId(student.userId);
+      setCertIssuanceForm(null);
+      try {
+        const res = await fetch('/api/admin/formations/certificate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          body: JSON.stringify({
+            userId: student.userId, userName: student.userName, userEmail: student.userEmail,
+            formationId: selectedCertFormationId, formationTitle: formation?.title || '',
+            issuedBy: admin?.fullName || 'Admin',
+            ...(pdfUrl ? { pdfUrl } : {}),
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Erreur');
+        toast.success(`Certificat émis pour ${student.userName} !`);
+        fetchCertificates(selectedCertFormationId);
+      } catch (e: any) { toast.error(e.message); }
+      finally { setIssuingCertId(''); }
+    });
   };
 
   const handleRevokeCertificate = async (certId: string) => {
-    setRevokingCertId(certId);
-    try {
-      await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
-      toast.success('Certificat révoqué.');
-      fetchCertificates(selectedCertFormationId || undefined);
-    } catch { toast.error('Erreur lors de la révocation.'); }
-    finally { setRevokingCertId(''); }
+    await withAdminPin('Révoquer le certificat', async () => {
+      setRevokingCertId(certId);
+      try {
+        await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+        toast.success('Certificat révoqué.');
+        fetchCertificates(selectedCertFormationId || undefined);
+      } catch { toast.error('Erreur lors de la révocation.'); }
+      finally { setRevokingCertId(''); }
+    });
   };
 
   const handleUpdateCertPdf = async (certId: string, pdfUrl: string) => {
-    setUpdatingCertPdf(certId);
-    try {
-      const res = await fetch(`/api/admin/formations/certificate/${certId}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
-        body: JSON.stringify({ pdfUrl }),
-      });
-      if (!res.ok) throw new Error('Erreur');
-      toast.success('Lien PDF mis à jour.');
-      setEditingCertPdf(null);
-      fetchCertificates(selectedCertFormationId || undefined);
-    } catch { toast.error('Erreur lors de la mise à jour.'); }
-    finally { setUpdatingCertPdf(''); }
+    await withAdminPin('Mettre à jour le PDF', async () => {
+      setUpdatingCertPdf(certId);
+      try {
+        const res = await fetch(`/api/admin/formations/certificate/${certId}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          body: JSON.stringify({ pdfUrl }),
+        });
+        if (!res.ok) throw new Error('Erreur');
+        toast.success('Lien PDF mis à jour.');
+        setEditingCertPdf(null);
+        fetchCertificates(selectedCertFormationId || undefined);
+      } catch { toast.error('Erreur lors de la mise à jour.'); }
+      finally { setUpdatingCertPdf(''); }
+    });
   };
   const [formationTagInput, setFormationTagInput] = useState('');
 
@@ -1517,51 +1549,39 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       toast.error("Le nom et le téléphone sont obligatoires.");
       return;
     }
-    setIsSaving(true);
-    try {
-      await saveClient(clientFormData, editingClient?.id);
-      toast.success(editingClient ? "Client mis à jour !" : "Client ajouté avec succès !");
-      setIsClientDialogOpen(false);
-      setEditingClient(null);
-      setClientFormData({
-        name: '',
-        phone: '',
-        directSponsorId: '',
-        indirectSponsorId: ''
-      });
-    } catch (error: any) {
-      console.error("Save Client Error:", error);
-      let errorMessage = "Erreur lors de l'enregistrement du client.";
-      
-      // Try to parse specialized firestore error
+    await withAdminPin('Enregistrer le client', async () => {
+      setIsSaving(true);
       try {
-        const parsed = JSON.parse(error.message);
-        if (parsed.error && parsed.error.includes('permissions')) {
-          errorMessage = "Permission refusée. Vérifiez vos accès administrateur.";
-        }
-      } catch (e) {
-        // Not a JSON error
-      }
-      
-      toast.error(errorMessage);
-    } finally {
-      setIsSaving(false);
-    }
+        await saveClient(clientFormData, editingClient?.id);
+        toast.success(editingClient ? "Client mis à jour !" : "Client ajouté avec succès !");
+        setIsClientDialogOpen(false);
+        setEditingClient(null);
+        setClientFormData({ name: '', phone: '', directSponsorId: '', indirectSponsorId: '' });
+      } catch (error: any) {
+        console.error("Save Client Error:", error);
+        let errorMessage = "Erreur lors de l'enregistrement du client.";
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed.error && parsed.error.includes('permissions')) errorMessage = "Permission refusée. Vérifiez vos accès administrateur.";
+        } catch (e) {}
+        toast.error(errorMessage);
+      } finally { setIsSaving(false); }
+    });
   };
 
   const handleConfirmDeleteClient = async () => {
     if (!clientToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteClient(clientToDelete.id);
-      toast.success("Client supprimé.");
-      setIsClientDeleteDialogOpen(false);
-      setClientToDelete(null);
-    } catch (error) {
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-    }
+    await withAdminPin('Supprimer le client', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteClient(clientToDelete.id);
+        toast.success("Client supprimé.");
+        setIsClientDeleteDialogOpen(false);
+        setClientToDelete(null);
+      } catch (error) {
+        toast.error("Erreur lors de la suppression.");
+      } finally { setIsDeleting(false); }
+    });
   };
 
   const handleSelectSponsorForClient = (sponsor: Affiliate) => {
@@ -1609,37 +1629,33 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       toast.error("Le nom et le mot de passe sont requis.");
       return;
     }
-    setIsSaving(true);
-    try {
-      await saveAdminAccount(adminFormData, editingAdmin?.id);
-      toast.success(editingAdmin ? "Compte administrateur mis à jour !" : "Compte administrateur créé !");
-      setIsAdminDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'enregistrement.");
-    } finally {
-      setIsSaving(false);
-    }
+    await withAdminPin('Enregistrer le compte admin', async () => {
+      setIsSaving(true);
+      try {
+        await saveAdminAccount(adminFormData, editingAdmin?.id);
+        toast.success(editingAdmin ? "Compte administrateur mis à jour !" : "Compte administrateur créé !");
+        setIsAdminDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de l'enregistrement.");
+      } finally { setIsSaving(false); }
+    });
   };
 
   const handleConfirmDeleteAdmin = async () => {
     if (!adminToDelete?.id) return;
-    if (adminToDelete.isSuperAdmin) {
-      toast.error("Impossible de supprimer le super administrateur.");
-      return;
-    }
-    setIsDeleting(true);
-    try {
-      await deleteAdminAccount(adminToDelete.id);
-      toast.success("Compte administrateur supprimé.");
-      setIsAdminDeleteDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setAdminToDelete(null);
-    }
+    if (adminToDelete.isSuperAdmin) { toast.error("Impossible de supprimer le super administrateur."); return; }
+    await withAdminPin('Supprimer le compte admin', async () => {
+      setIsDeleting(true);
+      try {
+        await deleteAdminAccount(adminToDelete.id);
+        toast.success("Compte administrateur supprimé.");
+        setIsAdminDeleteDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la suppression.");
+      } finally { setIsDeleting(false); setAdminToDelete(null); }
+    });
   };
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -2416,14 +2432,16 @@ function EmailLogsPanel() {
 
   const handleProfitReset = async () => {
     if (!confirm('Réinitialiser le solde des profits ? Cette action enregistre un historique et remet les compteurs à zéro.')) return;
-    setResettingProfit(true);
-    try {
-      const res = await fetch('/api/admin/profit/reset', { method: 'POST' });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success('Solde des profits réinitialisé !');
-      fetchProfitStats();
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setResettingProfit(false); }
+    await withAdminPin('Réinitialiser les profits', async () => {
+      setResettingProfit(true);
+      try {
+        const res = await fetch('/api/admin/profit/reset', { method: 'POST' });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success('Solde des profits réinitialisé !');
+        fetchProfitStats();
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setResettingProfit(false); }
+    });
   };
 
   const fetchTeacherWithdrawals = async () => {
@@ -2450,51 +2468,46 @@ function EmailLogsPanel() {
   const handleSaveFormationFee = async () => {
     const fee = Number(formationFeeInput);
     if (isNaN(fee) || fee < 0 || fee > 100) { toast.error('Frais invalides (0-100%).'); return; }
-    setSavingFormationFee(true);
-    try {
-      const res = await fetch('/api/admin/formation-fee', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fee }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success('Frais de vente mis à jour !');
-      setFormationFee(fee);
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setSavingFormationFee(false); }
+    await withAdminPin('Modifier les frais de formation', async () => {
+      setSavingFormationFee(true);
+      try {
+        const res = await fetch('/api/admin/formation-fee', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fee }) });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success('Frais de vente mis à jour !');
+        setFormationFee(fee);
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setSavingFormationFee(false); }
+    });
   };
 
   const handleSaveTeacher = async () => {
-    if (!teacherFormData.name.trim() || (!editingTeacher && !teacherFormData.password.trim())) {
-      toast.error('Nom et mot de passe requis.'); return;
-    }
-    setSavingTeacher(true);
-    try {
-      const url = editingTeacher ? `/api/admin/teachers/${editingTeacher.id}` : '/api/admin/teachers';
-      const method = editingTeacher ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(teacherFormData),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur');
-      toast.success(editingTeacher ? 'Professeur mis à jour !' : 'Professeur créé !');
-      setIsTeacherDialogOpen(false);
-      fetchTeachers();
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setSavingTeacher(false); }
+    if (!teacherFormData.name.trim() || (!editingTeacher && !teacherFormData.password.trim())) { toast.error('Nom et mot de passe requis.'); return; }
+    await withAdminPin('Enregistrer le professeur', async () => {
+      setSavingTeacher(true);
+      try {
+        const url = editingTeacher ? `/api/admin/teachers/${editingTeacher.id}` : '/api/admin/teachers';
+        const res = await fetch(url, { method: editingTeacher ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(teacherFormData) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur');
+        toast.success(editingTeacher ? 'Professeur mis à jour !' : 'Professeur créé !');
+        setIsTeacherDialogOpen(false);
+        fetchTeachers();
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setSavingTeacher(false); }
+    });
   };
 
   const handleDeleteTeacher = async (id: string) => {
-    setDeletingTeacherId(id);
-    try {
-      const res = await fetch(`/api/admin/teachers/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
-      toast.success('Professeur supprimé.');
-      fetchTeachers();
-    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
-    finally { setDeletingTeacherId(null); }
+    await withAdminPin('Supprimer le professeur', async () => {
+      setDeletingTeacherId(id);
+      try {
+        const res = await fetch(`/api/admin/teachers/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+        toast.success('Professeur supprimé.');
+        fetchTeachers();
+      } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+      finally { setDeletingTeacherId(null); }
+    });
   };
 
   // ── Free Fire Reseller state ────────────────────────────────────────────────
@@ -2549,6 +2562,7 @@ function EmailLogsPanel() {
   };
 
   const handleFFPacksSave = async () => {
+    await withAdminPin('Enregistrer les packs FF', async () => {
     setFFPacksSaving(true);
     try {
       const res = await fetch('/api/admin/reseller/ff/packs', {
@@ -4603,6 +4617,7 @@ function EmailLogsPanel() {
         identifier={admin.id}
         onSuccess={() => setShowPinSetup(false)}
       />
+      <PinEntryModal open={pinModalOpen} title={pinModalTitle} description={pinModalDesc} onConfirm={handlePinConfirm} onCancel={handlePinCancel} />
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
         <div>
