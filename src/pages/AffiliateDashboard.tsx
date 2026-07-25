@@ -353,6 +353,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   };
 
   const handleRejectWithdrawal = async (txId: string) => {
+    let pin: string;
+    try { pin = await requirePin('Refuser le retrait', 'Saisissez votre PIN pour refuser cette demande de retrait client.'); }
+    catch { return; }
     setProcessingRequestId(txId);
     try {
       await apiFetch(`/api/affiliate/client-withdrawal/${txId}/reject`, {
@@ -383,6 +386,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   };
 
   const handleRejectDeposit = async (txId: string) => {
+    let pin: string;
+    try { pin = await requirePin('Refuser le dépôt', 'Saisissez votre PIN pour refuser cette demande de dépôt client.'); }
+    catch { return; }
     setProcessingRequestId(txId);
     try {
       await apiFetch(`/api/affiliate/client-deposit/${txId}/reject`, {
@@ -411,12 +417,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   const handleConfirmScan = async () => {
     if (!scanResult) return;
+    let pin: string;
+    try { pin = await requirePin('Confirmer la transaction QR', 'Saisissez votre PIN pour valider cette transaction scannée.'); }
+    catch { return; }
     setScanConfirmLoading(true);
     try {
       const data = await apiFetch('/api/affiliate/scan-tx-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ affiliateId, codeData: scanResult }),
+        body: JSON.stringify({ affiliateId, codeData: scanResult, pin }),
       });
       toast.success(data.message || 'Transaction traitée avec succès !');
       setScanResult(null);
@@ -604,6 +613,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     const amount = parseFloat(transferAmount);
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
     if (!verifiedRecipientName) { toast.error('Bénéficiaire non identifié.'); return; }
+    let pin: string;
+    try { pin = await requirePin('Confirmer le transfert', `Saisissez votre PIN pour transférer $${amount} vers ${verifiedRecipientName}.`); }
+    catch { return; }
     setIsSubmitting(true);
     try {
       const recipientName = await submitTransfer(affiliate!, transferRecipientWalletId.trim(), amount);
@@ -660,6 +672,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     const amount = parseFloat(agentAmount);
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
     if (!agentClientName) { toast.error('Client non identifié.'); return; }
+    let pin: string;
+    try { pin = await requirePin('Soumettre le dépôt', `Saisissez votre PIN pour déposer $${amount} pour ${agentClientName}.`); }
+    catch { return; }
     setAgentSubmitting(true);
     try {
       const res = await fetch('/api/affiliate/submit-client-deposit', {
@@ -682,6 +697,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
     if (amount > (affiliate?.balance || 0)) { toast.error('Solde insuffisant.'); return; }
     if (affWMethod !== 'Physical' && !affWAccount.trim()) { toast.error('Numéro de compte requis.'); return; }
+    let pin: string;
+    try { pin = await requirePin('Confirmer le retrait', `Saisissez votre PIN pour retirer $${amount}.`); }
+    catch { return; }
     setAffWSubmitting(true);
     try {
       const res = await fetch('/api/affiliate/submit-withdrawal', {

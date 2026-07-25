@@ -314,6 +314,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const handleApproveAffiliate = async (tx: WalletTransaction) => {
     if (!agent) return;
     if (agent.balance < tx.amount) { toast.error('Solde insuffisant pour valider ce dépôt.'); return; }
+    let pin: string;
+    try { pin = await requirePin('Valider le dépôt affilié', `Saisissez votre PIN pour valider le dépôt de $${tx.amount}.`); }
+    catch { return; }
     setIsProcessing(true);
     try {
       await approveAgentDeposit(tx);
@@ -324,6 +327,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   };
 
   const handleRejectAffiliate = async (txId: string) => {
+    let pin: string;
+    try { pin = await requirePin('Rejeter le dépôt affilié', 'Saisissez votre PIN pour rejeter ce dépôt.'); }
+    catch { return; }
     setIsProcessing(true);
     try {
       await rejectAgentDeposit(txId);
@@ -362,6 +368,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   // Confirm client withdrawal request
   const handleConfirmWithdraw = async (req: ClientWithdrawRequest) => {
     if (!agent?.agentCode) return;
+    let pin: string;
+    try { pin = await requirePin('Confirmer le retrait client', `Saisissez votre PIN pour confirmer le retrait de ${req.clientName}.`); }
+    catch { return; }
     setIsProcessing(true);
     try {
       await apiFetch(`/api/agent/withdrawal-request/${req.id}/confirm`, {
@@ -380,6 +389,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   // Reject client withdrawal request
   const handleRejectWithdraw = async (req: ClientWithdrawRequest) => {
     if (!agent?.agentCode) return;
+    let pin: string;
+    try { pin = await requirePin('Refuser le retrait client', `Saisissez votre PIN pour refuser la demande de ${req.clientName}.`); }
+    catch { return; }
     const reason = rejectReasonMap[req.id] || '';
     setIsProcessing(true);
     try {
@@ -471,6 +483,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     const usd = parseFloat(selfDepositAmount);
     if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
     if (!agent?.agentCode) return;
+    let pin: string;
+    try { pin = await requirePin('Recharge de solde', `Saisissez votre PIN pour soumettre une recharge de $${usd.toFixed(2)}.`); }
+    catch { return; }
     setSelfDepositSubmitting(true);
     try {
       await apiFetch('/api/agent/personal-deposit', {
