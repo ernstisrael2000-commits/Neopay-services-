@@ -3,8 +3,8 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "22"
-  NPM_FLAGS = "--ignore-scripts"
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--include=dev"
 
 [functions]
   node_bundler = "esbuild"
