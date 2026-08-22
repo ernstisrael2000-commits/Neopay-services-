@@ -10,8 +10,7 @@ import { loginAdminWithGoogle, linkAdminGoogle } from '../services/adminService'
 import { isInIframe } from '../lib/google-auth';
 import { AdminAccount } from '../types';
 import OtpVerifyStep from './OtpVerifyStep';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { establishAdminFirebaseSession } from '../lib/adminFirebaseSession';
 
 interface AdminLoginProps {
   onLoginSuccess: (admin: AdminAccount) => void;
@@ -59,6 +58,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
         setOtpError(data.error || 'Code incorrect.');
         return;
       }
+      await establishAdminFirebaseSession(data.firebaseToken);
       toast.success(`Bienvenue, ${data.admin.fullName} !`);
       onLoginSuccess(data.admin);
     } catch {

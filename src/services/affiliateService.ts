@@ -323,9 +323,9 @@ export const updateWithdrawalStatus = async (
 
   const res = await fetch(endpoint, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024'),
     },
     body: JSON.stringify({ reason }),
   });

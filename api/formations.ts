@@ -1,7 +1,7 @@
 import { createSign } from 'crypto';
 
-const PROJECT = 'gen-lang-client-0739219145';
-const DB_ID = 'ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2';
+const DEFAULT_PROJECT = 'gen-lang-client-0739219145';
+const DEFAULT_DB_ID = 'ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2';
 
 function parseValue(val: any): any {
   if (!val) return null;
@@ -55,14 +55,27 @@ async function getAccessToken(sa: any): Promise<string> {
 }
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  const allowedOrigins = new Set(
+    [
+      process.env.APP_URL,
+      process.env.REPLIT_DEV_DOMAIN && `https://${process.env.REPLIT_DEV_DOMAIN}`,
+      ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:5000', 'http://localhost:5173', 'http://127.0.0.1:5000', 'http://127.0.0.1:5173'] : []),
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).replace(/\/$/, '')),
+  );
+  if (origin && !allowedOrigins.has(String(origin).replace(/\/$/, ''))) {
+    return res.status(403).json({ error: 'Origine non autorisée.' });
+  }
+  if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
     const rawSa = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!rawSa) {
-      return res.status(503).json({ error: 'FIREBASE_SERVICE_ACCOUNT non configuré' });
+      return res.status(200).json({ formations: [], unavailable: true });
     }
     let raw = rawSa.trim();
     // Support base64-encoded JSON (Vercel / Railway workaround)
@@ -79,9 +92,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const token = await getAccessToken(sa);
+    const project = process.env.FIREBASE_PROJECT_ID || sa.project_id || DEFAULT_PROJECT;
+    const databaseId = process.env.FIRESTORE_DB_ID || DEFAULT_DB_ID;
 
     const qRes = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/${DB_ID}/documents:runQuery`,
+      `https://firestore.googleapis.com/v1/projects/${project}/databases/${databaseId}/documents:runQuery`,
       {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -102,8 +117,8 @@ export default async function handler(req: any, res: any) {
     );
 
     if (!qRes.ok) {
-      const err = await qRes.json();
-      return res.status(500).json({ error: 'Firestore error', details: err });
+      console.error('[formations standalone] Firestore request failed:', qRes.status);
+      return res.status(200).json({ formations: [], unavailable: true });
     }
 
     const rows: any[] = await qRes.json();
@@ -116,7 +131,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ formations });
   } catch (e: any) {
-    console.error('[formations standalone]', e);
-    return res.status(500).json({ error: e.message || 'Erreur serveur.' });
+    console.error('[formations standalone]', e?.message || e);
+    return res.status(200).json({ formations: [], unavailable: true });
   }
 }

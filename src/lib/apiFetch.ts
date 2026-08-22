@@ -16,7 +16,7 @@ export async function apiFetch<T = any>(
 
   let res: Response;
   try {
-    res = await fetch(url, { ...options, signal: controller.signal });
+    res = await fetch(url, { ...options, credentials: options.credentials ?? 'include', signal: controller.signal });
   } catch (e: any) {
     if (e?.name === 'AbortError') {
       throw new Error('Délai dépassé. Le serveur met trop longtemps à répondre — réessayez.');

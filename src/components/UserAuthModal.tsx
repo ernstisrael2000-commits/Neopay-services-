@@ -17,6 +17,7 @@ import {
 import { loginAdminWithGoogle, linkAdminGoogle } from '../services/adminService';
 import { Client, AdminAccount } from '../types';
 import OtpVerifyStep from './OtpVerifyStep';
+import { establishAdminFirebaseSession } from '../lib/adminFirebaseSession';
 
 type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google' | 'admin-2fa';
 
@@ -324,6 +325,7 @@ export default function UserAuthModal({
         setOtpError(data.error || 'Code incorrect.');
         return;
       }
+      await establishAdminFirebaseSession(data.firebaseToken);
       toast.success(`Bienvenue Admin, ${data.admin.fullName} !`);
       onAdminLogin(data.admin);
       handleClose(false);

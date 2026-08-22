@@ -7,8 +7,6 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 
-const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024';
-
 async function loadOverrides(): Promise<Record<string, number>> {
   const r = await fetch('/api/fazer/price-overrides');
   const data = await r.json();
@@ -18,7 +16,8 @@ async function loadOverrides(): Promise<Record<string, number>> {
 async function saveOverride(offerId: string, customPriceHTG: number | null) {
   const r = await fetch('/api/fazer/price-overrides', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ offerId, customPriceHTG }),
   });
   if (!r.ok) {

@@ -2,13 +2,9 @@ import {
   collection, 
   query, 
   onSnapshot, 
-  doc, 
-  serverTimestamp,
-  setDoc,
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
 import { AdminAccount, AdminLog } from '../types';
@@ -21,9 +17,9 @@ const LOGS_COLLECTION = 'admin_login_logs';
 async function adminApi(method: string, path: string, body?: object): Promise<any> {
   const opts: RequestInit = {
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024'),
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -80,27 +76,6 @@ export const deleteAdminAccount = async (id: string) => {
   await adminApi('DELETE', `/api/admin/account/${id}`);
 };
 
-// ── Helper: setup client-side admin session for real-time reads ───────────────
-// After server confirms login, we try to establish an anonymous Firebase Auth
-// session and write to admin_uids so isAdmin() works for client SDK onSnapshot hooks.
-async function setupClientAdminSession(adminId: string, fullName: string): Promise<void> {
-  try {
-    if (!auth.currentUser) await signInAnonymously(auth);
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-      await setDoc(doc(db, 'admin_uids', uid), {
-        adminId,
-        fullName,
-        updatedAt: serverTimestamp()
-      });
-    }
-  } catch (err) {
-    // Non-critical: server login already succeeded.
-    // Only real-time reads requiring isAdmin() will be affected.
-    console.warn('Could not establish client-side admin session (anonymous auth may be disabled):', err);
-  }
-}
-
 // ── Admin Login (credentials verified server-side, no Firestore rules needed) ─
 
 export const checkAdminLogin = async (
@@ -119,8 +94,6 @@ export const checkAdminLogin = async (
     if (!res.ok) return { success: false, error: data.error || 'Erreur de connexion.' };
 
     const adminData = data.admin as AdminAccount;
-    await setupClientAdminSession(adminData.id!, adminData.fullName);
-
     return { success: true, admin: adminData };
   } catch (error) {
     console.error("Login Error:", error);
@@ -139,7 +112,7 @@ export const linkAdminGoogle = async (
     const res = await fetch('/api/admin/link-google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ loginCode, email: googleEmail, uid: googleUid }),
+      body: JSON.stringify({ loginCode, idToken: await auth.currentUser?.getIdToken() }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { success: false, error: data.error || 'Erreur de liaison.' };
@@ -149,17 +122,7 @@ export const linkAdminGoogle = async (
       return { success: false, pending2fa: true, sessionId: data.sessionId, maskedEmail: data.maskedEmail };
     }
 
-    const adminData = data.admin as AdminAccount;
-    try {
-      await setDoc(doc(db, 'admin_uids', googleUid), {
-        adminId: adminData.id,
-        fullName: adminData.fullName,
-        updatedAt: serverTimestamp()
-      });
-    } catch (err) {
-      console.warn('Could not write admin_uids after link:', err);
-    }
-    return { success: true, admin: adminData };
+    return { success: true, admin: data.admin as AdminAccount };
   } catch (error: any) {
     return { success: false, error: error.message || 'Erreur lors de la liaison.' };
   }
@@ -186,7 +149,7 @@ export const loginAdminWithGoogle = async (): Promise<{
     const res = await fetch('/api/admin/verify-google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: googleEmail, uid: googleUid })
+      body: JSON.stringify({ idToken: await result.user.getIdToken() })
     });
     const data = await res.json().catch(() => ({}));
 
@@ -199,20 +162,7 @@ export const loginAdminWithGoogle = async (): Promise<{
       return { success: false, pending2fa: true, sessionId: data.sessionId, maskedEmail: data.maskedEmail, googleEmail, googleUid };
     }
 
-    const adminData = data.admin as AdminAccount;
-
-    // Google user already has Firebase Auth session — write admin_uids
-    try {
-      await setDoc(doc(db, 'admin_uids', googleUid), {
-        adminId: adminData.id,
-        fullName: adminData.fullName,
-        updatedAt: serverTimestamp()
-      });
-    } catch (err) {
-      console.warn('Could not write admin_uids for Google admin:', err);
-    }
-
-    return { success: true, admin: adminData };
+    return { success: true, admin: data.admin as AdminAccount };
   } catch (error: any) {
     const mapped = mapGoogleAuthError(error);
     if (!mapped) return { success: false, error: '' };

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging as getAdminMessaging } from 'firebase-admin/messaging';
+import { getAuth } from 'firebase-admin/auth';
 import {
   emailDepositSubmitted, emailDepositApproved, emailDepositRejected,
   emailWithdrawalSubmitted, emailWithdrawalApproved, emailWithdrawalRejected,
@@ -221,6 +222,123 @@ function verifyPin(pin: string, stored: string): boolean {
   }
 }
 
+// ── Password and server session helpers ───────────────────────────────────────
+// Password hashes use the same memory-hard primitive as PINs. Existing plaintext
+// passwords are upgraded only after a successful login, never returned to callers.
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyPassword(password: string, stored: unknown): boolean {
+  if (typeof stored !== 'string' || !stored) return false;
+  if (!stored.startsWith('scrypt$')) {
+    const expected = Buffer.from(stored);
+    const supplied = Buffer.from(password);
+    return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+  }
+  try {
+    const [, salt, storedHash] = stored.split('$');
+    const hash = scryptSync(password, salt, 64);
+    const expected = Buffer.from(storedHash, 'hex');
+    return expected.length === hash.length && timingSafeEqual(expected, hash);
+  } catch {
+    return false;
+  }
+}
+
+type AdminSession = { role: 'admin'; adminId: string; exp: number };
+
+function sessionSecret(): Buffer | null {
+  const secret = process.env.SESSION_SECRET;
+  return secret && secret.length >= 32 ? Buffer.from(secret) : null;
+}
+
+function parseCookies(header?: string): Record<string, string> {
+  if (!header) return {};
+  return header.split(';').reduce<Record<string, string>>((cookies, item) => {
+    const separator = item.indexOf('=');
+    if (separator > 0) {
+      const key = item.slice(0, separator).trim();
+      cookies[key] = decodeURIComponent(item.slice(separator + 1).trim());
+    }
+    return cookies;
+  }, {});
+}
+
+function signSession(payload: string, secret: Buffer): string {
+  return createHmac('sha256', secret).update(payload).digest('base64url');
+}
+
+function readAdminSession(req: express.Request): AdminSession | null {
+  const secret = sessionSecret();
+  const token = parseCookies(req.headers.cookie).rena_admin_session;
+  if (!secret || !token) return null;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = signSession(payload, secret);
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as AdminSession;
+    if (session.role !== 'admin' || !session.adminId || !Number.isFinite(session.exp) || session.exp <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function setAdminSession(res: express.Response, adminId: string): void {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir une session administrateur.');
+  const session: AdminSession = { role: 'admin', adminId, exp: Date.now() + 8 * 60 * 60 * 1000 };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
+  res.cookie('rena_admin_session', `${payload}.${signSession(payload, secret)}`, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 8 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
+async function issueAdminFirebaseToken(adminRef: any, data: any): Promise<string> {
+  const auth = getAuth();
+  let uid = data.uid as string | undefined;
+  if (!uid) {
+    if (data.email) {
+      try {
+        uid = (await auth.getUserByEmail(data.email)).uid;
+      } catch {
+        uid = (await auth.createUser({ email: data.email, displayName: data.fullName || 'Administrateur' })).uid;
+      }
+    } else {
+      uid = (await auth.createUser({ displayName: data.fullName || 'Administrateur' })).uid;
+    }
+    await adminRef.update({ uid, updatedAt: FieldValue.serverTimestamp() });
+  }
+  await auth.setCustomUserClaims(uid, { admin: true });
+  return auth.createCustomToken(uid, { admin: true });
+}
+
+async function requireAdminSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const session = readAdminSession(req);
+  if (!session) return res.status(401).json({ error: 'Session administrateur requise. Veuillez vous reconnecter.' });
+  try {
+    const admin = await adminDb.collection('admin_accounts').doc(session.adminId).get();
+    if (!admin.exists || admin.data()?.disabled === true) {
+      res.clearCookie('rena_admin_session', { path: '/' });
+      return res.status(403).json({ error: 'Compte administrateur indisponible.' });
+    }
+    res.locals.adminSession = session;
+    next();
+  } catch {
+    return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
+  }
+}
+
 function sanitizeFormation(data: any): any {
   const out: any = {};
   for (const [k, v] of Object.entries(data)) {
@@ -343,28 +461,28 @@ const requireDb = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
-// ── Admin secret guard (timing-safe comparison) ───────────────────────────────
-// SECURITY: secret loaded from ADMIN_SECRET env var at startup (never hardcoded).
-const _ADMIN_SECRET_STR = process.env.ADMIN_SECRET || (() => {
-  console.warn('[Security] ADMIN_SECRET non défini — utilisation du secret par défaut. DÉFINISSEZ ADMIN_SECRET en production !');
-  return 'rena-admin-2024';
-})();
-const _ADMIN_SECRET_BUF = Buffer.from(_ADMIN_SECRET_STR);
+// Backwards-compatible route middleware name. The old shared browser secret has
+// been replaced by a signed, HttpOnly server session.
 const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const supplied = String(req.headers['x-admin-secret'] || '');
-  const suppliedBuf = Buffer.alloc(_ADMIN_SECRET_BUF.length);
-  suppliedBuf.write(supplied);
-  const ok = supplied.length === _ADMIN_SECRET_BUF.length && timingSafeEqual(suppliedBuf, _ADMIN_SECRET_BUF);
-  if (!ok) {
-    console.warn(`[Security] requireAdminSecret: tentative non autorisée depuis ${req.ip} — ${req.method} ${req.path}`);
-    return res.status(403).json({ error: 'Non autorisé.' });
-  }
-  next();
+  return requireAdminSession(req, res, next);
 };
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 const router = express.Router();
+
+// Every admin endpoint is protected consistently. Only the two login phases and
+// first-time Google account linking are public; all other routes fail closed.
+const publicAdminPaths = new Set([
+  '/login',
+  '/verify-2fa',
+  '/verify-google',
+  '/link-google',
+]);
+router.use('/api/admin', requireDb, (req, res, next) => {
+  if (publicAdminPaths.has(req.path)) return next();
+  return requireAdminSession(req, res, next);
+});
 
 // ── SSE: active client connections ────────────────────────────────────────────
 const clientSseConnections = new Map<string, Set<express.Response>>();
@@ -526,10 +644,8 @@ router.get('/api/client/events/:clientId', (req, res) => {
 // ── Health ───────────────────────────────────────────────────────────────────
 router.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// ── Debug (diagnostic Vercel — protégé par x-admin-secret) ───────────────────
-router.get('/api/debug', async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
-    return res.status(403).json({ error: 'Non autorisé.' });
+// ── Debug (diagnostic Vercel — réservé aux sessions administrateur) ───────────
+router.get('/api/debug', requireDb, requireAdminSession, async (req, res) => {
 
   // Extract project_id from service account (non-sensitive)
   let serviceAccountProjectId: string | null = null;
@@ -3266,8 +3382,6 @@ router.delete('/api/client/transactions/:clientId', requireDb, requireAdminSecre
 
 // ── Admin: Wallet Stats ───────────────────────────────────────────────────────
 router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
-    return res.status(403).json({ error: 'Non autorisé.' });
   try {
     const [txSnap, clientsSnap] = await Promise.all([
       adminDb.collection('client_transactions').orderBy('createdAt', 'desc').limit(500).get(),
@@ -3291,6 +3405,44 @@ router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: atomic affiliate wallet credit ─────────────────────────────────────
+router.post('/api/admin/affiliate/credit', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, amount, description } = req.body;
+    const credit = Number(amount);
+    if (!affiliateId || !Number.isFinite(credit) || credit === 0) {
+      return res.status(400).json({ error: 'Crédit invalide.' });
+    }
+    await adminDb.runTransaction(async (tx) => {
+      const affiliateRef = adminDb.collection('affiliates').doc(affiliateId);
+      const affiliate = await tx.get(affiliateRef);
+      if (!affiliate.exists) throw new Error('Affilié introuvable.');
+      const current = Number(affiliate.data()?.balance || 0);
+      const next = current + credit;
+      if (next < 0) throw new Error('Solde insuffisant.');
+      tx.update(affiliateRef, {
+        balance: next,
+        totalEarnings: Number(affiliate.data()?.totalEarnings || 0) + (credit > 0 ? credit : 0),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const transactionRef = adminDb.collection('wallet_transactions').doc();
+      tx.set(transactionRef, {
+        affiliateId,
+        type: credit > 0 ? 'deposit' : 'adjustment',
+        amount: Math.abs(credit),
+        status: 'completed',
+        description: String(description || 'Ajustement administrateur').slice(0, 500),
+        adminId: res.locals.adminSession.adminId,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message || 'Impossible de créditer ce compte.' });
   }
 });
 
@@ -4684,8 +4836,6 @@ router.get('/api/online-sub-services', requireDb, async (_req, res) => {
 });
 
 router.post('/api/admin/online-sub-services', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
-    return res.status(403).json({ error: 'Non autorisé.' });
   try {
     const { id, createdAt: _c, ...data } = req.body;
     if (id) {
@@ -4701,8 +4851,6 @@ router.post('/api/admin/online-sub-services', requireDb, async (req, res) => {
 });
 
 router.delete('/api/admin/online-sub-services/:id', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
-    return res.status(403).json({ error: 'Non autorisé.' });
   try {
     await adminDb.collection('online_sub_services').doc(req.params.id).delete();
     res.json({ success: true });
@@ -5103,7 +5251,8 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
       }
     }
 
-    if (adminData.password !== password) {
+    const storedPassword = adminData.passwordHash || adminData.password;
+    if (!verifyPassword(String(password), storedPassword)) {
       const newAttempts = (adminData.failedAttempts || 0) + 1;
       const upd: any = { failedAttempts: newAttempts };
       if (newAttempts >= 5) upd.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
@@ -5123,7 +5272,17 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
       return res.status(422).json({ error: 'Aucun email configuré sur ce compte. Contactez le super-administrateur pour associer un email à votre compte.' });
     }
 
-    await adminDoc.ref.update({ failedAttempts: 0, lockUntil: null, updatedAt: FieldValue.serverTimestamp() });
+    const securityUpdate: Record<string, unknown> = {
+      failedAttempts: 0,
+      lockUntil: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    // Upgrade legacy plaintext credentials only after a successful login.
+    if (!adminData.passwordHash && typeof adminData.password === 'string') {
+      securityUpdate.passwordHash = hashPassword(String(password));
+      securityUpdate.password = FieldValue.delete();
+    }
+    await adminDoc.ref.update(securityUpdate);
 
     const { sessionId, otpPlain } = await create2FASession({ role: 'admin', accountId: adminDoc.id, email, name: adminData.fullName });
     await send2FAOtp({ email, name: adminData.fullName, role: 'admin', otpCode: otpPlain, expiresMinutes: 5 });
@@ -5155,18 +5314,33 @@ router.post('/api/admin/verify-2fa', requireDb, async (req, res) => {
 
     const admin = serializeDoc(adminSnap);
     delete admin.password;
-    res.json({ success: true, admin, uid: result.extra?.uid, hasPin: !!adminSnap.data()?.pinHash });
+    delete admin.passwordHash;
+    // A short-lived custom token bridges the verified server session to the
+    // existing admin-only Firestore dashboard listeners without a writable
+    // browser-side privilege mapping.
+    const firebaseToken = await issueAdminFirebaseToken(adminSnap.ref, adminSnap.data());
+    setAdminSession(res, adminSnap.id);
+    res.json({ success: true, admin, firebaseToken, hasPin: !!adminSnap.data()?.pinHash });
   } catch (e: any) {
     console.error('[admin/verify-2fa]', e);
     res.status(500).json({ error: 'Erreur de vérification.' });
   }
 });
 
+router.post('/api/admin/logout', (_req, res) => {
+  res.clearCookie('rena_admin_session', { path: '/' });
+  res.json({ success: true });
+});
+
 // ── Admin: Verify Google login → triggers 2FA (phase 1) ──────────────────────
 router.post('/api/admin/verify-google', requireDb, async (req, res) => {
   try {
-    const { email, uid } = req.body;
-    if (!email || !uid) return res.status(400).json({ error: 'Données manquantes.' });
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'Jeton Google manquant.' });
+    const token = await getAuth().verifyIdToken(idToken);
+    const email = token.email?.toLowerCase();
+    const uid = token.uid;
+    if (!email || !uid || !token.email_verified) return res.status(401).json({ error: 'Compte Google non vérifié.' });
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
 
     let adminSnap = await adminDb.collection('admin_accounts').where('email', '==', email.toLowerCase()).limit(1).get();
@@ -5216,9 +5390,13 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
 // ── Admin: Link Google account to existing admin (verify creds first) ────────
 router.post('/api/admin/link-google', requireDb, async (req, res) => {
   try {
-    const { loginCode, email, uid } = req.body;
-    if (!loginCode || !email || !uid)
+    const { loginCode, idToken } = req.body;
+    if (!loginCode || !idToken)
       return res.status(400).json({ error: 'Données manquantes.' });
+    const token = await getAuth().verifyIdToken(idToken);
+    const email = token.email?.toLowerCase();
+    const uid = token.uid;
+    if (!email || !uid || !token.email_verified) return res.status(401).json({ error: 'Compte Google non vérifié.' });
 
     // Find admin account by loginCode (unique secret per account)
     const snap = await adminDb.collection('admin_accounts').where('loginCode', '==', loginCode).limit(1).get();
@@ -5275,6 +5453,7 @@ router.post('/api/admin/set-pin', requireDb, async (req, res) => {
   try {
     const { adminId, pin } = req.body;
     if (!adminId || !pin) return res.status(400).json({ error: 'adminId et pin requis.' });
+    if (res.locals.adminSession?.adminId !== adminId) return res.status(403).json({ error: 'Vous ne pouvez modifier que votre propre code PIN.' });
     if (!/^\d{8}$/.test(String(pin))) return res.status(400).json({ error: 'Le PIN doit comporter exactement 8 chiffres.' });
     const snap = await adminDb.collection('admin_accounts').doc(adminId).get();
     if (!snap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
@@ -5290,6 +5469,7 @@ router.post('/api/admin/verify-pin', requireDb, async (req, res) => {
   try {
     const { adminId, pin } = req.body;
     if (!adminId || !pin) return res.status(400).json({ error: 'adminId et pin requis.' });
+    if (res.locals.adminSession?.adminId !== adminId) return res.status(403).json({ error: 'Vous ne pouvez vérifier que votre propre code PIN.' });
     const snap = await adminDb.collection('admin_accounts').doc(adminId).get();
     if (!snap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
     const data = snap.data()!;
@@ -5480,38 +5660,30 @@ router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, re
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Admin: Bootstrap Super Admin (idempotent, no auth required) ───────────────
-router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
-  try {
-    const snap = await adminDb.collection('admin_accounts').limit(1).get();
-    if (!snap.empty) return res.json({ success: true, bootstrapped: false });
-    const ts = FieldValue.serverTimestamp();
-    const ref = await adminDb.collection('admin_accounts').add({
-      fullName: 'Ernst israel',
-      password: '$Ernst509@$',
-      loginCode: 'ER-2026',
-      isSuperAdmin: true,
-      permissions: ['all'],
-      failedAttempts: 0,
-      createdAt: ts,
-      updatedAt: ts,
-    });
-    console.log('[Bootstrap] Super Admin créé:', ref.id);
-    res.json({ success: true, bootstrapped: true });
-  } catch (e: any) {
-    console.error('[Bootstrap] Erreur:', e);
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // ── Admin: Admin Accounts CRUD ────────────────────────────────────────────────
 router.post('/api/admin/account', requireDb, requireAdminSecret, async (req, res) => {
   try {
     const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
     const ts = FieldValue.serverTimestamp();
     if (id) {
+      const previous = await adminDb.collection('admin_accounts').doc(id).get();
+      const oldUid = previous.data()?.uid;
+      if (oldUid && (data.disabled === true || (data.uid && data.uid !== oldUid))) {
+        await Promise.all([
+          getAuth().revokeRefreshTokens(oldUid),
+          getAuth().setCustomUserClaims(oldUid, {}),
+        ]);
+      }
+      if (typeof data.password === 'string' && data.password) {
+        data.passwordHash = hashPassword(data.password);
+        delete data.password;
+      }
       await adminDb.collection('admin_accounts').doc(id).update({ ...data, updatedAt: ts });
       return res.json({ success: true, id });
+    }
+    if (typeof data.password === 'string' && data.password) {
+      data.passwordHash = hashPassword(data.password);
+      delete data.password;
     }
     const ref = await adminDb.collection('admin_accounts').add({
       ...data, failedAttempts: 0, createdAt: ts, updatedAt: ts,
@@ -5522,6 +5694,14 @@ router.post('/api/admin/account', requireDb, requireAdminSecret, async (req, res
 
 router.delete('/api/admin/account/:id', requireDb, requireAdminSecret, async (req, res) => {
   try {
+    const existing = await adminDb.collection('admin_accounts').doc(req.params.id).get();
+    const uid = existing.data()?.uid;
+    if (uid) {
+      await Promise.all([
+        getAuth().revokeRefreshTokens(uid),
+        getAuth().setCustomUserClaims(uid, {}),
+      ]);
+    }
     await adminDb.collection('admin_accounts').doc(req.params.id).delete();
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -5594,9 +5774,7 @@ router.post('/api/push/unsubscribe', requireDb, async (req, res) => {
   }
 });
 
-router.post('/api/push/send', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
-    return res.status(403).json({ error: 'Non autorisé.' });
+router.post('/api/push/send', requireDb, requireAdminSession, async (req, res) => {
   if (!pushEnabled)
     return res.status(503).json({ error: 'Push notifications non configurées.' });
 
@@ -7520,6 +7698,10 @@ router.post('/api/crypto/ipn', async (req, res) => {
 
 // ── FazerCards API proxy ──────────────────────────────────────────────────────
 const FAZER_BASE = 'https://api.fzr.cards/api/v2';
+function hasFazerCredentials(): boolean {
+  return Boolean(process.env.FAZERCARDS_API_KEY || process.env.FAZER_CARDS_API_KEY);
+}
+
 function fazerFetch(path: string, opts: RequestInit = {}) {
   const key = process.env.FAZERCARDS_API_KEY || process.env.FAZER_CARDS_API_KEY;
   if (!key) throw new Error('FAZERCARDS_API_KEY non configurée.');
@@ -7531,6 +7713,7 @@ function fazerFetch(path: string, opts: RequestInit = {}) {
 
 // GET /api/fazer/topups — list game categories (with cover images)
 router.get('/api/fazer/topups', async (_req, res) => {
+  if (!hasFazerCredentials()) return res.json({ items: [], available: false });
   try {
     const r = await fazerFetch('/topups?include_ui=1&limit=100');
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
@@ -7549,6 +7732,7 @@ router.get('/api/fazer/topups/offers', async (req, res) => {
   try {
     const { category_id } = req.query as { category_id?: string };
     if (!category_id) return res.status(400).json({ error: 'category_id requis.' });
+    if (!hasFazerCredentials()) return res.json({ items: [], fields: [], available: false });
     const r = await fazerFetch(`/topups/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
     const data = await r.json() as any;
@@ -7569,6 +7753,7 @@ router.get('/api/fazer/topups/offers', async (req, res) => {
 
 // GET /api/fazer/topups/validate-id — list games that support ID validation
 router.get('/api/fazer/topups/validate-id', async (_req, res) => {
+  if (!hasFazerCredentials()) return res.json([]);
   try {
     const r = await fazerFetch('/topups/validate-id');
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
@@ -7740,6 +7925,7 @@ router.post('/api/fazer/price-overrides', requireDb, requireAdminSecret, async (
 
 // GET /api/fazer/giftcards — list gift card categories
 router.get('/api/fazer/giftcards', async (_req, res) => {
+  if (!hasFazerCredentials()) return res.json({ items: [], available: false });
   try {
     const r = await fazerFetch('/giftcards?include_ui=1&limit=100');
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards Gift Cards.' });
@@ -7757,6 +7943,7 @@ router.get('/api/fazer/giftcards/offers', async (req, res) => {
   try {
     const { category_id } = req.query as { category_id?: string };
     if (!category_id) return res.status(400).json({ error: 'category_id requis.' });
+    if (!hasFazerCredentials()) return res.json({ items: [], available: false });
     const r = await fazerFetch(`/giftcards/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
     const data = await r.json() as any;

@@ -12,9 +12,27 @@ const __dirname = path.dirname(__filename);
 
 import apiRouter from './src/api/router.ts';
 
+function allowedOrigins(): Set<string> {
+  const origins = new Set<string>();
+  for (const value of [process.env.APP_URL, process.env.REPLIT_DEV_DOMAIN && `https://${process.env.REPLIT_DEV_DOMAIN}`]) {
+    if (value) origins.add(value.replace(/\/$/, ''));
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    origins.add('http://localhost:5000');
+    origins.add('http://localhost:5173');
+    origins.add('http://127.0.0.1:5000');
+    origins.add('http://127.0.0.1:5173');
+  }
+  return origins;
+}
+
 async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '5000', 10);
+  if (process.env.NODE_ENV === 'production' && !process.env.APP_URL) {
+    throw new Error('APP_URL doit être configuré en production pour appliquer la politique CORS.');
+  }
+  const corsOrigins = allowedOrigins();
 
   // ── Gzip compression for all responses ─────────────────────────────────────
   app.use(compression({ level: 6, threshold: 1024 }));
@@ -27,16 +45,27 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=()');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https: wss:;");
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     next();
   });
 
   // ── CORS ───────────────────────────────────────────────────────────────────
   app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Credentials', 'true');
+    const origin = req.headers.origin;
+    if (origin) {
+      if (!corsOrigins.has(origin.replace(/\/$/, ''))) {
+        return res.status(403).json({ error: 'Origine non autorisée.' });
+      }
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
     res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-secret');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });

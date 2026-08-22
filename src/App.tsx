@@ -36,7 +36,8 @@ import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Client, Teacher, Agent } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import { signOut } from 'firebase/auth';
+import { auth, db } from './lib/firebase';
 import { toast } from 'sonner';
 
 function AppInner() {
@@ -71,6 +72,8 @@ function AppInner() {
   };
 
   const handleAdminLogout = () => {
+    fetch('/api/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    signOut(auth).catch(() => {});
     setLoggedAdmin(null);
     localStorage.removeItem('rena_admin');
     setView('home');
@@ -128,17 +131,6 @@ function AppInner() {
     }
   }, []);
 
-  // Bootstrap Super Admin — deferred so it doesn't compete with initial render
-  useEffect(() => {
-    const t = setTimeout(() => {
-      fetch('/api/admin/bootstrap', { method: 'POST' })
-        .then(r => r.json())
-        .then(d => { if (d.bootstrapped) console.log('[Bootstrap] Super Admin créé.'); })
-        .catch(e => console.warn('[Bootstrap] Non critique:', e.message));
-    }, 3000);
-    return () => clearTimeout(t);
-  }, []);
-  
   // Ordered nav slots — used to compute slide direction
   const NAV_ORDER = ['home', 'products', 'services', 'formations', 'tracking', 'shipping'];
 

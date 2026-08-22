@@ -93,7 +93,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Timestamp, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1264,7 +1264,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setLoadingPaymentRequests(true);
     try {
       const res = await fetch('/api/admin/formations/payment-requests', {
-        headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+        credentials: 'include',
       });
       const json = await res.json();
       setFormationPaymentRequests(json.requests || []);
@@ -1281,7 +1281,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       try {
         const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'approve' }),
         });
         if (!res.ok) throw new Error('Erreur');
@@ -1299,7 +1300,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       try {
         const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'reject' }),
         });
         if (!res.ok) throw new Error('Erreur');
@@ -1341,7 +1343,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setLoadingCertificates(true);
     try {
       const url = fId ? `/api/admin/formations/certificates?formationId=${fId}` : '/api/admin/formations/certificates';
-      const res = await fetch(url, { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+      const res = await fetch(url, { credentials: 'include' });
       const data = await res.json();
       setCertificates(data.certificates || []);
     } catch { toast.error('Impossible de charger les certificats.'); }
@@ -1351,7 +1353,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const fetchCertStudents = async (fId: string) => {
     setLoadingCertStudents(true);
     try {
-      const res = await fetch(`/api/admin/formations/${fId}/students`, { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+      const res = await fetch(`/api/admin/formations/${fId}/students`, { credentials: 'include' });
       const data = await res.json();
       setCertStudents(data.students || []);
     } catch { toast.error('Impossible de charger les étudiants.'); }
@@ -1366,7 +1368,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       setCertIssuanceForm(null);
       try {
         const res = await fetch('/api/admin/formations/certificate', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: student.userId, userName: student.userName, userEmail: student.userEmail,
             formationId: selectedCertFormationId, formationTitle: formation?.title || '',
@@ -1387,7 +1389,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     await withAdminPin('Révoquer le certificat', async () => {
       setRevokingCertId(certId);
       try {
-        await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+        await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', credentials: 'include' });
         toast.success('Certificat révoqué.');
         fetchCertificates(selectedCertFormationId || undefined);
       } catch { toast.error('Erreur lors de la révocation.'); }
@@ -1400,7 +1402,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       setUpdatingCertPdf(certId);
       try {
         const res = await fetch(`/api/admin/formations/certificate/${certId}`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pdfUrl }),
         });
         if (!res.ok) throw new Error('Erreur');
@@ -2543,7 +2545,7 @@ function EmailLogsPanel() {
   const fetchFFResellerAgents = async () => {
     setFFResellerLoading(true);
     try {
-      const res = await fetch('/api/admin/reseller/ff/agents', { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+      const res = await fetch('/api/admin/reseller/ff/agents', { credentials: 'include' });
       const data = await res.json();
       setFFResellerAgents(data.accounts || []);
       ffResellerLoaded.current = true;
@@ -2554,7 +2556,7 @@ function EmailLogsPanel() {
   const fetchFFPacks = async () => {
     setFFPacksLoading(true);
     try {
-      const res = await fetch('/api/admin/reseller/ff/packs', { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+      const res = await fetch('/api/admin/reseller/ff/packs', { credentials: 'include' });
       const data = await res.json();
       if (data.packs?.length) { setFFCreditPacks(data.packs); ffPacksLoaded.current = true; }
     } catch { /* use defaults */ }
@@ -2567,7 +2569,8 @@ function EmailLogsPanel() {
     try {
       const res = await fetch('/api/admin/reseller/ff/packs', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packs: ffEditingPacks }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
@@ -2585,7 +2588,7 @@ function EmailLogsPanel() {
       const url = agentId
         ? `/api/admin/reseller/ff/transactions?agentId=${encodeURIComponent(agentId)}&limit=100`
         : '/api/admin/reseller/ff/transactions?limit=100';
-      const res = await fetch(url, { headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') } });
+      const res = await fetch(url, { credentials: 'include' });
       const data = await res.json();
       setFFTxs(data.transactions || []);
     } catch { toast.error('Erreur chargement transactions Free Fire.'); }
@@ -2602,7 +2605,7 @@ function EmailLogsPanel() {
       try {
         const res = await fetch(`/api/admin/agent/${agentToDelete.id}`, {
           method: 'DELETE',
-          headers: { 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          credentials: 'include',
         });
         const data = await res.json();
         if (!res.ok) { toast.error(data.error || 'Erreur lors de la suppression.'); return; }
@@ -2620,7 +2623,8 @@ function EmailLogsPanel() {
       try {
         const res = await fetch('/api/admin/reseller/ff/toggle', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ agentId: agent.agentId || agent.id, agentName: agent.agentName || agent.name || '', enabled: !agent.enabled }),
         });
         if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
@@ -2639,7 +2643,8 @@ function EmailLogsPanel() {
       try {
         const res = await fetch('/api/admin/reseller/ff/credit', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-admin-secret': (import.meta.env.VITE_ADMIN_SECRET ?? 'rena-admin-2024') },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             agentId: ffCreditAgent.agentId || ffCreditAgent.id,
             agentName: ffCreditAgent.agentName || ffCreditAgent.name || '',
@@ -4109,24 +4114,17 @@ function EmailLogsPanel() {
       try {
         const exchangeRate = settings?.exchangeRate || 146;
         const usdAmount = Number((quickCreditAmount / exchangeRate).toFixed(2));
-        const newBalance = (selectedAffiliateForCredit.balance || 0) + usdAmount;
-        const newEarnings = (selectedAffiliateForCredit.totalEarnings || 0) + (usdAmount > 0 ? usdAmount : 0);
-        
-        await saveAffiliate({
-          balance: newBalance,
-          totalEarnings: newEarnings,
-          updatedAt: serverTimestamp()
-        }, selectedAffiliateForCredit.id);
-
-        await addDoc(collection(db, 'wallet_transactions'), {
-          affiliateId: selectedAffiliateForCredit.id,
-          type: 'deposit',
-          amount: usdAmount,
-          status: 'completed',
-          description: `Dépôt Admin (${quickCreditAmount.toLocaleString()} HTG @ ${exchangeRate})`,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+        const response = await fetch('/api/admin/affiliate/credit', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            affiliateId: selectedAffiliateForCredit.id,
+            amount: usdAmount,
+            description: `Dépôt Admin (${quickCreditAmount.toLocaleString()} HTG @ ${exchangeRate})`,
+          }),
         });
+        if (!response.ok) throw new Error((await response.json()).error || 'Crédit impossible.');
         
         toast.success(`Le compte de ${selectedAffiliateForCredit.name} a été crédité de ${usdAmount} $ (${quickCreditAmount} G).`);
         setIsQuickCreditDialogOpen(false);
