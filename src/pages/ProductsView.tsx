@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import * as LucideIcons from 'lucide-react';
 import {
@@ -711,10 +712,11 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
         </DialogContent>
       </Dialog>
 
-      {/* ── Product Detail — plein-écran slide-up ── */}
-      <AnimatePresence>
-        {isProductDetailOpen && selectedProduct && (
-          <>
+      {/* Render outside the animated page shell: transformed ancestors break fixed positioning on mobile. */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isProductDetailOpen && selectedProduct && (
+            <>
             {/* Backdrop */}
             <motion.div
               key="product-backdrop"
@@ -977,9 +979,11 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
               })()}
               </motion.div>
             </div>
-          </>
-        )}
-      </AnimatePresence>
+            </>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ── Payment Modal (WhatsApp) ── */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>

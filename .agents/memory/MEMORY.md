@@ -5,3 +5,4 @@
 - [Analytics nested listeners fix](analytics-listeners.md) — analyticsService.ts avait 6 niveaux imbriqués de onSnapshot (fuite mémoire critique); corrigé avec listeners plats + pattern ref partagé
 - [VAPID push key pairing](vapid-push-pairing.md) — la clé publique push frontend doit venir de VAPID_PUBLIC_KEY et correspondre à une clé privée décodée de 32 octets
 - [Security rules applied](security-rules-applied.md) — résumé de tous les correctifs de sécurité appliqués (wallet, IPN, Fazer prix, 2FA, Firestore rules, requireAdminSecret)
+- [Fixed modal portals](fixed-modal-portals.md) — les overlays fixes doivent sortir des conteneurs de page animés via un portail
