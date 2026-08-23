@@ -1,0 +1,69 @@
+/* ── Rena Popup System — static reference styles ─────────────────────────── */
+
+/* Full-screen panel slide-up animation */
+@keyframes rena-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.rena-panel {
+  animation: rena-slide-up 0.35s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+
+/* Frosted backdrop */
+.rena-backdrop {
+  background: rgba(0, 0, 0, 0.50);
+  backdrop-filter: blur(4px);
+}
+
+/* No scrollbar utility (mirrors production) */
+.rena-no-scrollbar::-webkit-scrollbar { display: none; }
+.rena-no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Plan radio button */
+.rena-plan-selected {
+  border-color: #2563EB;
+  background-color: rgba(37, 99, 235, 0.05);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1);
+}
+.rena-plan-unselected {
+  border-color: #f3f4f6;
+  background-color: #ffffff;
+}
+.rena-plan-unselected:hover {
+  border-color: #e5e7eb;
+}
+
+/* Guarantee badge rows */
+.rena-badge-emerald { background: #ecfdf5; border: 1px solid #d1fae5; }
+.rena-badge-blue    { background: #eff6ff; border: 1px solid #dbeafe; }
+.rena-badge-purple  { background: #f5f3ff; border: 1px solid #ede9fe; }
+
+/* Promo code applied chip */
+.rena-promo-chip {
+  background: #ecfdf5;
+  border: 2px solid #6ee7b7;
+}
+
+/* Wallet pay button states */
+.rena-wallet-btn-ok {
+  border: 2px solid #6ee7b7;
+  color: #047857;
+}
+.rena-wallet-btn-ok:hover {
+  background: #ecfdf5;
+  border-color: #34d399;
+}
+.rena-wallet-btn-insufficient {
+  border: 2px solid #fecaca;
+  color: #f87171;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Purchase section below-the-fold visual separator */
+.rena-purchase-divider {
+  border-top: 1px solid #f3f4f6;
+  margin-top: 8px;
+  padding-top: 16px;
+}
