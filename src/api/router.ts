@@ -5809,7 +5809,35 @@ function orderStatusMessage(status: string, symbol: string, note?: string): { ti
   return { title: '❌ Commande crypto refusée', message: `Votre commande ${symbol} n’a pas pu être finalisée.${suffix}` };
 }
 
+const DEFAULT_CRYPTO_ASSETS = [
+  { id: 'starter-bitcoin', name: 'Bitcoin', symbol: 'BTC', coingeckoId: 'bitcoin' },
+  { id: 'starter-ethereum', name: 'Ethereum', symbol: 'ETH', coingeckoId: 'ethereum' },
+  { id: 'starter-tether', name: 'Tether USD', symbol: 'USDT', coingeckoId: 'tether' },
+  { id: 'starter-usd-coin', name: 'USD Coin', symbol: 'USDC', coingeckoId: 'usd-coin' },
+  { id: 'starter-solana', name: 'Solana', symbol: 'SOL', coingeckoId: 'solana' },
+  { id: 'starter-bnb', name: 'BNB', symbol: 'BNB', coingeckoId: 'binancecoin' },
+];
+
+async function ensureDefaultCryptoAssets(): Promise<void> {
+  // Seed only once. A separate marker means an administrator can later choose
+  // to disable or remove every crypto without the public catalogue recreating it.
+  const markerRef = adminDb.collection('crypto_catalog_meta').doc('starter_assets_v1');
+  const marker = await markerRef.get();
+  if (marker.exists) return;
+  const batch = adminDb.batch();
+  for (const asset of DEFAULT_CRYPTO_ASSETS) {
+    batch.set(adminDb.collection('cryptos').doc(asset.id), {
+      name: asset.name, symbol: asset.symbol, logo: '', coingeckoId: asset.coingeckoId,
+      enabled: true, priceUSD: null, starterAsset: true,
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+  batch.set(markerRef, { seededAt: FieldValue.serverTimestamp(), assetCount: DEFAULT_CRYPTO_ASSETS.length });
+  await batch.commit();
+}
+
 async function getCryptoCatalog(includeDisabled = false): Promise<{ cryptos: any[]; networks: any[] }> {
+  await ensureDefaultCryptoAssets();
   const [cryptoSnap, networkSnap] = await Promise.all([
     adminDb.collection('cryptos').get(),
     adminDb.collection('crypto_networks').get(),

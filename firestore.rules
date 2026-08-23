@@ -332,6 +332,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /crypto_catalog_meta/{documentId} {
+      allow read, write: if false;
+    }
+
     match /affiliate_notifications/{notifId} {
       allow read: if isAdmin();
       allow write: if false;
