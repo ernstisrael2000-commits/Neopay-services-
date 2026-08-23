@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  Home, ShoppingBag, Globe, GraduationCap, Wallet, Lock,
+  House, PackageOpen, Compass, GraduationCap, Wallet, Lock,
 } from 'lucide-react';
 import { motion, useMotionValue, useTransform, animate, MotionConfig } from 'motion/react';
 import { Client } from '../types';
@@ -25,9 +25,9 @@ const RING_SZ = 46;   // diameter of active circle in px
 
 /* ─── Main nav items (4) + wallet handled separately ─────────── */
 const NAV_ITEMS = [
-  { key: 'home',       icon: Home,          label: 'Accueil'    },
-  { key: 'products',   icon: ShoppingBag,   label: 'Produits'   },
-  { key: 'services',   icon: Globe,         label: 'Services'   },
+  { key: 'home',       icon: House,         label: 'Accueil'    },
+  { key: 'products',   icon: PackageOpen,   label: 'Produits'   },
+  { key: 'services',   icon: Compass,       label: 'Services'   },
   { key: 'formations', icon: GraduationCap, label: 'Formations' },
 ] as const;
 
@@ -93,8 +93,9 @@ export default function BottomNav({
         className="fixed bottom-0 left-0 right-0 z-[300]"
         style={{
           /* solid white all the way to screen edge — covers safe area */
-          background: 'white',
+          background: 'rgba(255,255,255,0.96)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          backdropFilter: 'blur(18px)',
         }}
       >
         {/* ── Animated notched bar background ── */}
@@ -103,10 +104,10 @@ export default function BottomNav({
           className="absolute inset-x-0 top-0 pointer-events-none"
           style={{
             height: BAR_H,
-            background: 'white',
+            background: 'rgba(255,255,255,0.96)',
             WebkitMaskImage: maskImage,
             maskImage,
-            boxShadow: '0 -5px 22px rgba(0,0,0,0.07), 0 -1px 0 rgba(0,0,0,0.055)',
+            boxShadow: '0 -8px 26px rgba(15,23,42,0.08), 0 -1px 0 rgba(37,99,235,0.08)',
           }}
         />
 
@@ -130,7 +131,7 @@ export default function BottomNav({
               >
                 <Icon
                   style={{ width: 22, height: 22 }}
-                  className={`transition-colors duration-100 ${active ? 'text-white' : 'text-gray-900'}`}
+                  className={`transition-colors duration-100 ${active ? 'text-white' : 'text-slate-600'}`}
                   strokeWidth={active ? 2.5 : 1.75}
                 />
               </TabButton>
@@ -181,12 +182,12 @@ function TabButton({ label, active, rise, ringSize, onClick, children }: TabButt
       onClick={onClick}
       aria-label={label}
       aria-current={active ? 'page' : undefined}
-      className="relative flex-1 flex flex-col items-center pb-[7px] focus:outline-none select-none"
+      className="relative flex flex-1 select-none flex-col items-center pb-[7px] focus:outline-none focus-visible:z-20 focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-primary/40"
       style={{ WebkitTapHighlightColor: 'transparent' }}
     >
       {/* Icon container — rises above bar when active */}
       <motion.div
-        className="relative flex items-center justify-center"
+        className={`relative flex items-center justify-center rounded-xl transition-colors ${active ? '' : 'bg-slate-50/80'}`}
         style={{ width: ringSize, height: ringSize }}
         animate={{ y: active ? -rise : 0, scale: active ? 1.05 : 1 }}
         transition={SPRING}
@@ -197,8 +198,8 @@ function TabButton({ label, active, rise, ringSize, onClick, children }: TabButt
             layoutId="nav-ring"
             className="absolute inset-0 rounded-full"
             style={{
-              background: 'linear-gradient(135deg, #2563EB 0%, #4f46e5 100%)',
-              boxShadow: '0 8px 22px rgba(79,70,229,0.44), 0 0 0 3.5px white, 0 0 0 4.5px rgba(0,0,0,0.05)',
+               background: 'linear-gradient(135deg, #1D4ED8 0%, #2563EB 56%, #38BDF8 100%)',
+               boxShadow: '0 9px 24px rgba(37,99,235,0.38), 0 0 0 3.5px white, 0 0 0 4.5px rgba(37,99,235,0.10)',
             }}
             transition={SPRING}
           />
@@ -209,7 +210,7 @@ function TabButton({ label, active, rise, ringSize, onClick, children }: TabButt
           className="relative z-10 flex items-center justify-center"
           animate={{
             opacity: active ? 1 : 0.72,
-            color: active ? '#ffffff' : '#111827',
+            color: active ? '#ffffff' : '#475569',
           }}
           transition={{ duration: 0.18 }}
         >
@@ -219,10 +220,10 @@ function TabButton({ label, active, rise, ringSize, onClick, children }: TabButt
 
       {/* Label */}
       <motion.span
-        className="text-[9.5px] font-bold leading-none tracking-tight mt-0.5"
+        className="mt-0.5 text-[9.5px] font-black leading-none tracking-[0.01em]"
         animate={{
-          color: active ? '#2563EB' : '#6b7280',
-          opacity: active ? 1 : 0.7,
+          color: active ? '#2563EB' : '#64748b',
+          opacity: active ? 1 : 0.78,
         }}
         transition={{ duration: 0.18 }}
       >

@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Key, Copy, Check } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, ScanSearch, House, UsersRound, PackageCheck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Key, Copy, Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import RenaLogo from '../components/RenaLogo';
 import { Button } from '../components/ui/button';
@@ -117,11 +117,11 @@ const ClientNotifItem: React.FC<{ notif: any; onRead: () => void }> = ({ notif, 
 };
 
 const NAV_ITEMS = [
-  { key: 'home', icon: Home, label: 'Accueil' },
-  { key: 'tracking', icon: Search, label: 'Suivi' },
-  { key: 'shipping', icon: Truck, label: 'Shipping' },
+  { key: 'home', icon: House, label: 'Accueil' },
+  { key: 'tracking', icon: ScanSearch, label: 'Suivi' },
+  { key: 'shipping', icon: PackageCheck, label: 'Shipping' },
   { key: 'formations', icon: GraduationCap, label: 'Formations' },
-  { key: 'affiliate', icon: Users, label: 'Affiliés' },
+  { key: 'affiliate', icon: UsersRound, label: 'Affiliés' },
 ];
 
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, onTeacherAccess, formationsTab, onFormationsTabChange }: NavbarProps) {
@@ -184,7 +184,12 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
     return (
       <button
         onClick={() => handleNav(item.key)}
-        className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-colors duration-200 group ${active ? 'bg-primary/10' : 'hover:bg-gray-100'}`}
+        aria-current={active ? 'page' : undefined}
+        className={`group relative flex flex-col items-center justify-center gap-0.5 rounded-2xl px-2.5 py-1.5 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+          active
+            ? 'bg-primary/[0.08] text-primary shadow-[inset_0_0_0_1px_rgba(37,99,235,0.08)]'
+            : 'text-gray-500 hover:bg-slate-50 hover:text-primary'
+        }`}
       >
         <motion.div
           key={active ? 'active' : 'inactive'}
@@ -193,10 +198,15 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
           transition={{ type: 'spring', stiffness: 400, damping: 18 }}
           whileHover={{ scale: 1.18, y: -1.5 }}
           whileTap={{ scale: 0.88 }}
+          className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200 ${
+            active
+              ? 'bg-primary text-white shadow-[0_5px_14px_rgba(37,99,235,0.28)]'
+              : 'bg-slate-50 text-slate-600 group-hover:bg-white group-hover:shadow-sm'
+          }`}
         >
-          <item.icon className={`h-[18px] w-[18px] transition-colors ${active ? 'text-primary' : 'text-gray-900 group-hover:text-primary'}`} />
+          <item.icon className="h-[17px] w-[17px]" strokeWidth={active ? 2.4 : 1.9} />
         </motion.div>
-        <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${active ? 'text-primary' : 'text-gray-900/80 group-hover:text-primary/80'}`}>{item.label}</span>
+        <span className={`text-[9px] font-black uppercase tracking-[0.08em] transition-colors ${active ? 'text-primary' : 'text-gray-500 group-hover:text-primary'}`}>{item.label}</span>
       </button>
     );
   };
@@ -422,10 +432,14 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               {/* Burger — always on mobile, also on desktop when logged in for compactness */}
               <button
                 onClick={() => setMenuOpen(v => !v)}
-                className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors relative"
+                className={`relative flex h-10 w-10 items-center justify-center rounded-2xl border transition-all md:hidden ${
+                  menuOpen
+                    ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20'
+                    : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-primary/20 hover:bg-primary/5 hover:text-primary'
+                }`}
                 aria-label="Menu"
               >
-                {menuOpen ? <X className="h-5 w-5 text-gray-600" /> : <Menu className="h-5 w-5 text-gray-600" />}
+                {menuOpen ? <X className="h-[18px] w-[18px]" strokeWidth={2.25} /> : <Menu className="h-[18px] w-[18px]" strokeWidth={2.25} />}
                 {pendingCount > 0 && !menuOpen && (
                   <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
                     {pendingCount > 9 ? '9+' : pendingCount}
@@ -481,10 +495,21 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 const active = currentView === item.key;
                 return (
                   <button key={item.key} onClick={() => handleNav(item.key)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${active ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-100'}`}>
-                    <item.icon className={`h-5 w-5 shrink-0 ${active ? 'text-primary' : 'text-gray-400'}`} />
+                    aria-current={active ? 'page' : undefined}
+                    className={`group w-full flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition-all ${
+                      active
+                        ? 'bg-primary/[0.09] text-primary shadow-[inset_0_0_0_1px_rgba(37,99,235,0.08)]'
+                        : 'text-gray-600 hover:bg-slate-50 hover:text-gray-900'
+                    }`}>
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all ${
+                      active
+                        ? 'bg-primary text-white shadow-md shadow-primary/25'
+                        : 'bg-slate-50 text-slate-500 group-hover:bg-white group-hover:shadow-sm'
+                    }`}>
+                      <item.icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.35 : 1.85} />
+                    </span>
                     <span>{item.label}</span>
-                    {active && <ChevronRight className="h-4 w-4 ml-auto text-primary" />}
+                    {active && <ChevronRight className="ml-auto h-4 w-4 text-primary" strokeWidth={2.5} />}
                   </button>
                 );
               })}

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  ChevronLeft, BookMarked,
-  Wallet, Menu, Grid3X3, Heart, Award, X
+  ChevronLeft, LibraryBig,
+  Wallet, Menu, LayoutDashboard, Heart, Award, X
 } from 'lucide-react';
 import { Client } from '../types';
 import { useSettingsCtx } from '../contexts/SettingsContext';
@@ -41,14 +41,14 @@ export default function FormationsNavbar({
     {
       id: 'all' as const,
       label: 'Catalogue',
-      icon: <Grid3X3 className="h-5 w-5" />,
+      icon: LayoutDashboard,
       desc: 'Explorez toutes les formations',
       action: () => { onTabChange('all'); setMenuOpen(false); },
     },
     {
       id: 'my' as const,
       label: 'Mes cours',
-      icon: <BookMarked className="h-5 w-5" />,
+      icon: LibraryBig,
       desc: 'Vos formations achetées',
       action: () => {
         if (!loggedClient) { onRequestAuth(); setMenuOpen(false); return; }
@@ -58,7 +58,7 @@ export default function FormationsNavbar({
     {
       id: 'fav' as const,
       label: 'Favoris',
-      icon: <Heart className="h-5 w-5" />,
+      icon: Heart,
       desc: 'Formations sauvegardées',
       action: () => {
         if (!loggedClient) { onRequestAuth(); setMenuOpen(false); return; }
@@ -68,7 +68,7 @@ export default function FormationsNavbar({
     {
       id: 'cert' as const,
       label: 'Certificats',
-      icon: <Award className="h-5 w-5" />,
+      icon: Award,
       desc: 'Vos diplômes obtenus',
       action: () => {
         if (!loggedClient) { onRequestAuth(); setMenuOpen(false); return; }
@@ -88,8 +88,8 @@ export default function FormationsNavbar({
             className="flex items-center gap-1 shrink-0 group"
             aria-label="Retour à l'accueil"
           >
-            <div className="h-8 w-8 rounded-xl bg-gray-50 hover:bg-violet-50 border border-gray-100 flex items-center justify-center transition-all group-hover:border-violet-200">
-              <ChevronLeft className="h-4 w-4 text-gray-500 group-hover:text-violet-600 transition-colors" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 transition-all group-hover:border-violet-200 group-hover:bg-violet-50 group-hover:shadow-sm">
+              <ChevronLeft className="h-[17px] w-[17px] text-slate-500 transition-colors group-hover:text-violet-600" strokeWidth={2.25} />
             </div>
           </button>
 
@@ -120,14 +120,14 @@ export default function FormationsNavbar({
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(v => !v)}
-                className={`h-8 w-8 rounded-xl flex items-center justify-center border transition-all ${
+                className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-all ${
                   menuOpen
-                    ? 'bg-violet-600 border-violet-600 text-white'
-                    : 'bg-white border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-600'
+                    ? 'border-violet-600 bg-violet-600 text-white shadow-lg shadow-violet-600/20'
+                    : 'border-slate-100 bg-slate-50 text-slate-600 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600'
                 }`}
                 aria-label="Menu"
               >
-                {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                {menuOpen ? <X className="h-[18px] w-[18px]" strokeWidth={2.25} /> : <Menu className="h-[18px] w-[18px]" strokeWidth={2.25} />}
               </button>
 
               {/* Dropdown menu */}
@@ -155,32 +155,36 @@ export default function FormationsNavbar({
 
                     {/* Nav items */}
                     <div className="py-1.5">
-                      {navItems.map(item => (
-                        <button
+                      {navItems.map(item => {
+                        const active = (item.id === 'all' || item.id === 'my') && activeTab === item.id;
+                        const Icon = item.icon;
+                        return (
+                          <button
                           key={item.id}
                           onClick={item.action}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors ${
-                            (item.id === 'all' || item.id === 'my') && activeTab === item.id
-                              ? 'text-violet-700'
-                              : 'text-gray-700'
+                          className={`group w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-2xl transition-all ${
+                            active
+                              ? 'bg-violet-50 text-violet-700 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.10)]'
+                              : 'text-gray-700 hover:bg-slate-50'
                           }`}
                         >
-                          <div className={`h-9 w-9 rounded-[12px] flex items-center justify-center shrink-0 ${
-                            (item.id === 'all' || item.id === 'my') && activeTab === item.id
-                              ? 'bg-violet-100 text-violet-600'
-                              : 'bg-gray-100 text-gray-500'
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all ${
+                            active
+                              ? 'bg-violet-600 text-white shadow-md shadow-violet-600/20'
+                              : 'bg-slate-50 text-slate-500 group-hover:bg-white group-hover:shadow-sm'
                           }`}>
-                            {item.icon}
+                            <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.35 : 1.9} />
                           </div>
                           <div>
                             <p className="font-bold text-sm">{item.label}</p>
                             <p className="text-[11px] text-gray-400">{item.desc}</p>
                           </div>
-                          {(item.id === 'all' || item.id === 'my') && activeTab === item.id && (
-                            <div className="ml-auto h-2 w-2 rounded-full bg-violet-600 shrink-0" />
+                          {active && (
+                            <div className="ml-auto h-2 w-2 rounded-full bg-violet-600 shrink-0 shadow-[0_0_0_3px_rgba(124,58,237,0.12)]" />
                           )}
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {/* Divider + wallet */}
