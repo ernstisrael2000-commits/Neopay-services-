@@ -733,7 +733,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: '100%', opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-                className="relative pointer-events-auto flex h-[100dvh] w-full max-w-none flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(860px,calc(100dvh-2rem))] sm:max-w-[520px] sm:rounded-[2rem]"
+                className="relative pointer-events-auto flex h-[100svh] max-h-[100svh] w-full max-w-none flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(860px,calc(100dvh-2rem))] sm:max-h-[calc(100dvh-2rem)] sm:max-w-[520px] sm:rounded-[2rem]"
               >
               {/* Header remains visible while the product details scroll. */}
                <div className="z-10 flex shrink-0 items-center justify-between border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur sm:px-5 sm:pt-4">
