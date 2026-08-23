@@ -1,4 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /affiliate
+Disallow: /teacher
+Disallow: /wallet
+Disallow: /payment-success
+Disallow: /api/
 
 Sitemap: https://solutionpam.com/sitemap.xml

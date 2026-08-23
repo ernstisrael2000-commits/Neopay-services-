@@ -96,7 +96,7 @@ externalPort = 8081
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["bash", "-c", "NODE_ENV=production APP_URL=https://renaservices.shop npx tsx server.ts"]
+run = ["bash", "-c", "NODE_ENV=production APP_URL=https://solutionpam.com npx tsx server.ts"]
 build = ["npm", "run", "build"]
 
 [userenv]

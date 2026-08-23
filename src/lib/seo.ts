@@ -23,8 +23,8 @@ export interface SeoPage {
 export const SEO_PAGES: Record<SeoPath, SeoPage> = {
   '/': {
     path: '/',
-    title: 'Solutionpam | Services numériques en Haïti',
-    description: 'Solutionpam réunit recharges de jeux, abonnements, paiements, suivi de colis, expédition et formations en ligne pour la clientèle en Haïti.',
+    title: 'Solution Pam (Solutionpam) | Services en Haïti',
+    description: 'Solution Pam, aussi appelé Solutionpam, réunit recharges de jeux, abonnements, paiements, suivi de colis, expédition et formations en Haïti.',
     h1: 'Services numériques, paiements et logistique en Haïti',
   },
   '/produits': {
@@ -119,9 +119,15 @@ export function getStructuredData() {
       '@context': 'https://schema.org',
       '@type': 'Organization',
       name: 'Solutionpam',
+      alternateName: 'Solution Pam',
       url: SEO_SITE_URL,
-      logo: `${SEO_SITE_URL}/solution-pam-logo.png`,
-      description: 'Services numériques, logistique, suivi de colis, expédition et formations en ligne en Haïti.',
+      logo: `${SEO_SITE_URL}/solutionpam-site-logo.jpg`,
+      image: `${SEO_SITE_URL}/solutionpam-site-logo.jpg`,
+      description: 'Solution Pam (Solutionpam) propose des services numériques, de logistique, de suivi de colis, d’expédition et de formations en ligne en Haïti.',
+      areaServed: {
+        '@type': 'Country',
+        name: 'Haïti',
+      },
       contactPoint: {
         '@type': 'ContactPoint',
         telephone: '+50944813185',
@@ -133,6 +139,7 @@ export function getStructuredData() {
       '@context': 'https://schema.org',
       '@type': 'WebSite',
       name: 'Solutionpam',
+      alternateName: 'Solution Pam',
       url: SEO_SITE_URL,
       inLanguage: 'fr-HT',
     },

@@ -38,6 +38,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // If React cannot finish mounting, do not leave the static boot screen on top
+    // of the recovery UI.
+    document.getElementById('solution-pam-boot-loader')?.remove();
+
     if (isDomManipulationError(error.message || '')) {
       console.warn('[ErrorBoundary] Transient DOM conflict (Firebase/Radix/Framer) — recovered silently.');
       return;

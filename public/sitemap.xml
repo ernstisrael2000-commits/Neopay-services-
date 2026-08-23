@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://solutionpam.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://solutionpam.com/produits</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
-  <url><loc>https://solutionpam.com/services</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://solutionpam.com/suivi-colis</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://solutionpam.com/expedition</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://solutionpam.com/formations</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://solutionpam.com/recharge-free-fire</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://solutionpam.com/abonnements</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://solutionpam.com/paiements</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://solutionpam.com/contact</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://solutionpam.com/a-propos</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://solutionpam.com/</loc><lastmod>2026-08-23</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://solutionpam.com/produits</loc><lastmod>2026-08-23</lastmod><changefreq>daily</changefreq><priority>0.9</priority></url>
+  <url><loc>https://solutionpam.com/services</loc><lastmod>2026-08-23</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://solutionpam.com/suivi-colis</loc><lastmod>2026-08-23</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://solutionpam.com/expedition</loc><lastmod>2026-08-23</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://solutionpam.com/formations</loc><lastmod>2026-08-23</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://solutionpam.com/recharge-free-fire</loc><lastmod>2026-08-23</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://solutionpam.com/abonnements</loc><lastmod>2026-08-23</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://solutionpam.com/paiements</loc><lastmod>2026-08-23</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://solutionpam.com/contact</loc><lastmod>2026-08-23</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://solutionpam.com/a-propos</loc><lastmod>2026-08-23</lastmod><changefreq>monthly</changefreq><priority>0.5</priority></url>
 </urlset>

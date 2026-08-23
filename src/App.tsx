@@ -5,7 +5,6 @@ import FormationsNavbar from './layouts/FormationsNavbar';
 import LoadingScreen from './components/LoadingScreen';
 import { PageSkeleton } from './components/skeletons/PageSkeleton';
 import { SettingsProvider, useSettingsCtx } from './contexts/SettingsContext';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
 import SeoHead from './components/SeoHead';
 import SeoLandingPage from './pages/SeoLandingPage';
 import { SEO_LANDING_PATHS, SeoLandingPath } from './lib/seo';
@@ -28,9 +27,10 @@ const AffiliateLogin = lazy(() => import('./components/AffiliateLogin'));
 const AgentLogin = lazy(() => import('./components/AgentLogin'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const TeacherLogin = lazy(() => import('./components/TeacherLogin'));
+const UserAuthModal = lazy(() => import('./components/UserAuthModal'));
+const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
-import UserAuthModal from './components/UserAuthModal';
 import { useAuth } from './hooks/useAuth';
 import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -107,7 +107,7 @@ function AppInner() {
       return;
     }
 
-    const timer = window.setTimeout(() => setSplashVisible(false), 900);
+    const timer = window.setTimeout(() => setSplashVisible(false), 250);
     return () => window.clearTimeout(timer);
   }, [loading]);
 
@@ -179,17 +179,19 @@ function AppInner() {
 
   // Preload heavy dashboards during idle time so there's no white-page flash on login
   useEffect(() => {
+    if (loading || splashVisible) return;
+
     const preload = () => {
       import('./pages/AdminDashboard').catch(() => {});
       import('./pages/AgentDashboard').catch(() => {});
     };
     if (typeof (window as any).requestIdleCallback === 'function') {
-      (window as any).requestIdleCallback(preload, { timeout: 5000 });
+      (window as any).requestIdleCallback(preload, { timeout: 8000 });
     } else {
-      const t = setTimeout(preload, 3000);
+      const t = setTimeout(preload, 5000);
       return () => clearTimeout(t);
     }
-  }, []);
+  }, [loading, splashVisible]);
 
   // Ordered nav slots — used to compute slide direction
   const NAV_ORDER = ['home', 'products', 'services', 'formations', 'tracking', 'shipping'];
@@ -613,16 +615,22 @@ function AppInner() {
           </AnimatePresence>
         </Suspense>
 
-        <UserAuthModal
-          open={showAuthModal}
-          onOpenChange={setShowAuthModal}
-          onClientLogin={(client) => { handleClientLogin(client); setShowAuthModal(false); }}
-          onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
-          onAffiliateAccess={() => handleViewChange('affiliate')}
-          onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
-        />
+        {showAuthModal && (
+          <Suspense fallback={null}>
+            <UserAuthModal
+              open={showAuthModal}
+              onOpenChange={setShowAuthModal}
+              onClientLogin={(client) => { handleClientLogin(client); setShowAuthModal(false); }}
+              onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
+              onAffiliateAccess={() => handleViewChange('affiliate')}
+              onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
+            />
+          </Suspense>
+        )}
 
-        <PWAInstallPrompt />
+        <Suspense fallback={null}>
+          <PWAInstallPrompt />
+        </Suspense>
       </div>
     </ErrorBoundary>
   );
@@ -630,8 +638,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <SettingsProvider>
-      <AppInner />
-    </SettingsProvider>
+    <ErrorBoundary>
+      <SettingsProvider>
+        <AppInner />
+      </SettingsProvider>
+    </ErrorBoundary>
   );
 }

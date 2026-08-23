@@ -8,10 +8,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { usePendingCounts } from '../services/affiliateService';
 import { usePendingClientCount, useClientNotifications, markClientNotificationRead, markAllClientNotificationsRead, clearAllClientNotifications } from '../services/clientService';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Client, AdminAccount } from '../types';
-import UserAuthModal from '../components/UserAuthModal';
+
+const UserAuthModal = lazy(() => import('../components/UserAuthModal'));
 
 interface NavbarProps {
   currentView: string;
@@ -615,15 +616,19 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
         </div>
       )}
 
-      <UserAuthModal
-        open={showAuthModal}
-        onOpenChange={setShowAuthModal}
-        onClientLogin={(client) => { onClientLogin(client); setShowAuthModal(false); }}
-        onAdminLogin={(admin) => { onAdminLogin(admin); onViewChange('admin'); setShowAuthModal(false); }}
-        onAffiliateAccess={() => onViewChange('affiliate')}
-        onAdminPasswordLogin={() => { onViewChange('admin'); setShowAuthModal(false); }}
-        onTeacherAccess={onTeacherAccess ? () => { onTeacherAccess(); onViewChange('teacher'); setShowAuthModal(false); } : undefined}
-      />
+      {showAuthModal && (
+        <Suspense fallback={null}>
+          <UserAuthModal
+            open={showAuthModal}
+            onOpenChange={setShowAuthModal}
+            onClientLogin={(client) => { onClientLogin(client); setShowAuthModal(false); }}
+            onAdminLogin={(admin) => { onAdminLogin(admin); onViewChange('admin'); setShowAuthModal(false); }}
+            onAffiliateAccess={() => onViewChange('affiliate')}
+            onAdminPasswordLogin={() => { onViewChange('admin'); setShowAuthModal(false); }}
+            onTeacherAccess={onTeacherAccess ? () => { onTeacherAccess(); onViewChange('teacher'); setShowAuthModal(false); } : undefined}
+          />
+        </Suspense>
+      )}
 
       <Dialog open={showLoginErrorDialog} onOpenChange={setShowLoginErrorDialog}>
         <DialogContent className="max-w-md rounded-3xl p-6 sm:p-8">
