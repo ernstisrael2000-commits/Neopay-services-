@@ -87,11 +87,12 @@ interface ProductsViewProps {
   onRequestAuth?: () => void;
   onViewChange: (view: any) => void;
   onProductDetailChange?: (open: boolean) => void;
+  initialTab?: TabKey;
 }
 
 type TabKey = 'cards' | 'games' | 'products' | 'giftcards';
 
-export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth, onViewChange, onProductDetailChange }: ProductsViewProps) {
+export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth, onViewChange, onProductDetailChange, initialTab = 'products' }: ProductsViewProps) {
   const { products, loading: productsLoading } = useProducts();
   const { cards, loading: cardsLoading } = useCardTopups();
   const { settings } = useSettingsCtx();
@@ -106,7 +107,11 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
     if (settings?.whatsappAdminNumber) (window as any).__renaAdminPhone = settings.whatsappAdminNumber;
   }, [settings?.whatsappAdminNumber]);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('products');
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Card recharge
   const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<any>(null);

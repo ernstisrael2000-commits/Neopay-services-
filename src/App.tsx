@@ -45,6 +45,7 @@ import { toast } from 'sonner';
 import { logoutClient } from './services/clientService';
 
 type AppView = 'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet' | 'seo';
+type CatalogTab = 'products' | 'games' | 'giftcards' | 'cards';
 
 const PUBLIC_VIEW_PATHS: Partial<Record<AppView, string>> = {
   home: '/',
@@ -80,6 +81,7 @@ function AppInner() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsInPlayer, setFormationsInPlayer] = useState(false);
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>('products');
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
@@ -194,6 +196,7 @@ function AppInner() {
 
   const handleViewChange = (newView: AppView) => {
     if (newView === view) return;
+    if (newView === 'products') setCatalogTab('products');
     const fromIdx = NAV_ORDER.indexOf(view);
     const toIdx   = NAV_ORDER.indexOf(newView);
     navDirection.current = (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) ? -1 : 1;
@@ -203,6 +206,11 @@ function AppInner() {
     setAccessChoice(null);
     const path = PUBLIC_VIEW_PATHS[newView];
     if (path && window.location.pathname !== path) window.history.pushState({ view: newView }, '', path);
+  };
+
+  const handleCatalogShortcut = (tab: CatalogTab) => {
+    handleViewChange('products');
+    setCatalogTab(tab);
   };
 
   const handleBack = () => {
@@ -323,6 +331,7 @@ function AppInner() {
             onClientLogin={handleClientLogin}
             onClientLogout={handleClientLogout}
             onOpenWallet={() => handleViewChange('wallet')}
+            onCatalogShortcut={handleCatalogShortcut}
             onAdminLogin={(admin) => {
               handleAdminLogin(admin);
               handleViewChange('admin');
@@ -494,6 +503,7 @@ function AppInner() {
                       onOpenWallet={() => handleViewChange('wallet')}
                       onRequestAuth={() => setShowAuthModal(true)}
                       onViewChange={handleViewChange}
+                      initialTab={catalogTab}
                       onProductDetailChange={setIsProductDetailOpen}
                     />
                   )}

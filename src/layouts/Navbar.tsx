@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, ScanSearch, House, UsersRound, PackageCheck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Key, Copy, Check } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, ScanSearch, House, UsersRound, PackageCheck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Key, Copy, Check, Gamepad2, Gift, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 import SolutionpamLogo from '../components/RenaLogo';
 import { Button } from '../components/ui/button';
@@ -22,6 +22,7 @@ interface NavbarProps {
   onOpenWallet: () => void;
   onAdminLogin: (admin: AdminAccount) => void;
   onTeacherAccess?: () => void;
+  onCatalogShortcut?: (tab: 'products' | 'games' | 'giftcards' | 'cards') => void;
   formationsTab?: 'all' | 'my';
   onFormationsTabChange?: (tab: 'all' | 'my') => void;
 }
@@ -124,7 +125,13 @@ const NAV_ITEMS = [
   { key: 'affiliate', icon: UsersRound, label: 'Affiliés' },
 ];
 
-export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, onTeacherAccess, formationsTab, onFormationsTabChange }: NavbarProps) {
+const CATALOG_SHORTCUTS = [
+  { tab: 'games' as const, label: 'Jeux', icon: Gamepad2, activeClass: 'text-violet-600 bg-violet-50 hover:bg-violet-100' },
+  { tab: 'giftcards' as const, label: 'Cartes-cadeaux', icon: Gift, activeClass: 'text-amber-600 bg-amber-50 hover:bg-amber-100' },
+  { tab: 'cards' as const, label: 'Recharges', icon: Smartphone, activeClass: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' },
+];
+
+export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, onTeacherAccess, onCatalogShortcut, formationsTab, onFormationsTabChange }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettingsCtx();
   const { total: pendingAffiliateCount } = usePendingCounts(isAdmin);
@@ -157,6 +164,12 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
 
   const handleNav = (view: string) => {
     onViewChange(view);
+    setMenuOpen(false);
+  };
+
+  const handleCatalogShortcut = (tab: 'products' | 'games' | 'giftcards' | 'cards') => {
+    if (onCatalogShortcut) onCatalogShortcut(tab);
+    else handleNav('products');
     setMenuOpen(false);
   };
 
@@ -233,6 +246,26 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Solutionpam</span>
             </div>
 
+            {/* Catalogue shortcuts — fast paths for the most requested services */}
+            <div className="hidden md:flex items-center gap-1 rounded-2xl border border-slate-100 bg-slate-50/80 p-1 shadow-sm">
+              {CATALOG_SHORTCUTS.map(shortcut => {
+                const ShortcutIcon = shortcut.icon;
+                return (
+                  <button
+                    key={shortcut.tab}
+                    type="button"
+                    onClick={() => handleCatalogShortcut(shortcut.tab)}
+                    title={shortcut.label}
+                    aria-label={`Ouvrir ${shortcut.label}`}
+                    className={`group flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] font-black uppercase tracking-[0.06em] transition-all active:scale-95 ${shortcut.activeClass}`}
+                  >
+                    <ShortcutIcon className="h-4 w-4 transition-transform group-hover:scale-110" strokeWidth={2.25} />
+                    <span className="hidden xl:inline">{shortcut.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Desktop nav — always visible on md+ */}
             <div className="hidden md:flex items-center gap-1">
               {NAV_ITEMS.map(item => <NavButton key={item.key} item={item} />)}
@@ -296,6 +329,25 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
 
             {/* Right side */}
             <div className="flex items-center gap-2 shrink-0">
+              {/* Mobile quick access keeps the top bar useful without opening the menu */}
+              <div className="flex md:hidden items-center gap-1">
+                {CATALOG_SHORTCUTS.slice(0, 2).map(shortcut => {
+                  const ShortcutIcon = shortcut.icon;
+                  return (
+                    <button
+                      key={shortcut.tab}
+                      type="button"
+                      onClick={() => handleCatalogShortcut(shortcut.tab)}
+                      title={shortcut.label}
+                      aria-label={`Ouvrir ${shortcut.label}`}
+                      className={`h-9 w-9 rounded-xl flex items-center justify-center transition-all active:scale-95 ${shortcut.activeClass}`}
+                    >
+                      <ShortcutIcon className="h-[17px] w-[17px]" strokeWidth={2.25} />
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Client notification bell */}
               {loggedClient && (
                 <>
