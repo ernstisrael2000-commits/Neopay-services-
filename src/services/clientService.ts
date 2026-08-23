@@ -3,13 +3,12 @@ import {
   collection,
   query,
   where,
-  getDocs,
   doc,
   orderBy,
   limit,
   onSnapshot
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
 import { Client, ClientTransaction, AdminClientNotification, ClientNotification } from '../types';
 
@@ -37,6 +36,7 @@ export const registerClient = async (data: {
 }): Promise<Client> => {
   const res = await fetch('/api/client/register', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
@@ -50,10 +50,13 @@ export const registerClientWithGoogle = async (data: {
   sponsorCode?: string;
   googleUser: { uid: string; email: string; name: string; photoUrl?: string };
 }): Promise<Client> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) throw new Error('Session Google expirée. Veuillez recommencer.');
   const res = await fetch('/api/client/register-google', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    body: JSON.stringify({ phone: data.phone, sponsorCode: data.sponsorCode, idToken })
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `Erreur inscription Google (${res.status})`);
@@ -63,6 +66,7 @@ export const registerClientWithGoogle = async (data: {
 export const loginClient = async (email: string, password: string): Promise<Client | null> => {
   const res = await fetch('/api/client/login', {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
@@ -89,11 +93,15 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
     const email = user.email;
 
     if (!email) return { client: null, error: "L'email Google est requis." };
-
-    const q = query(collection(db, 'clients'), where('email', '==', email));
-    const snap = await getDocs(q);
-
-    if (snap.empty) {
+    const idToken = await user.getIdToken();
+    const res = await fetch('/api/client/login-google', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (res.status === 404 && payload.noAccount) {
       return {
         client: null,
         noAccount: true,
@@ -103,30 +111,8 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
         googleUid: user.uid
       };
     }
-
-    const clientDoc = snap.docs[0];
-    const clientData = clientDoc.data() as Client;
-
-    if (clientData.status === 'blocked') {
-      return { client: null, error: "Votre compte est bloqué. Contactez le support." };
-    }
-
-    // Update uid/photoUrl via server API (client SDK can't update clients without isAdmin())
-    try {
-      await fetch('/api/client/update-google-uid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: clientDoc.id,
-          uid: user.uid,
-          ...(user.photoURL && { photoUrl: user.photoURL })
-        })
-      });
-    } catch (updateErr) {
-      console.warn('Could not update Google uid on client doc:', updateErr);
-    }
-
-    return { client: { id: clientDoc.id, ...clientData, uid: user.uid } };
+    if (!res.ok) return { client: null, error: payload.error || 'Connexion Google impossible.' };
+    return { client: payload.client as Client };
   } catch (error: any) {
     const mapped = mapGoogleAuthError(error);
     if (!mapped) return { client: null, error: '' };
@@ -159,6 +145,7 @@ export const useClientData = (clientId: string | null) => {
 async function apiPost(path: string, body: object): Promise<any> {
   const res = await fetch(path, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
@@ -173,6 +160,10 @@ async function apiPost(path: string, body: object): Promise<any> {
   if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
   return data;
 }
+
+export const logoutClient = async (): Promise<void> => {
+  await fetch('/api/client/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+};
 
 // ─── Deposit ─────────────────────────────────────────────────────────────────
 

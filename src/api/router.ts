@@ -249,6 +249,7 @@ function verifyPassword(password: string, stored: unknown): boolean {
 }
 
 type AdminSession = { role: 'admin'; adminId: string; exp: number };
+type ClientSession = { role: 'client'; clientId: string; exp: number };
 
 function sessionSecret(): Buffer | null {
   const secret = process.env.SESSION_SECRET;
@@ -304,6 +305,39 @@ function setAdminSession(res: express.Response, adminId: string): void {
   });
 }
 
+function readClientSession(req: express.Request): ClientSession | null {
+  const secret = sessionSecret();
+  const token = parseCookies(req.headers.cookie).rena_client_session;
+  if (!secret || !token) return null;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = signSession(payload, secret);
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as ClientSession;
+    if (session.role !== 'client' || !session.clientId || !Number.isFinite(session.exp) || session.exp <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function setClientSession(res: express.Response, clientId: string): void {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir une session client.');
+  const session: ClientSession = { role: 'client', clientId, exp: Date.now() + 8 * 60 * 60 * 1000 };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
+  res.cookie('rena_client_session', `${payload}.${signSession(payload, secret)}`, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 8 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
 async function issueAdminFirebaseToken(adminRef: any, data: any): Promise<string> {
   const auth = getAuth();
   let uid = data.uid as string | undefined;
@@ -333,6 +367,7 @@ async function requireAdminSession(req: express.Request, res: express.Response, 
       return res.status(403).json({ error: 'Compte administrateur indisponible.' });
     }
     res.locals.adminSession = session;
+    res.locals.adminRecord = admin.data();
     next();
   } catch {
     return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
@@ -461,11 +496,37 @@ const requireDb = (req: express.Request, res: express.Response, next: express.Ne
   next();
 };
 
+async function requireClientSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const session = readClientSession(req);
+  if (!session) return res.status(401).json({ error: 'Session client requise. Veuillez vous reconnecter.' });
+  try {
+    const client = await adminDb.collection('clients').doc(session.clientId).get();
+    if (!client.exists || client.data()?.status === 'blocked') {
+      res.clearCookie('rena_client_session', { path: '/' });
+      return res.status(403).json({ error: 'Compte client indisponible.' });
+    }
+    res.locals.clientSession = session;
+    res.locals.clientRecord = client;
+    next();
+  } catch {
+    return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
+  }
+}
+
 // Backwards-compatible route middleware name. The old shared browser secret has
 // been replaced by a signed, HttpOnly server session.
 const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   return requireAdminSession(req, res, next);
 };
+
+function requireAdminPermission(permission: string) {
+  return (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const admin = res.locals.adminRecord;
+    if (!admin) return res.status(401).json({ error: 'Session administrateur requise.' });
+    if (admin.isSuperAdmin === true || (Array.isArray(admin.permissions) && admin.permissions.includes(permission))) return next();
+    return res.status(403).json({ error: 'Permission administrateur insuffisante pour le marché crypto.' });
+  };
+}
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
@@ -4516,13 +4577,14 @@ router.post('/api/client/register', requireDb, async (req, res) => {
     }
 
     const clientData: any = {
-      name, phone, email, password, balance: 0, walletId, status: 'active',
+      name, phone, email: String(email).trim().toLowerCase(), password: hashPassword(String(password)), balance: 0, walletId, status: 'active',
       ...(directSponsorId && { directSponsorId }),
       ...(indirectSponsorId && { indirectSponsorId }),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
     const ref = await adminDb.collection('clients').add(clientData);
+    setClientSession(res, ref.id);
     // Increment referredClients on sponsor affiliates
     if (directSponsorId) {
       adminDb.collection('affiliates').doc(directSponsorId).update({
@@ -4537,7 +4599,9 @@ router.post('/api/client/register', requireDb, async (req, res) => {
         updatedAt: FieldValue.serverTimestamp(),
       }).catch(() => {});
     }
-    res.json({ success: true, client: { id: ref.id, ...clientData, createdAt: null, updatedAt: null } });
+    const client = { id: ref.id, ...clientData, createdAt: null, updatedAt: null };
+    delete client.password;
+    res.json({ success: true, client });
   } catch (e: any) {
     console.error('[register]', e);
     res.status(500).json({ error: e.message || "Erreur lors de l'inscription." });
@@ -4558,12 +4622,16 @@ router.post('/api/client/login', requireDb, async (req, res) => {
 
     const clientDoc = snap.docs[0];
     const clientData = clientDoc.data() || {};
-    if (clientData.password !== password) {
+    if (!verifyPassword(password, clientData.password)) {
       return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+    }
+    if (typeof clientData.password === 'string' && !clientData.password.startsWith('scrypt$')) {
+      await clientDoc.ref.update({ password: hashPassword(password), updatedAt: FieldValue.serverTimestamp() });
     }
 
     const client = serializeDoc(clientDoc);
     delete client.password;
+    setClientSession(res, clientDoc.id);
     res.json({ success: true, client });
   } catch (e: any) {
     console.error('[login]', e);
@@ -4571,11 +4639,45 @@ router.post('/api/client/login', requireDb, async (req, res) => {
   }
 });
 
+router.post('/api/client/login-google', requireDb, async (req, res) => {
+  try {
+    const idToken = typeof req.body?.idToken === 'string' ? req.body.idToken : '';
+    if (!idToken) return res.status(400).json({ error: 'Jeton Google manquant.' });
+    const decoded = await getAuth().verifyIdToken(idToken);
+    const email = String(decoded.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Le compte Google doit contenir un email.' });
+    const snap = await adminDb.collection('clients').where('email', '==', email).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Aucun compte client associé.', noAccount: true });
+    const clientDoc = snap.docs[0];
+    const data = clientDoc.data() || {};
+    if (data.status === 'blocked') return res.status(403).json({ error: 'Votre compte est bloqué. Contactez le support.' });
+    await clientDoc.ref.update({
+      uid: decoded.uid,
+      ...(decoded.picture ? { photoUrl: decoded.picture } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const client = serializeDoc(clientDoc);
+    delete client.password;
+    client.uid = decoded.uid;
+    setClientSession(res, clientDoc.id);
+    res.json({ success: true, client });
+  } catch (e: any) {
+    res.status(401).json({ error: e?.message || 'Connexion Google non vérifiée.' });
+  }
+});
+
 router.post('/api/client/register-google', requireDb, async (req, res) => {
   try {
-    const { phone, sponsorCode, googleUser } = req.body;
-    if (!googleUser?.email || !googleUser?.uid)
-      return res.status(400).json({ error: 'Données Google manquantes.' });
+    const { phone, sponsorCode, idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'Jeton Google manquant.' });
+    const decoded = await getAuth().verifyIdToken(String(idToken));
+    const googleUser = {
+      email: String(decoded.email || '').trim().toLowerCase(),
+      uid: decoded.uid,
+      name: String(decoded.name || 'Client Rena'),
+      photoUrl: String(decoded.picture || ''),
+    };
+    if (!googleUser.email) return res.status(400).json({ error: 'Le compte Google doit contenir un email.' });
 
     const existing = await adminDb.collection('clients').where('email', '==', googleUser.email).get();
     if (!existing.empty) return res.status(409).json({ error: 'Un compte avec cet email existe déjà.' });
@@ -4608,6 +4710,7 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     };
     const ref = await adminDb.collection('clients').add(clientData);
+    setClientSession(res, ref.id);
     // Increment referredClients on sponsor affiliates
     if (directSponsorId) {
       adminDb.collection('affiliates').doc(directSponsorId).update({
@@ -4627,6 +4730,11 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
     console.error('[register-google]', e);
     res.status(500).json({ error: e.message || "Erreur lors de l'inscription Google." });
   }
+});
+
+router.post('/api/client/logout', (_req, res) => {
+  res.clearCookie('rena_client_session', { path: '/' });
+  res.json({ success: true });
 });
 
 // ── Formations — Admin CRUD ───────────────────────────────────────────────────
@@ -5491,6 +5599,348 @@ router.post('/api/client/update-google-uid', requireDb, async (req, res) => {
     await adminDb.collection('clients').doc(clientId).update(updates);
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Marché crypto manuel ─────────────────────────────────────────────────────
+// This marketplace is intentionally isolated from crypto deposits and wallet
+// accounting. A request merely records a manual fulfillment instruction.
+const CRYPTO_MARKET_STATUSES = ['pending', 'processing', 'sent', 'rejected'] as const;
+const SUPPORTED_CRYPTO_NETWORKS = ['TRC20', 'ERC20', 'BEP20', 'BTC'] as const;
+const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function normalizeCryptoMarketOffer(input: any): any {
+  const assetName = typeof input?.assetName === 'string' ? input.assetName.trim() : '';
+  const symbol = typeof input?.symbol === 'string' ? input.symbol.trim().toUpperCase() : '';
+  const networkName = typeof input?.networkName === 'string' ? input.networkName.trim() : '';
+  const networkCode = typeof input?.networkCode === 'string' ? input.networkCode.trim().toUpperCase() : '';
+  const feePercent = Number(input?.feePercent);
+  const minAmountUSD = Number(input?.minAmountUSD);
+  const maxAmountUSD = Number(input?.maxAmountUSD);
+  const unitPriceUSD = Number(input?.unitPriceUSD);
+  if (!assetName || assetName.length > 60 || !/^[A-Z0-9._-]{2,16}$/.test(symbol) || !networkName || networkName.length > 60 || !SUPPORTED_CRYPTO_NETWORKS.includes(networkCode as any)) {
+    throw new Error('Actif ou réseau invalide.');
+  }
+  if (![feePercent, minAmountUSD, maxAmountUSD, unitPriceUSD].every(Number.isFinite) || feePercent < 0 || feePercent > 30 || minAmountUSD <= 0 || maxAmountUSD < minAmountUSD || maxAmountUSD > 1_000_000 || unitPriceUSD <= 0 || unitPriceUSD > 10_000_000) {
+    throw new Error('Frais, limites ou cotation invalides.');
+  }
+  const color = typeof input?.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(input.color) ? input.color : '#2563EB';
+  const icon = typeof input?.icon === 'string' ? input.icon.trim().slice(0, 12) : '';
+  return {
+    assetName, symbol, networkName, networkCode,
+    enabled: input?.enabled !== false,
+    feePercent: Number(feePercent.toFixed(4)),
+    minAmountUSD: Number(minAmountUSD.toFixed(2)),
+    maxAmountUSD: Number(maxAmountUSD.toFixed(2)),
+    unitPriceUSD: Number(unitPriceUSD.toFixed(8)),
+    icon, color,
+    quoteSource: input?.quoteSource === 'partner' ? 'partner' : 'manual',
+  };
+}
+
+function decodeBase58(value: string): Buffer | null {
+  let number = BigInt(0);
+  for (const char of value) {
+    const index = BASE58_ALPHABET.indexOf(char);
+    if (index < 0) return null;
+    number = number * BigInt(58) + BigInt(index);
+  }
+  let hex = number.toString(16);
+  if (hex.length % 2) hex = `0${hex}`;
+  const body = hex === '00' && number === BigInt(0) ? Buffer.alloc(0) : Buffer.from(hex, 'hex');
+  const leadingZeros = value.match(/^1*/)?.[0].length || 0;
+  return Buffer.concat([Buffer.alloc(leadingZeros), body]);
+}
+
+function isBase58Check(value: string, expectedVersion?: number): boolean {
+  const decoded = decodeBase58(value);
+  if (!decoded || decoded.length < 5) return false;
+  const payload = decoded.subarray(0, -4);
+  const checksum = decoded.subarray(-4);
+  const expected = createHash('sha256').update(createHash('sha256').update(payload).digest()).digest().subarray(0, 4);
+  return checksum.equals(expected) && (expectedVersion === undefined || payload[0] === expectedVersion);
+}
+
+function isValidBitcoinBech32(value: string): boolean {
+  if (value.length < 14 || value.length > 90 || value !== value.toLowerCase()) return false;
+  const separator = value.lastIndexOf('1');
+  if (separator < 1 || separator + 7 > value.length || !value.startsWith('bc1')) return false;
+  const charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const data: number[] = [];
+  for (const char of value.slice(separator + 1)) {
+    const index = charset.indexOf(char);
+    if (index < 0) return false;
+    data.push(index);
+  }
+  const generators = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let checksum = 1;
+  for (const item of [...value.slice(0, separator)].map(char => char.charCodeAt(0) >> 5).concat([0], [...value.slice(0, separator)].map(char => char.charCodeAt(0) & 31), data)) {
+    const top = checksum >>> 25;
+    checksum = ((checksum & 0x1ffffff) << 5) ^ item;
+    generators.forEach((generator, index) => { if ((top >>> index) & 1) checksum ^= generator; });
+  }
+  const dataWithoutChecksum = data.slice(0, -6);
+  const witnessVersion = dataWithoutChecksum[0];
+  if (witnessVersion === undefined || witnessVersion > 16) return false;
+  let accumulator = 0;
+  let bits = 0;
+  const witnessProgram: number[] = [];
+  for (const item of dataWithoutChecksum.slice(1)) {
+    accumulator = (accumulator << 5) | item;
+    bits += 5;
+    while (bits >= 8) {
+      bits -= 8;
+      witnessProgram.push((accumulator >> bits) & 0xff);
+    }
+  }
+  // A non-zero trailing padding would change the destination program.
+  if (bits >= 5 || ((accumulator << (8 - bits)) & 0xff) !== 0) return false;
+  if (witnessProgram.length < 2 || witnessProgram.length > 40) return false;
+  if (witnessVersion === 0 && witnessProgram.length !== 20 && witnessProgram.length !== 32) return false;
+  return witnessVersion === 0 ? checksum === 1 : checksum === 0x2bc830a3;
+}
+
+function validateCryptoDestination(address: string, networkCode: string): boolean {
+  if (!address || address.length < 20 || address.length > 160 || /\s/.test(address)) return false;
+  const normalized = networkCode.toUpperCase();
+  if (normalized === 'TRC20') return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address) && isBase58Check(address, 0x41);
+  if (normalized === 'ERC20' || normalized === 'BEP20') return /^0x[a-fA-F0-9]{40}$/.test(address);
+  if (normalized === 'BTC') return isValidBitcoinBech32(address) || (/^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address) && (isBase58Check(address, 0x00) || isBase58Check(address, 0x05)));
+  return false;
+}
+
+function validateCryptoTransactionHash(hash: string, networkCode: string): boolean {
+  const normalized = networkCode.toUpperCase();
+  if (normalized === 'ERC20' || normalized === 'BEP20') return /^0x[a-fA-F0-9]{64}$/.test(hash);
+  if (normalized === 'TRC20' || normalized === 'BTC') return /^[a-fA-F0-9]{64}$/.test(hash);
+  return false;
+}
+
+function canonicalCryptoAddress(address: string, networkCode: string): string {
+  // EVM addresses are case-insensitive. Bitcoin bech32 is normalized to lower
+  // case, while Base58 and Tron remain case-sensitive by design.
+  if (networkCode === 'ERC20' || networkCode === 'BEP20' || (networkCode === 'BTC' && address.startsWith('bc1'))) return address.toLowerCase();
+  return address;
+}
+
+function cryptoRequestStatusMessage(status: string, symbol: string, note?: string): { title: string; message: string } {
+  const suffix = note ? ` Note : ${note}` : '';
+  if (status === 'processing') return { title: '🔄 Demande crypto en cours', message: `Votre demande ${symbol} est prise en charge par notre équipe.${suffix}` };
+  if (status === 'sent') return { title: '✅ Crypto envoyée', message: `Votre demande ${symbol} a été finalisée. Vérifiez le hash de transaction dans son suivi.${suffix}` };
+  return { title: '❌ Demande crypto refusée', message: `Votre demande ${symbol} n’a pas pu être finalisée.${suffix}` };
+}
+
+router.get('/api/crypto-market/offers', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('crypto_market_offers').where('enabled', '==', true).get();
+    const offers = snap.docs.map(serializeDoc).sort((a, b) => `${a.assetName}-${a.networkName}`.localeCompare(`${b.assetName}-${b.networkName}`));
+    res.json({ offers });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Impossible de charger le marché crypto.' });
+  }
+});
+
+router.get('/api/client/crypto-market/requests', requireDb, requireClientSession, async (_req, res) => {
+  try {
+    const clientId = res.locals.clientSession.clientId;
+    const snap = await adminDb.collection('crypto_market_requests').where('clientId', '==', clientId).limit(100).get();
+    const requests = snap.docs.map(serializeDoc).sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0));
+    res.json({ requests });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Impossible de charger vos demandes.' });
+  }
+});
+
+router.post('/api/client/crypto-market/requests', requireDb, requireClientSession, async (req, res) => {
+  try {
+    const offerId = typeof req.body?.offerId === 'string' ? req.body.offerId : '';
+    const amountUSD = Number(req.body?.amountUSD);
+    const destinationAddress = typeof req.body?.destinationAddress === 'string' ? req.body.destinationAddress.trim() : '';
+    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+    if (!offerId || !Number.isFinite(amountUSD) || amountUSD <= 0 || req.body?.consent !== true || !/^[A-Za-z0-9_-]{16,128}$/.test(idempotencyKey)) {
+      return res.status(400).json({ error: 'Les informations de demande sont incomplètes.' });
+    }
+    const clientId = res.locals.clientSession.clientId as string;
+    const clientData = res.locals.clientRecord.data() || {};
+    const requestRef = adminDb.collection('crypto_market_requests').doc();
+    const auditRef = adminDb.collection('crypto_market_audit').doc();
+    const idempotencyRef = adminDb.collection('crypto_market_idempotency').doc(createHash('sha256').update(`${clientId}|${idempotencyKey}`).digest('hex'));
+    let requestData: any;
+    let existingRequestId = '';
+
+    await adminDb.runTransaction(async transaction => {
+      const [offerSnap, idempotencySnap] = await Promise.all([
+        transaction.get(adminDb.collection('crypto_market_offers').doc(offerId)),
+        transaction.get(idempotencyRef),
+      ]);
+      if (idempotencySnap.exists) {
+        existingRequestId = String(idempotencySnap.data()?.requestId || '');
+        if (existingRequestId) return;
+        throw new Error('Clé de demande invalide.');
+      }
+      if (!offerSnap.exists) throw new Error('Cette offre n’est plus disponible.');
+      const offer = normalizeCryptoMarketOffer({ ...offerSnap.data(), enabled: offerSnap.data()?.enabled });
+      if (!offer.enabled) throw new Error('Cette offre est temporairement indisponible.');
+      if (amountUSD < offer.minAmountUSD || amountUSD > offer.maxAmountUSD) throw new Error(`Montant autorisé : ${offer.minAmountUSD} à ${offer.maxAmountUSD} USD.`);
+      if (!validateCryptoDestination(destinationAddress, offer.networkCode)) throw new Error(`Cette adresse ne correspond pas au réseau ${offer.networkName}.`);
+      const normalizedAddress = canonicalCryptoAddress(destinationAddress, offer.networkCode);
+      const dedupeId = createHash('sha256').update(`${clientId}|${offer.symbol}|${offer.networkCode}|${normalizedAddress}`).digest('hex');
+      const dedupeRef = adminDb.collection('crypto_market_request_dedupes').doc(dedupeId);
+      const dedupeSnap = await transaction.get(dedupeRef);
+      if (dedupeSnap.exists && dedupeSnap.data()?.active === true) throw new Error('Une demande active existe déjà pour cette adresse et cet actif.');
+
+      const feeAmountUSD = Number((amountUSD * offer.feePercent / 100).toFixed(2));
+      const totalUSD = Number((amountUSD + feeAmountUSD).toFixed(2));
+      const estimatedCryptoAmount = Number((amountUSD / offer.unitPriceUSD).toFixed(8));
+      const offerSnapshot = { id: offerId, ...offer };
+      requestData = {
+        id: requestRef.id,
+        clientId,
+        clientName: String(clientData.name || 'Client Rena'),
+        clientEmail: String(clientData.email || ''),
+        status: 'pending',
+        destinationAddress,
+        normalizedDestinationAddress: normalizedAddress,
+        amountUSD: Number(amountUSD.toFixed(2)),
+        feeAmountUSD,
+        totalUSD,
+        estimatedCryptoAmount,
+        offerSnapshot,
+        consentedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        dedupeId,
+      };
+      transaction.set(requestRef, requestData);
+      transaction.set(dedupeRef, { active: true, requestId: requestRef.id, clientId, offerId, updatedAt: FieldValue.serverTimestamp() });
+      transaction.set(idempotencyRef, { requestId: requestRef.id, clientId, createdAt: FieldValue.serverTimestamp() });
+      transaction.set(auditRef, {
+        requestId: requestRef.id, clientId, actorType: 'client', actorId: clientId,
+        action: 'created', fromStatus: null, toStatus: 'pending',
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    if (existingRequestId) {
+      const existing = await adminDb.collection('crypto_market_requests').doc(existingRequestId).get();
+      if (!existing.exists) return res.status(409).json({ error: 'Demande en cours de synchronisation. Réessayez dans un instant.' });
+      return res.json({ request: serializeDoc(existing), idempotent: true });
+    }
+
+    await adminDb.collection('admin_notifications').add({
+      type: 'crypto_market_request',
+      title: 'Nouvelle demande crypto',
+      message: `${requestData.clientName} demande ${requestData.offerSnapshot.symbol} (${requestData.amountUSD.toFixed(2)} USD).`,
+      clientId,
+      requestId: requestRef.id,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    sendFcmToClient(clientId, '✅ Demande crypto reçue', 'Votre demande est en attente de traitement (15 à 30 minutes).', { type: 'crypto_market', requestId: requestRef.id });
+    pushClientEvent(clientId, 'crypto_market_created', { id: requestRef.id, status: 'pending' });
+    const created = await requestRef.get();
+    res.status(201).json({ request: serializeDoc(created) });
+  } catch (e: any) {
+    const status = /incomplètes|autorisé|adresse ne correspond|demande active|indisponible/.test(String(e.message)) ? 400 : 500;
+    res.status(status).json({ error: e.message || 'Impossible de créer la demande.' });
+  }
+});
+
+router.get('/api/admin/crypto-market/offers', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('crypto_market_offers').get();
+    res.json({ offers: snap.docs.map(serializeDoc).sort((a, b) => `${a.assetName}-${a.networkName}`.localeCompare(`${b.assetName}-${b.networkName}`)) });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'Erreur catalogue crypto.' }); }
+});
+
+router.post('/api/admin/crypto-market/offers', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    const offer = normalizeCryptoMarketOffer(req.body);
+    const adminId = res.locals.adminSession?.adminId || '';
+    if (id) {
+      const ref = adminDb.collection('crypto_market_offers').doc(String(id));
+      if (!(await ref.get()).exists) return res.status(404).json({ error: 'Offre introuvable.' });
+      await ref.update({ ...offer, quoteUpdatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), updatedBy: adminId });
+      return res.json({ id: ref.id });
+    }
+    const ref = await adminDb.collection('crypto_market_offers').add({
+      ...offer, quoteUpdatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), createdBy: adminId,
+    });
+    res.status(201).json({ id: ref.id });
+  } catch (e: any) { res.status(400).json({ error: e.message || 'Offre crypto invalide.' }); }
+});
+
+router.delete('/api/admin/crypto-market/offers/:id', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    await adminDb.collection('crypto_market_offers').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'Suppression impossible.' }); }
+});
+
+router.get('/api/admin/crypto-market/requests', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    if (status && !CRYPTO_MARKET_STATUSES.includes(status as any)) return res.status(400).json({ error: 'Statut invalide.' });
+    let query: FirebaseFirestore.Query = adminDb.collection('crypto_market_requests');
+    if (status) query = query.where('status', '==', status);
+    const snap = await query.limit(500).get();
+    res.json({ requests: snap.docs.map(serializeDoc).sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0)) });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'Impossible de charger les demandes.' }); }
+});
+
+router.patch('/api/admin/crypto-market/requests/:id', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const nextStatus = typeof req.body?.status === 'string' ? req.body.status : '';
+    const adminNote = typeof req.body?.adminNote === 'string' ? req.body.adminNote.trim().slice(0, 1000) : '';
+    const transactionHash = typeof req.body?.transactionHash === 'string' ? req.body.transactionHash.trim().slice(0, 256) : '';
+    if (!CRYPTO_MARKET_STATUSES.includes(nextStatus as any) || nextStatus === 'pending') return res.status(400).json({ error: 'Transition de statut invalide.' });
+    const requestRef = adminDb.collection('crypto_market_requests').doc(req.params.id);
+    const auditRef = adminDb.collection('crypto_market_audit').doc();
+    const adminId = res.locals.adminSession?.adminId || '';
+    let updated: any;
+
+    await adminDb.runTransaction(async transaction => {
+      const snap = await transaction.get(requestRef);
+      if (!snap.exists) throw new Error('Demande introuvable.');
+      const current = snap.data()!;
+      const allowed: Record<string, string[]> = { pending: ['processing', 'rejected'], processing: ['sent', 'rejected'], sent: [], rejected: [] };
+      if (!allowed[current.status]?.includes(nextStatus)) throw new Error('Cette transition de statut n’est pas autorisée.');
+      if (nextStatus === 'sent' && !validateCryptoTransactionHash(transactionHash, String(current.offerSnapshot?.networkCode || ''))) {
+        throw new Error('Le hash de transaction ne correspond pas au réseau de cette demande.');
+      }
+      const updates: any = {
+        status: nextStatus, updatedAt: FieldValue.serverTimestamp(), processedBy: adminId,
+        ...(adminNote ? { adminNote } : {}),
+        ...(transactionHash ? { transactionHash } : {}),
+        ...(nextStatus === 'processing' ? { processedAt: FieldValue.serverTimestamp() } : {}),
+        ...(nextStatus === 'sent' ? { completedAt: FieldValue.serverTimestamp() } : {}),
+        ...(nextStatus === 'rejected' ? { rejectedAt: FieldValue.serverTimestamp() } : {}),
+      };
+      transaction.update(requestRef, updates);
+      if (nextStatus === 'sent' || nextStatus === 'rejected') {
+        const dedupeId = current.dedupeId;
+        if (dedupeId) transaction.update(adminDb.collection('crypto_market_request_dedupes').doc(dedupeId), { active: false, updatedAt: FieldValue.serverTimestamp() });
+      }
+      transaction.set(auditRef, {
+        requestId: requestRef.id, clientId: current.clientId, actorType: 'admin', actorId: adminId,
+        action: 'status_changed', fromStatus: current.status, toStatus: nextStatus,
+        note: adminNote || null, transactionHash: transactionHash || null, createdAt: FieldValue.serverTimestamp(),
+      });
+      updated = { id: requestRef.id, ...current, ...updates };
+    });
+
+    const notification = cryptoRequestStatusMessage(nextStatus, updated.offerSnapshot?.symbol || 'crypto', adminNote);
+    await adminDb.collection('client_notifications').add({
+      clientId: updated.clientId, type: 'crypto_market', title: notification.title, message: notification.message,
+      requestId: requestRef.id, read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+    sendFcmToClient(updated.clientId, notification.title, notification.message, { type: 'crypto_market', requestId: requestRef.id, status: nextStatus });
+    pushClientEvent(updated.clientId, 'crypto_market_updated', { id: requestRef.id, status: nextStatus });
+    res.json({ request: updated });
+  } catch (e: any) {
+    const status = /introuvable|autorisée|requis/.test(String(e.message)) ? 400 : 500;
+    res.status(status).json({ error: e.message || 'Mise à jour impossible.' });
+  }
 });
 
 // ── Admin: Parcels ────────────────────────────────────────────────────────────

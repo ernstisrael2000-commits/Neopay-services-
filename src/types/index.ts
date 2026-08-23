@@ -315,11 +315,59 @@ export interface ClientNotification {
   clientId: string;
   title: string;
   message: string;
-  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system' | 'purchase_credentials';
+  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system' | 'purchase_credentials' | 'crypto_market';
   read: boolean;
   amount?: number;
   metadata?: Record<string, any>;
   createdAt: any;
+}
+
+// ─── Marché crypto manuel ─────────────────────────────────────────────────────
+// Ces offres représentent des combinaisons actif/réseau configurées par
+// l'administration. Elles ne contiennent jamais de clé privée ni d'adresse de
+// portefeuille Rena : le client renseigne uniquement son adresse de réception.
+export interface CryptoMarketOffer {
+  id?: string;
+  assetName: string;
+  symbol: string;
+  networkName: string;
+  networkCode: string;
+  icon?: string;
+  color?: string;
+  enabled: boolean;
+  feePercent: number;
+  minAmountUSD: number;
+  maxAmountUSD: number;
+  unitPriceUSD: number;
+  quoteSource?: 'manual' | 'partner';
+  quoteUpdatedAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export type CryptoMarketRequestStatus = 'pending' | 'processing' | 'sent' | 'rejected';
+
+export interface CryptoMarketRequest {
+  id?: string;
+  clientId: string;
+  clientName: string;
+  clientEmail?: string;
+  status: CryptoMarketRequestStatus;
+  destinationAddress: string;
+  amountUSD: number;
+  feeAmountUSD: number;
+  totalUSD: number;
+  estimatedCryptoAmount: number;
+  offerSnapshot: Omit<CryptoMarketOffer, 'id' | 'createdAt' | 'updatedAt'> & { id: string };
+  consentedAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
+  processedAt?: any;
+  completedAt?: any;
+  rejectedAt?: any;
+  adminNote?: string;
+  transactionHash?: string;
+  processedBy?: string;
 }
 
 export interface PromoCode {

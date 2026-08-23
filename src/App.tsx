@@ -39,6 +39,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { toast } from 'sonner';
+import { logoutClient } from './services/clientService';
 
 function AppInner() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet'>('home');
@@ -219,6 +220,7 @@ function AppInner() {
   const handleClientLogout = () => {
     setLoggedClient(null);
     localStorage.removeItem('rena_client');
+    void logoutClient();
     if (view === 'wallet') setView('home');
   };
 

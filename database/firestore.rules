@@ -285,6 +285,28 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Marché crypto manuel : uniquement accessible via les routes serveur.
+    // Cela empêche un client de modifier un cours, un statut ou une trace d'audit.
+    match /crypto_market_offers/{offerId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_audit/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_request_dedupes/{dedupeId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_idempotency/{key} {
+      allow read, write: if false;
+    }
+
     match /affiliate_notifications/{notifId} {
       allow read: if isAdmin();
       allow write: if false;

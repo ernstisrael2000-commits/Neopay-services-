@@ -282,6 +282,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Marché crypto manuel : l'accès passe exclusivement par les API serveur
+    // signées. Les documents gardent un audit complet et ne sont jamais
+    // modifiables par un navigateur ou un client Firebase.
+    match /crypto_market_offers/{offerId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_requests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_audit/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_request_dedupes/{dedupeId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_market_idempotency/{key} {
+      allow read, write: if false;
+    }
+
     match /affiliate_notifications/{notifId} {
       allow read: if isAdmin();
       allow write: if false;

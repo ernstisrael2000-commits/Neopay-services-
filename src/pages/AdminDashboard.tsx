@@ -70,6 +70,7 @@ import { useAllClientTransactions, updateClientTransactionStatus, useAdminClient
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
 import AgentFeeHistory from './AgentFeeHistory';
+import CryptoMarketAdminPanel from '../components/CryptoMarketAdminPanel';
 import PinSetupModal from '../components/PinSetupModal';
 import PinEntryModal from '../components/PinEntryModal';
 import { usePinGuard } from '../hooks/usePinGuard';
@@ -2323,6 +2324,7 @@ function EmailLogsPanel() {
         { value: 'teacher-withdrawals', label: 'Retraits Professeurs', icon: LucideIcons.Banknote, permission: 'settings' },
         { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
         { value: 'promo-codes', label: 'Codes Promo', icon: LucideIcons.Tag, permission: 'products' },
+        { value: 'crypto-market', label: 'Marché Crypto', icon: LucideIcons.Coins, permission: 'settings' },
         { value: 'commissions-catalog', label: 'Commissions & Tarifs', icon: LucideIcons.BadgePercent, permission: 'settings' },
         { value: 'contest', label: 'Concours', icon: LucideIcons.Trophy, permission: 'settings' },
       ]
@@ -9669,6 +9671,10 @@ function EmailLogsPanel() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="crypto-market" className="space-y-6">
+          <CryptoMarketAdminPanel />
         </TabsContent>
 
 
