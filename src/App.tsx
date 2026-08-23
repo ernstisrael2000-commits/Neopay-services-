@@ -72,6 +72,7 @@ function AppInner() {
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'agent' | 'admin' | null>(null);
   const { loading } = useAuth();
+  const [splashVisible, setSplashVisible] = useState(true);
   const { settings } = useSettingsCtx();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
@@ -97,6 +98,26 @@ function AppInner() {
     window.addEventListener('popstate', handleBrowserNavigation);
     return () => window.removeEventListener('popstate', handleBrowserNavigation);
   }, []);
+
+  useEffect(() => {
+    if (loading) {
+      setSplashVisible(true);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setSplashVisible(false), 900);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
+
+  useEffect(() => {
+    if (loading || splashVisible) return;
+    const bootLoader = document.getElementById('solution-pam-boot-loader');
+    if (!bootLoader) return;
+
+    bootLoader.classList.add('boot-loader--ready');
+    const cleanup = window.setTimeout(() => bootLoader.remove(), 380);
+    return () => window.clearTimeout(cleanup);
+  }, [loading, splashVisible]);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('rena_admin');
@@ -283,7 +304,7 @@ function AppInner() {
     return () => { if (clientUnsub.current) clientUnsub.current(); };
   }, [loggedClient?.id]);
 
-  if (loading) {
+  if (loading || splashVisible) {
     return <LoadingScreen />;
   }
 

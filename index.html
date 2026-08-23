@@ -64,8 +64,38 @@
 
     <!-- Structured data is kept in the static document for search crawlers. -->
     <script id="seo-structured-data" type="application/ld+json">[{"@context":"https://schema.org","@type":"Organization","name":"Rena Services","url":"https://renaservices.shop","logo":"https://renaservices.shop/logo.png","description":"Services numériques, logistique, suivi de colis, expédition et formations en ligne en Haïti.","contactPoint":{"@type":"ContactPoint","telephone":"+50944813185","contactType":"customer service","availableLanguage":["fr","ht"]}},{"@context":"https://schema.org","@type":"WebSite","name":"Rena Services","url":"https://renaservices.shop","inLanguage":"fr-HT"}]</script>
+    <style>
+      #solution-pam-boot-loader { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; overflow: hidden; background: #f4f8f8; color: #103447; transition: opacity .35s ease, visibility .35s ease; }
+      #solution-pam-boot-loader.boot-loader--ready { opacity: 0; visibility: hidden; pointer-events: none; }
+      #solution-pam-boot-loader::before, #solution-pam-boot-loader::after { content: ""; position: absolute; border-radius: 999px; filter: blur(56px); opacity: .6; }
+      #solution-pam-boot-loader::before { width: 21rem; height: 21rem; left: -9rem; top: 13%; background: rgba(109,179,188,.22); animation: solutionPamDrift 8s ease-in-out infinite; }
+      #solution-pam-boot-loader::after { width: 24rem; height: 24rem; right: -10rem; bottom: 8%; background: rgba(29,91,114,.16); animation: solutionPamDrift 9s ease-in-out .4s infinite reverse; }
+      .solution-pam-boot-inner { position: relative; display: flex; flex-direction: column; align-items: center; }
+      .solution-pam-boot-frame { position: relative; width: 8.75rem; height: 8.75rem; display: grid; place-items: center; }
+      .solution-pam-boot-mark { width: 100%; height: 100%; overflow: hidden; animation: solutionPamEnter .62s cubic-bezier(.22,1,.36,1) both; }
+      .solution-pam-boot-mark img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.72); mix-blend-mode: multiply; animation: solutionPamReveal .72s cubic-bezier(.22,1,.36,1) .22s both; }
+      .solution-pam-boot-brand { margin: 2.1rem 0 0; color: #367388; font: 800 10px/1.2 system-ui, sans-serif; letter-spacing: .34em; text-transform: uppercase; }
+      .solution-pam-boot-copy { margin: .75rem 0 0; color: #5c737e; font: 500 14px/1.4 system-ui, sans-serif; }
+      .solution-pam-boot-progress { width: 10rem; height: 3px; margin-top: 2.25rem; overflow: hidden; border-radius: 999px; background: rgba(31,97,119,.1); }
+      .solution-pam-boot-progress::after { content: ""; display: block; width: 48%; height: 100%; border-radius: inherit; background: #27677d; animation: solutionPamProgress 1.35s cubic-bezier(.65,0,.35,1) infinite; }
+      @keyframes solutionPamEnter { from { opacity: 0; transform: scale(.68) rotate(-10deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+      @keyframes solutionPamReveal { from { clip-path: inset(100% 0 0); } to { clip-path: inset(0); } }
+      @keyframes solutionPamProgress { from { transform: translateX(-110%); } to { transform: translateX(230%); } }
+      @keyframes solutionPamDrift { 50% { transform: translate(36px,-18px); opacity: .95; } }
+      @media (prefers-reduced-motion: reduce) { #solution-pam-boot-loader *, #solution-pam-boot-loader::before, #solution-pam-boot-loader::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+    </style>
   </head>
   <body>
+    <div id="solution-pam-boot-loader" role="status" aria-label="Chargement de Solution PAM">
+      <div class="solution-pam-boot-inner">
+        <div class="solution-pam-boot-frame">
+          <div class="solution-pam-boot-mark"><img src="/solution-pam-logo.png" alt="" /></div>
+        </div>
+        <p class="solution-pam-boot-brand">Solution PAM</p>
+        <p class="solution-pam-boot-copy">Préparation de votre espace...</p>
+        <div class="solution-pam-boot-progress"></div>
+      </div>
+    </div>
     <div id="root"></div>
     <!-- seo-fallback is populated by the production server for crawlers without JavaScript. -->
     <!-- seo-fallback -->
