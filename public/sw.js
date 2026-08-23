@@ -17,8 +17,8 @@ try {
     const data  = payload.data || {};
     return self.registration.showNotification(title, {
       body,
-      icon: '/solution-pam-logo.png',
-      badge: '/solution-pam-logo.png',
+      icon: '/solutionpam-site-logo.jpg',
+      badge: '/solutionpam-site-logo.jpg',
       tag: data.tag || 'solutionpam-fcm',
       data,
       vibrate: [200, 100, 200],
@@ -29,15 +29,15 @@ try {
 }
 
 // ── Cache names (bump version to force refresh) ───────────────────────────────
-const SHELL_CACHE   = 'solutionpam-shell-v3'; // App shell: JS, CSS, fonts
-const IMAGE_CACHE   = 'solutionpam-images-v3'; // Local + Firebase Storage images
+const SHELL_CACHE   = 'solutionpam-shell-v4'; // App shell: JS, CSS, fonts
+const IMAGE_CACHE   = 'solutionpam-images-v4'; // Local + Firebase Storage images
 const OFFLINE_URL   = '/';
 
 // Assets pre-cached at install time
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.webmanifest',
-  '/solution-pam-logo.png',
+  '/solutionpam-site-logo.jpg',
 ];
 
 // ── Install: pre-cache app shell ──────────────────────────────────────────────
@@ -145,7 +145,7 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push Notifications ────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'Solutionpam', body: 'Nouvelle notification', icon: '/solution-pam-logo.png', badge: '/solution-pam-logo.png', tag: 'solutionpam-notif' };
+  let data = { title: 'Solutionpam', body: 'Nouvelle notification', icon: '/solutionpam-site-logo.jpg', badge: '/solutionpam-site-logo.jpg', tag: 'solutionpam-notif' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch (e) {}
@@ -153,8 +153,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-       icon: data.icon || '/solution-pam-logo.png',
-       badge: data.badge || '/solution-pam-logo.png',
+       icon: data.icon || '/solutionpam-site-logo.jpg',
+       badge: data.badge || '/solutionpam-site-logo.jpg',
       tag: data.tag || 'solutionpam-notif',
       renotify: true,
       vibrate: [200, 100, 200],

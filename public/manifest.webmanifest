@@ -11,9 +11,9 @@
   "lang": "fr",
   "icons": [
     {
-      "src": "/solution-pam-logo.png",
-      "sizes": "920x595",
-      "type": "image/png",
+      "src": "/solutionpam-site-logo.jpg",
+      "sizes": "1280x1276",
+      "type": "image/jpeg",
       "purpose": "any"
     }
   ],
@@ -24,14 +24,14 @@
       "short_name": "Wallet",
       "description": "Accéder à mon portefeuille",
       "url": "/?action=wallet",
-      "icons": [{ "src": "/solution-pam-logo.png", "sizes": "920x595", "type": "image/png" }]
+      "icons": [{ "src": "/solutionpam-site-logo.jpg", "sizes": "1280x1276", "type": "image/jpeg" }]
     },
     {
       "name": "Suivi de colis",
       "short_name": "Suivi",
       "description": "Suivre un colis",
       "url": "/?view=tracking",
-      "icons": [{ "src": "/solution-pam-logo.png", "sizes": "920x595", "type": "image/png" }]
+      "icons": [{ "src": "/solutionpam-site-logo.jpg", "sizes": "1280x1276", "type": "image/jpeg" }]
     }
   ]
 }
