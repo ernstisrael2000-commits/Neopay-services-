@@ -8880,12 +8880,13 @@ router.get('/api/fazer/giftcards/offers', async (req, res) => {
     const { category_id } = req.query as { category_id?: string };
     if (!category_id) return res.status(400).json({ error: 'category_id requis.' });
     if (!hasFazerCredentials()) return res.json({ items: [], available: false });
-    const r = await fazerFetch(`/giftcards/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
+    const r = await fazerFetch(`/giftcards/cards?category_id=${encodeURIComponent(category_id)}`);
     if (!r.ok) return res.status(r.status).json({ error: 'Erreur FazerCards.' });
     const data = await r.json() as any;
-    const raw: any[] = Array.isArray(data) ? data : (data.items || data.offers || data.data || []);
+    const raw: any[] = Array.isArray(data) ? data : (data.items || data.cards || data.offers || data.data || []);
     const items = raw.map((o: any) => ({
       ...o,
+      offer_id: String(o.offer_id || o.card_id || o.id || ''),
       price: typeof o.price === 'number' ? o.price : parseFloat(o.price_usd ?? o.price ?? '0') || 0,
     }));
     res.json({ items });
@@ -8909,11 +8910,11 @@ router.post('/api/fazer/giftcards/order', requireDb, requireClientSession, async
     // SECURITY: Fetch the real price from FazerCards server-side.
     let price = 0;
     try {
-      const offersRes = await fazerFetch(`/giftcards/offers?category_id=${encodeURIComponent(category_id)}&include_ui=1`);
+      const offersRes = await fazerFetch(`/giftcards/cards?category_id=${encodeURIComponent(category_id)}`);
       if (offersRes.ok) {
         const offersData = await offersRes.json() as any;
-        const offersList: any[] = Array.isArray(offersData) ? offersData : (offersData.items || offersData.offers || offersData.data || []);
-        const matchedOffer = offersList.find((o: any) => String(o.id || o.offer_id) === String(offer_id));
+        const offersList: any[] = Array.isArray(offersData) ? offersData : (offersData.items || offersData.cards || offersData.offers || offersData.data || []);
+        const matchedOffer = offersList.find((o: any) => String(o.card_id || o.id || o.offer_id) === String(offer_id));
         if (matchedOffer) {
           price = typeof matchedOffer.price === 'number'
             ? matchedOffer.price
@@ -8937,7 +8938,7 @@ router.post('/api/fazer/giftcards/order', requireDb, requireClientSession, async
     const fazerRes = await fazerFetch('/giftcards/order', {
       method: 'POST',
       headers: { 'idempotency-key': idempotencyKey } as any,
-      body: JSON.stringify({ category_id, offer_id }),
+      body: JSON.stringify({ category_id, card_id: offer_id, quantity: 1 }),
     });
     const fazerData = await fazerRes.json() as any;
     if (!fazerRes.ok) {
@@ -8959,16 +8960,17 @@ router.post('/api/fazer/giftcards/order', requireDb, requireClientSession, async
       txn.set(txRef, {
         clientId, clientName: clientData.name || '',
         type: 'purchase', amount: price, status: 'completed',
-        productName: fazerData.category_name || category_id,
+        productName: fazerData.category_name || fazerData.order?.category_name || category_id,
         productPrice: `${price} USD`,
-        description: `Carte-cadeau: ${fazerData.category_name || category_id} (${fazerData.order_id || idempotencyKey})`,
-        fazerOrderId: fazerData.order_id || null,
+        description: `Carte-cadeau: ${fazerData.category_name || fazerData.order?.category_name || category_id} (${fazerData.order_id || fazerData.order?.id || idempotencyKey})`,
+        fazerOrderId: fazerData.order_id || fazerData.order?.id || null,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
     });
 
-    const code = fazerData.code || fazerData.pin || fazerData.serial || fazerData.card_number || null;
+    const order = fazerData.order || fazerData;
+    const code = order.code || order.pin || order.serial || order.card_number || null;
     res.json({ success: true, order: fazerData, code });
   } catch (e: any) {
     console.error('[fazer/giftcards/order]', e.message);
