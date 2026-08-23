@@ -4,6 +4,7 @@ import { createServer as createHttpServer } from "http";
 import path from "path";
 import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'node:fs';
 
 dotenv.config();
 
@@ -11,6 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import apiRouter from './src/api/router.ts';
+import { getCanonicalUrl, getSeoPage, getStructuredData, SEO_SITE_URL } from './src/lib/seo.ts';
 
 function allowedOrigins(): Set<string> {
   const origins = new Set<string>();
@@ -24,6 +26,39 @@ function allowedOrigins(): Set<string> {
     origins.add('http://127.0.0.1:5173');
   }
   return origins;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderSeoFallback(pathname: string): string {
+  const page = getSeoPage(pathname);
+  if (!page) return '';
+
+  return `<noscript><main><header><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.description)}</p></header><nav aria-label="Navigation Rena Services"><a href="/produits">Produits et recharges</a> | <a href="/services">Services</a> | <a href="/suivi-colis">Suivi de colis</a> | <a href="/expedition">Expédition</a> | <a href="/formations">Formations</a> | <a href="/contact">Contact</a></nav></main></noscript>`;
+}
+
+function renderSeoDocument(template: string, pathname: string): string {
+  const page = getSeoPage(pathname);
+  const title = page?.title || 'Rena Services';
+  const description = page?.description || 'Services numériques et logistiques Rena Services.';
+  const canonical = page ? getCanonicalUrl(page.path) : SEO_SITE_URL;
+  const robots = page ? 'index, follow' : 'noindex, nofollow';
+  const schema = JSON.stringify(getStructuredData()).replace(/</g, '\\u003c');
+
+  return template
+    .replace(/<title data-seo-title>.*?<\/title>/s, `<title data-seo-title>${escapeHtml(title)}</title>`)
+    .replace(/<meta data-seo-description name="description" content="[^"]*"\s*\/?>/, `<meta data-seo-description name="description" content="${escapeHtml(description)}" />`)
+    .replace(/<meta name="robots" content="[^"]*"\s*\/?>/, `<meta name="robots" content="${robots}" />`)
+    .replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${canonical}" />`)
+    .replace(/<meta data-seo-og-title property="og:title" content="[^"]*"\s*\/?>/, `<meta data-seo-og-title property="og:title" content="${escapeHtml(title)}" />`)
+    .replace(/<meta data-seo-og-description property="og:description" content="[^"]*"\s*\/?>/, `<meta data-seo-og-description property="og:description" content="${escapeHtml(description)}" />`)
+    .replace(/<meta data-seo-og-url property="og:url" content="[^"]*"\s*\/?>/, `<meta data-seo-og-url property="og:url" content="${canonical}" />`)
+    .replace(/<meta data-seo-twitter-title name="twitter:title" content="[^"]*"\s*\/?>/, `<meta data-seo-twitter-title name="twitter:title" content="${escapeHtml(title)}" />`)
+    .replace(/<meta data-seo-twitter-description name="twitter:description" content="[^"]*"\s*\/?>/, `<meta data-seo-twitter-description name="twitter:description" content="${escapeHtml(description)}" />`)
+    .replace(/<script id="seo-structured-data" type="application\/ld\+json">.*?<\/script>/s, `<script id="seo-structured-data" type="application/ld+json">${schema}</script>`)
+    .replace('<!-- seo-fallback -->', renderSeoFallback(pathname));
 }
 
 async function startServer() {
@@ -52,6 +87,16 @@ async function startServer() {
     res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com; frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; connect-src 'self' https: wss:;");
     if (process.env.NODE_ENV === 'production') {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
+
+  app.use((req, res, next) => {
+    if (process.env.NODE_ENV !== 'production') return next();
+    const host = req.get('host')?.split(':')[0];
+    const isInternalProbe = !host || host === 'localhost' || host === '127.0.0.1' || host.startsWith('169.254.');
+    if (!isInternalProbe && host !== 'renaservices.shop') {
+      return res.redirect(301, `${SEO_SITE_URL}${req.originalUrl}`);
     }
     next();
   });
@@ -134,6 +179,8 @@ async function startServer() {
     });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    const indexPath = path.join(distPath, 'index.html');
+    let indexTemplate: string | null = null;
 
     app.use('/assets', express.static(path.join(distPath, 'assets'), {
       maxAge: '1y',
@@ -141,6 +188,7 @@ async function startServer() {
     }));
 
     app.use(express.static(distPath, {
+      index: false,
       setHeaders(res, filePath) {
         if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -161,7 +209,8 @@ async function startServer() {
 
     app.get('*', (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.sendFile(path.join(distPath, 'index.html'));
+      indexTemplate ||= readFileSync(indexPath, 'utf8');
+      res.type('html').send(renderSeoDocument(indexTemplate, _req.path));
     });
 
     httpServer.listen(PORT, "0.0.0.0", () => {

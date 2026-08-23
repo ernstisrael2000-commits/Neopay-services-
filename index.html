@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Rena — Logistique, Paiements &amp; Services Digitaux en Haïti</title>
+    <title data-seo-title>Rena Services | Services numériques en Haïti</title>
 
     <!-- Primary SEO -->
-    <meta name="description" content="Rena : logistique, paiements mobiles, recharges de cartes, top-up jeux et formations en ligne en Haïti. Suivi de colis, dépôts MonCash &amp; NatCash." />
-    <meta name="keywords" content="rena, logistique haïti, paiement mobile, moncash, natcash, suivi colis, recharge carte, top-up jeux, formations en ligne, wallet haïti" />
+    <meta data-seo-description name="description" content="Rena Services réunit recharges de jeux, abonnements, paiements, suivi de colis, expédition et formations en ligne pour la clientèle en Haïti." />
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Rena" />
+    <link rel="canonical" href="https://renaservices.shop/" />
 
     <!-- PWA / App Meta -->
     <meta name="theme-color" content="#1d4ed8" />
@@ -29,17 +29,19 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Rena" />
+    <meta property="og:site_name" content="Rena Services" />
     <meta property="og:locale" content="fr_HT" />
-    <meta property="og:title" content="Rena — Logistique, Paiements &amp; Services Digitaux en Haïti" />
-    <meta property="og:description" content="Plateforme de logistique, paiements mobiles, recharges de cartes, top-up jeux et formations en ligne en Haïti." />
-    <meta property="og:image" content="/icon-512.png" />
+    <meta data-seo-og-title property="og:title" content="Rena Services | Services numériques en Haïti" />
+    <meta data-seo-og-description property="og:description" content="Recharges, abonnements, paiements, suivi de colis, expédition et formations en ligne en Haïti." />
+    <meta data-seo-og-url property="og:url" content="https://renaservices.shop/" />
+    <meta property="og:image" content="https://renaservices.shop/logo.png" />
+    <meta property="og:image:alt" content="Logo Rena Services" />
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Rena — Logistique &amp; Paiements en Haïti" />
-    <meta name="twitter:description" content="Logistique, paiements mobiles, recharges cartes, top-up jeux et formations. MonCash, NatCash." />
-    <meta name="twitter:image" content="/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta data-seo-twitter-title name="twitter:title" content="Rena Services | Services numériques en Haïti" />
+    <meta data-seo-twitter-description name="twitter:description" content="Recharges, abonnements, paiements, suivi de colis, expédition et formations en ligne en Haïti." />
+    <meta name="twitter:image" content="https://renaservices.shop/logo.png" />
 
     <!-- Performance: preconnect to critical origins -->
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
@@ -60,29 +62,13 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
     />
 
-    <!-- LCP hint: preconnect to image CDN used by the hero slider -->
-    <link rel="preconnect" href="https://images.unsplash.com" />
-    <link rel="dns-prefetch" href="https://images.unsplash.com" />
-
-    <!-- Structured Data — Organization -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Organization",
-      "name": "Rena",
-      "description": "Plateforme de logistique, paiements mobiles et services digitaux en Haïti",
-      "logo": "/icon-512.png",
-      "contactPoint": {
-        "@type": "ContactPoint",
-        "telephone": "+50944813185",
-        "contactType": "customer service",
-        "availableLanguage": "French"
-      }
-    }
-    </script>
+    <!-- Structured data is kept in the static document for search crawlers. -->
+    <script id="seo-structured-data" type="application/ld+json">[{"@context":"https://schema.org","@type":"Organization","name":"Rena Services","url":"https://renaservices.shop","logo":"https://renaservices.shop/logo.png","description":"Services numériques, logistique, suivi de colis, expédition et formations en ligne en Haïti.","contactPoint":{"@type":"ContactPoint","telephone":"+50944813185","contactType":"customer service","availableLanguage":["fr","ht"]}},{"@context":"https://schema.org","@type":"WebSite","name":"Rena Services","url":"https://renaservices.shop","inLanguage":"fr-HT"}]</script>
   </head>
   <body>
     <div id="root"></div>
+    <!-- seo-fallback is populated by the production server for crawlers without JavaScript. -->
+    <!-- seo-fallback -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

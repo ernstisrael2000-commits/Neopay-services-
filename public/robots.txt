@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://neopay-services--ernstisrael2000.replit.app/sitemap.xml
+Sitemap: https://renaservices.shop/sitemap.xml

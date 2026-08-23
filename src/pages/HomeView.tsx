@@ -363,7 +363,11 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       >
                         <img
                           src={img.url}
-                          alt={img.description || 'slide'}
+                          alt={img.description || 'Offre numérique proposée par Rena Services'}
+                          width={1600}
+                          height={900}
+                          fetchPriority={idx === 0 ? 'high' : 'auto'}
+                          decoding="async"
                           className="absolute inset-0 w-full h-full object-cover"
                           draggable={false}
                         />
@@ -387,6 +391,18 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           </motion.section>
         )}
       </AnimatePresence>
+
+      <section className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-5 shadow-sm sm:p-7">
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Rena Services en Haïti</p>
+        <h1 className="mt-2 max-w-3xl text-2xl font-black tracking-tight text-dark sm:text-3xl">Services numériques, paiements et logistique en Haïti</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Découvrez des recharges de jeux, abonnements numériques, services de paiement, suivi de colis, expédition internationale et formations en ligne réunis sur une même plateforme.</p>
+        <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-black text-primary" aria-label="Découvrir les services Rena">
+          <a href="/recharge-free-fire" className="hover:underline">Recharge Free Fire</a>
+          <a href="/abonnements" className="hover:underline">Abonnements numériques</a>
+          <a href="/paiements" className="hover:underline">Paiements et recharges</a>
+          <a href="/suivi-colis" className="hover:underline">Suivi de colis</a>
+        </nav>
+      </section>
 
       {/* ── Barre de recherche produits ── */}
       <div className="search-border-wrap shadow-sm">
@@ -550,7 +566,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         <img
                           src={item.image}
                           alt={item.name}
-                          loading={i < 4 ? 'eager' : 'lazy'}
+                          width={640}
+                          height={480}
+                          loading={i === 0 ? 'eager' : 'lazy'}
                           decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/200/150'; }}

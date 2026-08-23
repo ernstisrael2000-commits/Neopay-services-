@@ -6,6 +6,9 @@ import LoadingScreen from './components/LoadingScreen';
 import { PageSkeleton } from './components/skeletons/PageSkeleton';
 import { SettingsProvider, useSettingsCtx } from './contexts/SettingsContext';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import SeoHead from './components/SeoHead';
+import SeoLandingPage from './pages/SeoLandingPage';
+import { SEO_LANDING_PATHS, SeoLandingPath } from './lib/seo';
 
 // Heavy pages — loaded only when the user navigates to them
 const HomeView = lazy(() => import('./pages/HomeView'));
@@ -41,9 +44,29 @@ import { auth, db } from './lib/firebase';
 import { toast } from 'sonner';
 import { logoutClient } from './services/clientService';
 
+type AppView = 'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet' | 'seo';
+
+const PUBLIC_VIEW_PATHS: Partial<Record<AppView, string>> = {
+  home: '/',
+  products: '/produits',
+  services: '/services',
+  tracking: '/suivi-colis',
+  shipping: '/expedition',
+  formations: '/formations',
+};
+
+function routeFromPathname(pathname: string): { view: AppView; seoPath: SeoLandingPath | null } {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if ((SEO_LANDING_PATHS as readonly string[]).includes(path)) return { view: 'seo', seoPath: path as SeoLandingPath };
+  const view = (Object.entries(PUBLIC_VIEW_PATHS).find(([, value]) => value === path)?.[0] || 'home') as AppView;
+  return { view, seoPath: null };
+}
+
 function AppInner() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet')[]>(['home']);
+  const [initialRoute] = useState(() => routeFromPathname(window.location.pathname));
+  const [view, setView] = useState<AppView>(initialRoute.view);
+  const [seoPath, setSeoPath] = useState<SeoLandingPath | null>(initialRoute.seoPath);
+  const [history, setHistory] = useState<AppView[]>([initialRoute.view]);
   // Direction for page slide: 1 = left (new page comes from right), -1 = right (back)
   const navDirection = useRef<1 | -1>(1);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
@@ -61,6 +84,19 @@ function AppInner() {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
     window.location.pathname === '/payment-success'
   );
+
+  useEffect(() => {
+    const handleBrowserNavigation = () => {
+      const route = routeFromPathname(window.location.pathname);
+      navDirection.current = -1;
+      setHistory([route.view]);
+      setSeoPath(route.seoPath);
+      setView(route.view);
+      setAccessChoice(null);
+    };
+    window.addEventListener('popstate', handleBrowserNavigation);
+    return () => window.removeEventListener('popstate', handleBrowserNavigation);
+  }, []);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('rena_admin');
@@ -135,14 +171,17 @@ function AppInner() {
   // Ordered nav slots — used to compute slide direction
   const NAV_ORDER = ['home', 'products', 'services', 'formations', 'tracking', 'shipping'];
 
-  const handleViewChange = (newView: typeof view) => {
+  const handleViewChange = (newView: AppView) => {
     if (newView === view) return;
     const fromIdx = NAV_ORDER.indexOf(view);
     const toIdx   = NAV_ORDER.indexOf(newView);
     navDirection.current = (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) ? -1 : 1;
     setHistory(prev => [...prev, newView]);
     setView(newView);
+    setSeoPath(null);
     setAccessChoice(null);
+    const path = PUBLIC_VIEW_PATHS[newView];
+    if (path && window.location.pathname !== path) window.history.pushState({ view: newView }, '', path);
   };
 
   const handleBack = () => {
@@ -154,8 +193,13 @@ function AppInner() {
       const prevView = newHistory[newHistory.length - 1];
       setHistory(newHistory);
       setView(prevView);
+      setSeoPath(null);
+      const path = PUBLIC_VIEW_PATHS[prevView];
+      if (path) window.history.replaceState({ view: prevView }, '', path);
     } else {
       setView('home');
+      setSeoPath(null);
+      window.history.replaceState({ view: 'home' }, '', '/');
     }
   };
 
@@ -246,6 +290,10 @@ function AppInner() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-background font-sans selection:bg-accent-light selection:text-dark flex flex-col">
+        <SeoHead
+          pathname={view === 'seo' && seoPath ? seoPath : PUBLIC_VIEW_PATHS[view] || window.location.pathname}
+          indexable={view === 'seo' || Boolean(PUBLIC_VIEW_PATHS[view])}
+        />
         {view !== 'formations' && (
           <Navbar 
             currentView={view}
@@ -455,6 +503,8 @@ function AppInner() {
                     />
                   )}
 
+                  {view === 'seo' && seoPath && <SeoLandingPage path={seoPath} />}
+
                   {view === 'admin' && (
                     loggedAdmin
                       ? <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
@@ -500,12 +550,12 @@ function AppInner() {
                 <span className="text-xl font-bold text-dark">Rena</span>
               </div>
               <p className="text-subtext text-sm">
-                © {new Date().getFullYear()} Rena Logistics. Tous droits réservés.
+                © {new Date().getFullYear()} Rena Services. Tous droits réservés.
               </p>
               <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
-                <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>
-                <a href="#" className="hover:text-subtext transition-colors">Conditions d'utilisation</a>
-                <a href="mailto:renaservices509@gmail.com" className="hover:text-subtext transition-colors">Support</a>
+                <a href="/services" className="hover:text-subtext transition-colors">Services</a>
+                <a href="/contact" className="hover:text-subtext transition-colors">Contact &amp; support</a>
+                <a href="/a-propos" className="hover:text-subtext transition-colors">À propos</a>
               </div>
             </div>
           </footer>
