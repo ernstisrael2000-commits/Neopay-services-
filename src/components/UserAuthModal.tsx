@@ -388,7 +388,6 @@ export default function UserAuthModal({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
         className="max-w-sm rounded-[2rem] p-0 overflow-hidden border-0 shadow-2xl"
-        showCloseButton={false}
       >
         {/* No AnimatePresence / motion.div — plain conditional rendering to avoid DOM conflicts */}
 

@@ -48,11 +48,11 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
-      <div className="fixed inset-0 z-[301] flex items-center justify-center p-2 sm:p-4 pointer-events-none">
+      <div className="fixed inset-0 z-[301] flex items-end justify-center pt-8 pointer-events-none sm:items-center sm:p-4">
         <DialogPrimitive.Popup
           data-slot="dialog-content"
           className={cn(
-            "pointer-events-auto relative w-full max-w-[calc(100%-1rem)] sm:max-w-xl rounded-[2.5rem] bg-white p-0 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] ring-1 ring-black/5 duration-300 outline-none max-h-[94vh] overflow-y-auto data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 flex flex-col",
+            "pointer-events-auto relative flex w-full max-w-full max-h-[calc(100dvh-2rem)] flex-col overflow-y-auto rounded-t-[2rem] bg-white p-0 shadow-[0_-18px_55px_-20px_rgba(0,0,0,0.38)] ring-1 ring-black/5 outline-none duration-300 data-open:animate-in data-open:slide-in-from-bottom-6 data-open:fade-in-0 data-closed:animate-out data-closed:slide-out-to-bottom-6 data-closed:fade-out-0 sm:max-w-xl sm:max-h-[94vh] sm:rounded-[2.5rem] sm:shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] sm:data-open:zoom-in-95 sm:data-closed:zoom-out-95",
             className
           )}
           {...props}
@@ -61,7 +61,7 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="absolute right-6 top-6 rounded-full bg-black/5 p-2 hover:bg-black/10 transition-all z-50 group active:scale-90"
+              className="absolute right-4 top-4 z-50 rounded-full bg-black/5 p-2.5 transition-all hover:bg-black/10 group active:scale-90 sm:right-6 sm:top-6"
             >
               <XIcon className="h-5 w-5 text-gray-500 group-hover:text-gray-900" />
               <span className="sr-only">Fermer</span>

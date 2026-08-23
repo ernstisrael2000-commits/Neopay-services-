@@ -71,7 +71,7 @@ const WalletPayButton = ({
       type="button"
       disabled={purchaseLoading || !hasBalance}
       onClick={handlePay}
-      className={`w-full h-14 rounded-2xl border-2 font-black text-base flex items-center justify-center gap-3 transition-all ${hasBalance ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 active:scale-95' : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'}`}
+      className={`w-full h-14 rounded-2xl border-2 font-black text-base flex items-center justify-center gap-3 transition-all ${hasBalance ? 'border-primary bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary/90 hover:-translate-y-0.5 active:scale-[0.98]' : 'border-red-200 bg-red-50 text-red-500 cursor-not-allowed opacity-70'}`}
     >
       {purchaseLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
         <><Wallet className="h-5 w-5" />{hasBalance ? `Payer avec mon solde (${balanceHTG.toLocaleString()} HTG)` : `Solde insuffisant (${balanceHTG.toLocaleString()} HTG)`}</>
@@ -207,10 +207,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
   };
 
   const handleProductClick = (product: any) => {
-    if (!loggedClient) {
-      onRequestAuth?.();
-      return;
-    }
     setSelectedProduct(product);
     setSelectedPlan(product.plans?.[0] || null);
     setCustomAmountUSD('');
@@ -468,7 +464,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
       {/* ── Card Recharge — Step 1 ── */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
-        <DialogContent className="w-full h-full max-w-none max-h-none rounded-none border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+        <DialogContent className="relative flex h-[100dvh] w-full max-w-none max-h-none flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl sm:h-[min(860px,calc(100dvh-2rem))] sm:max-w-[520px] sm:rounded-[2rem]" showCloseButton={false}>
           <div className="bg-emerald-600 p-5 sm:p-7 text-white relative overflow-hidden shrink-0">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none" />
             <DialogHeader>
@@ -602,7 +598,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
       {/* ── Card Recharge — Step 2 ── */}
       <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
-        <DialogContent className="w-full h-full max-w-none max-h-none rounded-none border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+        <DialogContent className="relative flex h-[100dvh] w-full max-w-none max-h-none flex-col overflow-hidden rounded-none border-0 bg-white shadow-2xl sm:h-[min(860px,calc(100dvh-2rem))] sm:max-w-[520px] sm:rounded-[2rem]" showCloseButton={false}>
           <div className="bg-emerald-800 p-5 sm:p-7 text-white shrink-0">
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
@@ -737,14 +733,17 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: '100%', opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-                className="relative pointer-events-auto bg-white shadow-2xl w-full h-full max-w-none max-h-none flex flex-col overflow-hidden"
+                className="relative pointer-events-auto flex h-[100dvh] w-full max-w-none flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(860px,calc(100dvh-2rem))] sm:max-w-[520px] sm:rounded-[2rem]"
               >
-              {/* Handle bar */}
-               <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0 border-b border-gray-100">
-                 <span className="text-xs font-black uppercase tracking-widest text-gray-400">Détails du produit</span>
+              {/* Header remains visible while the product details scroll. */}
+               <div className="z-10 flex shrink-0 items-center justify-between border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur sm:px-5 sm:pt-4">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Rena Digital</span>
+                    <p className="mt-0.5 text-sm font-black text-gray-900">Finaliser l’achat</p>
+                  </div>
                  <button
                    onClick={() => setIsProductDetailOpen(false)}
-                   className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-100 bg-gray-50 text-gray-700 transition-all hover:bg-gray-100 active:scale-95"
                    aria-label="Fermer les détails du produit"
                  >
                    <X className="h-5 w-5 text-gray-700" />
@@ -762,14 +761,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                {/* Close button */}
-                 <button
-                  onClick={() => setIsProductDetailOpen(false)}
-                   className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-black/60 transition-all"
-                   aria-label="Fermer les détails du produit"
-                >
-                  <X className="h-4 w-4 text-white" />
-                </button>
                 {/* Badge catégorie */}
                 <span className="absolute top-4 left-4 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-primary/90 backdrop-blur-sm text-white">
                   Service Premium
@@ -784,7 +775,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
               {/* Content is intentionally fixed-height: the complete purchase summary stays visible without nested scrolling. */}
               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-                <div className="p-5 space-y-5 pb-8">
+                <div className="space-y-5 p-4 pb-6 sm:p-5">
 
                   {/* Titre + sous-titre */}
                   <div className="flex items-start justify-between gap-3">
@@ -911,75 +902,79 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                     {promoError && <p className="text-[11px] text-red-500 font-semibold px-1">{promoError}</p>}
                   </div>
 
-                  {/* Boutons d'action */}
-                  {(() => {
-                    const rate2 = selectedProduct.customExchangeRate || exchangeRate;
-                    const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD))
-                      ? Math.round(parseFloat(customAmountUSD) * rate2) : null;
-                    const rawPrice = customHTG !== null
-                      ? `${customHTG} HTG`
-                      : (selectedPlan ? selectedPlan.price : selectedProduct.price);
-                    // Apply promo discount
-                    const applyDiscount = (priceStr: string) => {
-                      if (!appliedPromo) return priceStr;
-                      const numMatch = priceStr.match(/[\d.,]+/);
-                      if (!numMatch) return priceStr;
-                      const base = parseFloat(numMatch[0].replace(',', '.'));
-                      const discounted = Math.round(base * (1 - appliedPromo.discountPercent / 100));
-                      return priceStr.replace(numMatch[0], discounted.toLocaleString('fr-FR'));
-                    };
-                    const displayPrice = applyDiscount(rawPrice);
-                    const displayName = selectedPlan
-                      ? `${selectedProduct.name} (${selectedPlan.name})`
-                      : selectedProduct.name;
-                    const customLabel = customHTG !== null
-                      ? `$${customAmountUSD} USD = ${customHTG.toLocaleString()} HTG`
-                      : null;
-                    return (
-                      <div className="space-y-3 pt-1">
-                        {appliedPromo && rawPrice !== displayPrice && (
-                          <div className="flex items-center justify-between px-2">
-                            <span className="text-xs text-gray-400 line-through">{rawPrice}</span>
-                            <span className="text-lg font-black text-emerald-600">{displayPrice}</span>
-                          </div>
-                        )}
-                        {loggedClient && (
-                          <WalletPayButton
-                            client={effectiveClient || loggedClient}
-                            price={displayPrice}
-                            productName={customLabel ? `${displayName} — ${customLabel}` : displayName}
-                            hasPendingPurchase={hasPendingPurchase}
-                            purchaseLoading={purchaseLoading}
-                            setPurchaseLoading={setPurchaseLoading}
-                            onSuccess={async () => {
-                              if (appliedPromo) {
-                                try { await usePromoCode(appliedPromo.id); } catch {}
-                              }
-                              setIsProductDetailOpen(false);
-                              resetPromo();
-                            }}
-                            exchangeRate={exchangeRate}
-                          />
-                        )}
-                        {!loggedClient && (
-                          <Button
-                            onClick={() => {
-                              setIsProductDetailOpen(false);
-                              if (onRequestAuth) onRequestAuth();
-                              else onOpenWallet?.();
-                            }}
-                            variant="outline"
-                            className="w-full h-12 rounded-2xl border-2 border-emerald-200 text-emerald-700 font-black flex items-center justify-center gap-2 hover:bg-emerald-50 active:scale-95 transition-all"
-                          >
-                            <Wallet className="h-4 w-4" />
-                            Se connecter pour payer
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })()}
                 </div>
               </div>
+              {(() => {
+                const rate = selectedProduct.customExchangeRate || exchangeRate;
+                const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD))
+                  ? Math.round(parseFloat(customAmountUSD) * rate) : null;
+                const rawPrice = customHTG !== null
+                  ? `${customHTG} HTG`
+                  : (selectedPlan ? selectedPlan.price : selectedProduct.price);
+                const applyDiscount = (priceStr: string) => {
+                  if (!appliedPromo) return priceStr;
+                  const numMatch = priceStr.match(/[\d.,]+/);
+                  if (!numMatch) return priceStr;
+                  const base = parseFloat(numMatch[0].replace(',', '.'));
+                  const discounted = Math.round(base * (1 - appliedPromo.discountPercent / 100));
+                  return priceStr.replace(numMatch[0], discounted.toLocaleString('fr-FR'));
+                };
+                const displayPrice = applyDiscount(rawPrice);
+                const displayName = selectedPlan
+                  ? `${selectedProduct.name} (${selectedPlan.name})`
+                  : selectedProduct.name;
+                const customLabel = customHTG !== null
+                  ? `$${customAmountUSD} USD = ${customHTG.toLocaleString()} HTG`
+                  : null;
+
+                return (
+                  <footer className="z-10 shrink-0 border-t border-gray-100 bg-white/95 px-4 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_28px_rgba(15,23,42,0.08)] backdrop-blur sm:px-5">
+                    <div className="mb-3 flex items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Total à payer</p>
+                        <p className="mt-0.5 truncate text-2xl font-black tracking-tight text-gray-900">{displayPrice}</p>
+                      </div>
+                      {appliedPromo && rawPrice !== displayPrice && (
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-gray-400 line-through">{rawPrice}</p>
+                          <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-600">Promotion appliquée</p>
+                        </div>
+                      )}
+                    </div>
+                    {loggedClient ? (
+                      <WalletPayButton
+                        client={effectiveClient || loggedClient}
+                        price={displayPrice}
+                        productName={customLabel ? `${displayName} — ${customLabel}` : displayName}
+                        hasPendingPurchase={hasPendingPurchase}
+                        purchaseLoading={purchaseLoading}
+                        setPurchaseLoading={setPurchaseLoading}
+                        onSuccess={async () => {
+                          if (appliedPromo) {
+                            try { await usePromoCode(appliedPromo.id); } catch {}
+                          }
+                          setIsProductDetailOpen(false);
+                          resetPromo();
+                        }}
+                        exchangeRate={exchangeRate}
+                      />
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          setIsProductDetailOpen(false);
+                          if (onRequestAuth) onRequestAuth();
+                          else onOpenWallet?.();
+                        }}
+                        className="h-14 w-full rounded-2xl bg-primary font-black text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:-translate-y-0.5 active:scale-[0.98]"
+                      >
+                        <Wallet className="h-5 w-5" />
+                        Se connecter pour payer
+                      </Button>
+                    )}
+                    <p className="mt-2 text-center text-[10px] font-semibold text-gray-400">Paiement sécurisé · Prix affiché en gourdes haïtiennes</p>
+                  </footer>
+                );
+              })()}
               </motion.div>
             </div>
           </>
@@ -988,7 +983,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
 
       {/* ── Payment Modal (WhatsApp) ── */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="w-full h-full max-w-none max-h-none rounded-none border-0" showCloseButton={false}>
+        <DialogContent className="h-[100dvh] w-full max-w-none max-h-none rounded-none border-0 sm:h-auto sm:max-w-[520px] sm:rounded-[2rem]" showCloseButton={false}>
           <div className="bg-primary p-6 text-white rounded-t-[2rem]">
             <DialogHeader>
               <div className="flex items-center justify-between mb-3">
