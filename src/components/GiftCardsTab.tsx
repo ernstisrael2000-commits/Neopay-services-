@@ -20,7 +20,7 @@ interface Props {
 
 
 export default function GiftCardsTab({ loggedClient, onOpenWallet, onRequestAuth }: Props) {
-  const { categories: rawCategories, loading, error } = useFazerGiftCards();
+  const { categories: rawCategories, loading, error, available } = useFazerGiftCards();
   const { settings } = useSettingsCtx();
   const exchangeRate = settings?.exchangeRate || 146;
   const { client: liveClient } = useClientData(loggedClient?.id || null);
@@ -50,6 +50,14 @@ export default function GiftCardsTab({ loggedClient, onOpenWallet, onRequestAuth
       <AlertCircle className="h-10 w-10 text-red-300" />
       <p className="text-sm text-gray-400 text-center">Impossible de charger les cartes-cadeaux.</p>
       <p className="text-xs text-red-400">{error}</p>
+    </div>
+  );
+
+  if (available === false) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+      <AlertCircle className="h-10 w-10 text-amber-400" />
+      <p className="text-sm font-bold text-gray-600">Les cartes-cadeaux sont en cours d’activation.</p>
+      <p className="max-w-sm text-xs leading-relaxed text-gray-400">Le catalogue Fazerscards sera disponible dès que sa configuration sécurisée sera finalisée.</p>
     </div>
   );
 

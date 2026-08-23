@@ -11,16 +11,16 @@
   "lang": "fr",
   "icons": [
     {
-      "src": "/solutionpam-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/solution-pam-logo.png",
-      "sizes": "920x595",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "screenshots": [],
@@ -30,14 +30,14 @@
       "short_name": "Wallet",
       "description": "Accéder à mon portefeuille",
       "url": "/?action=wallet",
-      "icons": [{ "src": "/solutionpam-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Suivi de colis",
       "short_name": "Suivi",
       "description": "Suivre un colis",
       "url": "/?view=tracking",
-      "icons": [{ "src": "/solutionpam-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

@@ -29,6 +29,11 @@ export interface FazerValidateGame {
   fields: FazerField[];
 }
 
+interface FazerCatalogResponse<T> {
+  items: T[];
+  available?: boolean;
+}
+
 // ── Fetch helpers ────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -44,18 +49,24 @@ export function useFazerTopups() {
   const [categories, setCategories] = useState<FazerCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiFetch<{ items: FazerCategory[] }>('/api/fazer/topups')
-      .then(data => { if (!cancelled) setCategories(data.items || []); })
+    apiFetch<FazerCatalogResponse<FazerCategory>>('/api/fazer/topups')
+      .then(data => {
+        if (!cancelled) {
+          setCategories(data.items || []);
+          setAvailable(data.available !== false);
+        }
+      })
       .catch(e => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  return { categories, loading, error };
+  return { categories, loading, error, available };
 }
 
 // ── Hook: offers + player fields for one category ────────────────
@@ -108,18 +119,24 @@ export function useFazerGiftCards() {
   const [categories, setCategories] = useState<FazerGiftCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiFetch<{ items: FazerGiftCategory[] }>('/api/fazer/giftcards')
-      .then(data => { if (!cancelled) setCategories(data.items || []); })
+    apiFetch<FazerCatalogResponse<FazerGiftCategory>>('/api/fazer/giftcards')
+      .then(data => {
+        if (!cancelled) {
+          setCategories(data.items || []);
+          setAvailable(data.available !== false);
+        }
+      })
       .catch(e => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  return { categories, loading, error };
+  return { categories, loading, error, available };
 }
 
 export function useFazerGiftCardOffers(categoryId: string | null) {

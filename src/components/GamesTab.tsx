@@ -47,7 +47,7 @@ interface Props {
 
 // ── Main component ─────────────────────────────────────────────────────────
 export default function GamesTab({ loggedClient, onOpenWallet, onRequestAuth }: Props) {
-  const { categories, loading, error } = useFazerTopups();
+  const { categories, loading, error, available } = useFazerTopups();
   const validatableGames = useFazerValidatableGames();
   const priceOverrides = useFazerPriceOverrides();
   const { settings } = useSettingsCtx();
@@ -97,6 +97,14 @@ export default function GamesTab({ loggedClient, onOpenWallet, onRequestAuth }: 
       <AlertCircle className="h-10 w-10 text-red-300" />
       <p className="text-sm text-gray-400">Impossible de charger les jeux.</p>
       <p className="text-xs text-red-400">{error}</p>
+    </div>
+  );
+
+  if (available === false) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+      <AlertCircle className="h-10 w-10 text-amber-400" />
+      <p className="text-sm font-bold text-gray-600">Les recharges de jeux sont en cours d’activation.</p>
+      <p className="max-w-sm text-xs leading-relaxed text-gray-400">Notre catalogue Fazerscards sera disponible dès que sa configuration sécurisée sera finalisée.</p>
     </div>
   );
 

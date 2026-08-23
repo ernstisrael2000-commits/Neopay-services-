@@ -17,8 +17,8 @@ try {
     const data  = payload.data || {};
     return self.registration.showNotification(title, {
       body,
-      icon: '/solutionpam-icon.svg',
-      badge: '/solutionpam-icon.svg',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       tag: data.tag || 'solutionpam-fcm',
       data,
       vibrate: [200, 100, 200],
@@ -29,16 +29,16 @@ try {
 }
 
 // ── Cache names (bump version to force refresh) ───────────────────────────────
-const SHELL_CACHE   = 'solutionpam-shell-v1'; // App shell: JS, CSS, fonts
-const IMAGE_CACHE   = 'solutionpam-images-v1'; // Local + Firebase Storage images
+const SHELL_CACHE   = 'solutionpam-shell-v2'; // App shell: JS, CSS, fonts
+const IMAGE_CACHE   = 'solutionpam-images-v2'; // Local + Firebase Storage images
 const OFFLINE_URL   = '/';
 
 // Assets pre-cached at install time
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.webmanifest',
-  '/solutionpam-icon.svg',
-  '/solution-pam-logo.png',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 // ── Install: pre-cache app shell ──────────────────────────────────────────────
@@ -146,7 +146,7 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push Notifications ────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'Solutionpam', body: 'Nouvelle notification', icon: '/solutionpam-icon.svg', badge: '/solutionpam-icon.svg', tag: 'solutionpam-notif' };
+  let data = { title: 'Solutionpam', body: 'Nouvelle notification', icon: '/icon-192.png', badge: '/icon-192.png', tag: 'solutionpam-notif' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch (e) {}
@@ -154,8 +154,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || '/icon.svg',
-      badge: data.badge || '/icon.svg',
+       icon: data.icon || '/icon-192.png',
+       badge: data.badge || '/icon-192.png',
       tag: data.tag || 'solutionpam-notif',
       renotify: true,
       vibrate: [200, 100, 200],

@@ -503,6 +503,11 @@ async function requireClientSession(req: express.Request, res: express.Response,
   }
 }
 
+const blockNewCryptoClientOrders = (_req: express.Request, res: express.Response, _next: express.NextFunction) =>
+  res.status(503).json({
+    error: 'Le service crypto est bientôt disponible. Les nouvelles commandes sont temporairement fermées.',
+  });
+
 // Backwards-compatible route middleware name. The old shared browser secret has
 // been replaced by a signed, HttpOnly server session.
 const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -5869,7 +5874,7 @@ router.get('/api/client/crypto-orders/:id', requireDb, requireClientSession, asy
   }
 });
 
-router.post('/api/client/crypto-orders', requireDb, requireClientSession, async (req, res) => {
+router.post('/api/client/crypto-orders', requireDb, requireClientSession, blockNewCryptoClientOrders, async (req, res) => {
   try {
     const cryptoId = typeof req.body?.cryptoId === 'string' ? req.body.cryptoId.trim() : '';
     const networkId = typeof req.body?.networkId === 'string' ? req.body.networkId.trim() : '';
@@ -6227,7 +6232,7 @@ router.get('/api/client/crypto-market/requests', requireDb, requireClientSession
   }
 });
 
-router.post('/api/client/crypto-market/requests', requireDb, requireClientSession, async (req, res) => {
+router.post('/api/client/crypto-market/requests', requireDb, requireClientSession, blockNewCryptoClientOrders, async (req, res) => {
   try {
     const offerId = typeof req.body?.offerId === 'string' ? req.body.offerId : '';
     const amountUSD = Number(req.body?.amountUSD);
@@ -8739,14 +8744,16 @@ router.post('/api/fazer/topups/validate-id', async (req, res) => {
 });
 
 // POST /api/fazer/topups/order — place order, deduct wallet
-router.post('/api/fazer/topups/order', requireDb, async (req, res) => {
+router.post('/api/fazer/topups/order', requireDb, requireClientSession, async (req, res) => {
   try {
-    const { clientId, category_id, offer_id, fields } = req.body as {
-      clientId: string; category_id: string; offer_id: string;
+    const { category_id, offer_id, fields } = req.body as {
+      category_id: string; offer_id: string;
       fields: Record<string, string>;
     };
+    const clientId = String(res.locals.clientSession.clientId);
     // NOTE: priceUSD from client is intentionally ignored — price is fetched server-side.
-    if (!clientId || !category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (!category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (!hasFazerCredentials()) return res.status(503).json({ error: 'Les services Fazerscards sont en cours d’activation.' });
 
     // SECURITY: Fetch the real price from FazerCards server-side.
     // Never trust priceUSD sent by the client — a malicious user could send 0.
@@ -8766,6 +8773,8 @@ router.post('/api/fazer/topups/order', requireDb, async (req, res) => {
     } catch (priceErr: any) {
       console.warn('[fazer/order] Could not fetch offer price server-side:', priceErr.message);
     }
+
+    if (price <= 0) return res.status(422).json({ error: 'Cette offre Fazerscards n’est plus disponible. Veuillez choisir une autre offre.' });
 
     // 1. Atomically verify balance and place order using runTransaction
     const clientRef = adminDb.collection('clients').doc(clientId);
@@ -8887,13 +8896,15 @@ router.get('/api/fazer/giftcards/offers', async (req, res) => {
 });
 
 // POST /api/fazer/giftcards/order — purchase a gift card and deduct wallet
-router.post('/api/fazer/giftcards/order', requireDb, async (req, res) => {
+router.post('/api/fazer/giftcards/order', requireDb, requireClientSession, async (req, res) => {
   try {
-    const { clientId, category_id, offer_id } = req.body as {
-      clientId: string; category_id: string; offer_id: string;
+    const { category_id, offer_id } = req.body as {
+      category_id: string; offer_id: string;
     };
+    const clientId = String(res.locals.clientSession.clientId);
     // NOTE: priceUSD from client is intentionally ignored — price is fetched server-side.
-    if (!clientId || !category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (!category_id || !offer_id) return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (!hasFazerCredentials()) return res.status(503).json({ error: 'Les services Fazerscards sont en cours d’activation.' });
 
     // SECURITY: Fetch the real price from FazerCards server-side.
     let price = 0;
@@ -8912,6 +8923,8 @@ router.post('/api/fazer/giftcards/order', requireDb, async (req, res) => {
     } catch (priceErr: any) {
       console.warn('[fazer/giftcards/order] Could not fetch offer price server-side:', priceErr.message);
     }
+
+    if (price <= 0) return res.status(422).json({ error: 'Cette offre Fazerscards n’est plus disponible. Veuillez choisir une autre offre.' });
 
     const clientRef = adminDb.collection('clients').doc(clientId);
     const clientSnap = await clientRef.get();
