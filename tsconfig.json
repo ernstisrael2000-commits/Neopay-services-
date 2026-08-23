@@ -17,5 +17,8 @@
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "artifacts/mockup-sandbox"
+  ]
 }
