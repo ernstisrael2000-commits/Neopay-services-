@@ -103,12 +103,12 @@ export const submitCryptoOrder = async (input: {
   walletAddress: string;
   consent: boolean;
   idempotencyKey: string;
-}): Promise<CryptoOrder> => {
-  const data = await requestJson<{ order: CryptoOrder }>('/api/client/crypto-orders', {
+}): Promise<{ order: CryptoOrder; balanceAfter: number }> => {
+  const data = await requestJson<{ order: CryptoOrder; balanceAfter: number }>('/api/client/crypto-orders', {
     method: 'POST',
     body: JSON.stringify(input),
   });
-  return data.order;
+  return { order: data.order, balanceAfter: data.balanceAfter };
 };
 
 export const getAdminCryptoOrderCatalog = async (): Promise<{ cryptos: CryptoAsset[]; networks: CryptoNetwork[] }> => {

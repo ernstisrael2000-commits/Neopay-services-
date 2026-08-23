@@ -315,7 +315,7 @@ export interface ClientNotification {
   clientId: string;
   title: string;
   message: string;
-  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system' | 'purchase_credentials' | 'crypto_market';
+  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system' | 'purchase_credentials' | 'crypto_market' | 'crypto_order';
   read: boolean;
   amount?: number;
   metadata?: Record<string, any>;
@@ -381,6 +381,7 @@ export interface CryptoAsset {
   coingeckoId: string;
   enabled: boolean;
   priceUSD?: number | null;
+  feePercent?: number;
   priceUpdatedAt?: any;
   createdAt?: any;
   updatedAt?: any;
@@ -428,6 +429,14 @@ export interface CryptoOrder {
   transactionHash?: string;
   priceUSD?: number | null;
   priceUpdatedAt?: any;
+  cryptoSubtotalUSD?: number;
+  feePercent?: number;
+  feeAmountUSD?: number;
+  totalUSD?: number;
+  paymentStatus?: 'confirmed' | 'refunded';
+  paymentTransactionId?: string;
+  refundTransactionId?: string;
+  refundedAt?: any;
   createdAt?: any;
   updatedAt?: any;
   completedAt?: any;
@@ -663,7 +672,7 @@ export interface FormationPaymentRequest {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ClientTransactionType = 'deposit' | 'withdrawal' | 'purchase' | 'transfer_received' | 'refund';
+export type ClientTransactionType = 'deposit' | 'withdrawal' | 'purchase' | 'transfer_received' | 'refund' | 'crypto_purchase' | 'crypto_refund';
 export type ClientTransactionStatus = 'pending' | 'approved' | 'rejected' | 'completed';
 
 export interface ClientTransaction {
@@ -684,6 +693,8 @@ export interface ClientTransaction {
   txId?: string;
   productName?: string;
   productPrice?: string;
+  cryptoOrderId?: string;
+  orderNumber?: string;
   rejectionReason?: string;
   createdAt: any;
   updatedAt: any;

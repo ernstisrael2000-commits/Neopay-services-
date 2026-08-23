@@ -786,8 +786,9 @@ router.get('/api/admin/transactions', requireDb, requireAdminSecret, async (_req
   }
 });
 
-router.get('/api/client/transactions/:clientId', requireDb, async (req, res) => {
+router.get('/api/client/transactions/:clientId', requireDb, requireClientSession, async (req, res) => {
   try {
+    if (req.params.clientId !== res.locals.clientSession.clientId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('client_transactions')
       .where('clientId', '==', req.params.clientId)
       .orderBy('createdAt', 'desc')
@@ -5746,9 +5747,9 @@ function cryptoRequestStatusMessage(status: string, symbol: string, note?: strin
 }
 
 // ─── Commandes crypto manuelles — catalogue séparé ────────────────────────────
-// These records are deliberately independent from wallet accounting, deposits,
-// and the former crypto_market_* collections. Creating an order never performs
-// a payment or blockchain transfer.
+// These records remain separate from deposits and external blockchain handling.
+// The Rena-balance debit and any refund are nevertheless recorded atomically
+// with the order so no browser-supplied amount can alter wallet accounting.
 function normalizeCryptoAsset(input: any): any {
   const name = typeof input?.name === 'string' ? input.name.trim() : '';
   const symbol = typeof input?.symbol === 'string' ? input.symbol.trim().toUpperCase() : '';
@@ -5758,7 +5759,11 @@ function normalizeCryptoAsset(input: any): any {
     throw new Error('Les informations de la crypto sont invalides.');
   }
   if (logo && !/^https:\/\//i.test(logo)) throw new Error('Le logo doit utiliser une URL HTTPS.');
-  return { name, symbol, coingeckoId, logo, enabled: input?.enabled !== false };
+  const feePercent = Number(input?.feePercent ?? 2);
+  if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 30) {
+    throw new Error('Les frais doivent être compris entre 0 % et 30 %.');
+  }
+  return { name, symbol, coingeckoId, logo, feePercent: Number(feePercent.toFixed(4)), enabled: input?.enabled !== false };
 }
 
 function normalizeCryptoNetwork(input: any, crypto: any): any {
@@ -5805,8 +5810,8 @@ function orderStatusMessage(status: string, symbol: string, note?: string): { ti
   if (status === 'payment_confirmed') return { title: '✅ Paiement confirmé', message: `Le paiement de votre commande ${symbol} est confirmé.${suffix}` };
   if (status === 'processing') return { title: '🔄 Commande crypto en cours', message: `Votre commande ${symbol} est en préparation par notre équipe.${suffix}` };
   if (status === 'completed') return { title: '✅ Commande crypto finalisée', message: `Votre commande ${symbol} est finalisée. Consultez le hash dans votre suivi.${suffix}` };
-  if (status === 'cancelled') return { title: 'Commande crypto annulée', message: `Votre commande ${symbol} a été annulée.${suffix}` };
-  return { title: '❌ Commande crypto refusée', message: `Votre commande ${symbol} n’a pas pu être finalisée.${suffix}` };
+  if (status === 'cancelled') return { title: 'Commande crypto annulée', message: `Votre commande ${symbol} a été annulée. Votre solde Rena a été remboursé automatiquement.${suffix}` };
+  return { title: '❌ Commande crypto refusée', message: `Votre commande ${symbol} n’a pas pu être finalisée. Votre solde Rena a été remboursé automatiquement.${suffix}` };
 }
 
 const DEFAULT_CRYPTO_ASSETS = [
@@ -5828,7 +5833,7 @@ async function ensureDefaultCryptoAssets(): Promise<void> {
   for (const asset of DEFAULT_CRYPTO_ASSETS) {
     batch.set(adminDb.collection('cryptos').doc(asset.id), {
       name: asset.name, symbol: asset.symbol, logo: '', coingeckoId: asset.coingeckoId,
-      enabled: true, priceUSD: null, starterAsset: true,
+      enabled: true, priceUSD: null, feePercent: 2, starterAsset: true,
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
   }
@@ -5892,18 +5897,20 @@ router.post('/api/client/crypto-orders', requireDb, requireClientSession, async 
       return res.status(400).json({ error: 'Les informations de la commande sont incomplètes.' });
     }
     const userId = String(res.locals.clientSession.clientId);
-    const clientData = res.locals.clientRecord.data() || {};
     const orderRef = adminDb.collection('crypto_orders').doc();
     const auditRef = adminDb.collection('crypto_order_audit').doc();
+    const paymentTransactionRef = adminDb.collection('client_transactions').doc();
     const idempotencyRef = adminDb.collection('crypto_order_idempotency').doc(createHash('sha256').update(`${userId}|${idempotencyKey}`).digest('hex'));
+    const clientRef = adminDb.collection('clients').doc(userId);
     let createdOrder: any;
     let existingOrderId = '';
 
     await adminDb.runTransaction(async transaction => {
-      const [cryptoSnap, networkSnap, idempotencySnap] = await Promise.all([
+      const [cryptoSnap, networkSnap, idempotencySnap, clientSnap] = await Promise.all([
         transaction.get(adminDb.collection('cryptos').doc(cryptoId)),
         transaction.get(adminDb.collection('crypto_networks').doc(networkId)),
         transaction.get(idempotencyRef),
+        transaction.get(clientRef),
       ]);
       if (idempotencySnap.exists) {
         existingOrderId = String(idempotencySnap.data()?.orderId || '');
@@ -5912,10 +5919,22 @@ router.post('/api/client/crypto-orders', requireDb, requireClientSession, async 
       }
       if (!cryptoSnap.exists || cryptoSnap.data()?.enabled !== true) throw new Error('Cette crypto n’est plus disponible.');
       if (!networkSnap.exists) throw new Error('Ce réseau n’est plus disponible.');
+      if (!clientSnap.exists || clientSnap.data()?.status === 'blocked') throw new Error('Compte client indisponible.');
       const cryptoAsset: any = { id: cryptoSnap.id, ...(cryptoSnap.data() || {}) };
       const network: any = { id: networkSnap.id, ...(networkSnap.data() || {}) };
       if (network.cryptoId !== cryptoAsset.id || network.enabled !== true) throw new Error('Ce réseau n’est pas disponible pour cette crypto.');
       if (!validateCryptoDestination(walletAddress, network.networkCode)) throw new Error(`Cette adresse ne correspond pas au réseau ${network.networkName}.`);
+      const priceUSD = Number(cryptoAsset.priceUSD);
+      const feePercent = Number(cryptoAsset.feePercent ?? 2);
+      if (!Number.isFinite(priceUSD) || priceUSD <= 0) throw new Error('Le prix indicatif de cette crypto est indisponible. Réessayez après une synchronisation.');
+      if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 30) throw new Error('La configuration des frais de cette crypto est invalide.');
+      const cryptoSubtotalUSD = Number((amount * priceUSD).toFixed(2));
+      const feeAmountUSD = Number((cryptoSubtotalUSD * feePercent / 100).toFixed(2));
+      const totalUSD = Number((cryptoSubtotalUSD + feeAmountUSD).toFixed(2));
+      if (!Number.isFinite(totalUSD) || totalUSD <= 0 || totalUSD > 10_000_000) throw new Error('Le total de la commande est invalide.');
+      const clientData = clientSnap.data() || {};
+      const balance = Number(clientData.balance);
+      if (!Number.isFinite(balance) || balance < totalUSD) throw new Error(`Solde insuffisant. Cette commande nécessite ${totalUSD.toFixed(2)} USD.`);
       const normalizedAddress = canonicalCryptoAddress(walletAddress, network.networkCode);
       const dedupeId = createHash('sha256').update(`${userId}|${cryptoAsset.id}|${network.id}|${normalizedAddress}`).digest('hex');
       const dedupeRef = adminDb.collection('crypto_order_dedupes').doc(dedupeId);
@@ -5930,33 +5949,43 @@ router.post('/api/client/crypto-orders', requireDb, requireClientSession, async 
         cryptoId: cryptoAsset.id, cryptoName: cryptoAsset.name, cryptoSymbol: cryptoAsset.symbol, cryptoLogo: cryptoAsset.logo || '',
         networkId: network.id, networkName: network.networkName, networkCode: network.networkCode,
         amount: Number(amount.toFixed(12)), walletAddress, normalizedWalletAddress: normalizedAddress,
-        status: 'pending', priceUSD: Number.isFinite(Number(cryptoAsset.priceUSD)) ? Number(cryptoAsset.priceUSD) : null,
-        priceUpdatedAt: cryptoAsset.priceUpdatedAt || null, consentedAt: FieldValue.serverTimestamp(),
+        status: 'payment_confirmed', paymentStatus: 'confirmed',
+        priceUSD, priceUpdatedAt: cryptoAsset.priceUpdatedAt || null,
+        cryptoSubtotalUSD, feePercent, feeAmountUSD, totalUSD,
+        paymentTransactionId: paymentTransactionRef.id, consentedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), dedupeId,
       };
       transaction.set(orderRef, createdOrder);
+      transaction.update(clientRef, { balance: FieldValue.increment(-totalUSD), updatedAt: FieldValue.serverTimestamp() });
+      transaction.set(paymentTransactionRef, {
+        clientId: userId, clientName: createdOrder.clientName, type: 'crypto_purchase',
+        amount: totalUSD, usdAmount: totalUSD, status: 'completed', method: 'rena_balance',
+        description: `Achat crypto ${createdOrder.amount} ${createdOrder.cryptoSymbol} · ${orderNumber}`,
+        cryptoOrderId: orderRef.id, orderNumber, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
       transaction.set(dedupeRef, { active: true, orderId: orderRef.id, userId, cryptoId, networkId, updatedAt: FieldValue.serverTimestamp() });
       transaction.set(idempotencyRef, { orderId: orderRef.id, userId, createdAt: FieldValue.serverTimestamp() });
-      transaction.set(auditRef, { orderId: orderRef.id, userId, actorType: 'client', actorId: userId, action: 'created', fromStatus: null, toStatus: 'pending', createdAt: FieldValue.serverTimestamp() });
+      transaction.set(auditRef, { orderId: orderRef.id, userId, actorType: 'client', actorId: userId, action: 'created_and_debited', fromStatus: null, toStatus: 'payment_confirmed', paymentTransactionId: paymentTransactionRef.id, totalUSD, createdAt: FieldValue.serverTimestamp() });
     });
 
     if (existingOrderId) {
       const existing = await adminDb.collection('crypto_orders').doc(existingOrderId).get();
       if (!existing.exists) return res.status(409).json({ error: 'Commande en cours de synchronisation. Réessayez dans un instant.' });
-      return res.json({ order: clientCryptoOrder(serializeDoc(existing)), idempotent: true });
+      const currentClient = await clientRef.get();
+      return res.json({ order: clientCryptoOrder(serializeDoc(existing)), balanceAfter: Number(currentClient.data()?.balance || 0), idempotent: true });
     }
     await adminDb.collection('admin_notifications').add({
       type: 'crypto_order', title: 'Nouvelle commande crypto',
       message: `${createdOrder.clientName} demande ${createdOrder.amount} ${createdOrder.cryptoSymbol} sur ${createdOrder.networkName}.`,
       clientId: userId, orderId: orderRef.id, read: false, createdAt: FieldValue.serverTimestamp(),
     });
-    sendFcmToClient(userId, '✅ Commande crypto reçue', 'Votre demande sera examinée manuellement par notre équipe.', { type: 'crypto_order', orderId: orderRef.id });
-    pushClientEvent(userId, 'crypto_order_created', { id: orderRef.id, status: 'pending' });
-    const created = await orderRef.get();
-    res.status(201).json({ order: clientCryptoOrder(serializeDoc(created)) });
+    sendFcmToClient(userId, '✅ Paiement crypto confirmé', 'Votre solde Rena a été débité. Notre équipe prépare votre envoi.', { type: 'crypto_order', orderId: orderRef.id });
+    pushClientEvent(userId, 'crypto_order_created', { id: orderRef.id, status: 'payment_confirmed' });
+    const [created, currentClient] = await Promise.all([orderRef.get(), clientRef.get()]);
+    res.status(201).json({ order: clientCryptoOrder(serializeDoc(created)), balanceAfter: Number(currentClient.data()?.balance || 0) });
   } catch (e: any) {
     const message = e.message || 'Impossible de créer la commande.';
-    res.status(/incomplètes|disponible|adresse ne correspond|commande active|invalide/.test(message) ? 400 : 500).json({ error: message });
+    res.status(/incomplètes|disponible|adresse ne correspond|commande active|invalide|insuffisant|indisponible|compte client/.test(message) ? 400 : 500).json({ error: message });
   }
 });
 
@@ -6017,6 +6046,7 @@ router.patch('/api/admin/crypto-orders/orders/:id', requireDb, requireAdminSecre
     if (!CRYPTO_ORDER_STATUSES.includes(nextStatus as any)) return res.status(400).json({ error: 'Statut invalide.' });
     const orderRef = adminDb.collection('crypto_orders').doc(req.params.id);
     const auditRef = adminDb.collection('crypto_order_audit').doc();
+    const refundTransactionRef = adminDb.collection('client_transactions').doc();
     let updated: any;
     await adminDb.runTransaction(async transaction => {
       const snap = await transaction.get(orderRef);
@@ -6030,8 +6060,22 @@ router.patch('/api/admin/crypto-orders/orders/:id', requireDb, requireAdminSecre
         completed: [], cancelled: [], rejected: [],
       };
       if (!allowed[current.status]?.includes(nextStatus)) throw new Error('Cette transition de statut n’est pas autorisée.');
+      if (nextStatus === 'payment_confirmed' && !current.paymentTransactionId) {
+        throw new Error('Cette commande historique n’a pas été réglée depuis le solde Rena.');
+      }
       if (nextStatus === 'completed' && !validateCryptoTransactionHash(transactionHash, String(current.networkCode || ''))) {
         throw new Error('Le hash de transaction est requis et doit correspondre au réseau de la commande.');
+      }
+      const requiresRefund = ['cancelled', 'rejected'].includes(nextStatus)
+        && current.paymentStatus === 'confirmed'
+        && typeof current.paymentTransactionId === 'string'
+        && !current.refundTransactionId;
+      let refundAmount = 0;
+      if (requiresRefund) {
+        refundAmount = Number(current.totalUSD);
+        if (!Number.isFinite(refundAmount) || refundAmount <= 0) throw new Error('Le montant du remboursement est invalide.');
+        const clientSnap = await transaction.get(adminDb.collection('clients').doc(String(current.userId)));
+        if (!clientSnap.exists) throw new Error('Client introuvable pour le remboursement.');
       }
       const updates: any = {
         status: nextStatus, updatedAt: FieldValue.serverTimestamp(), processedBy: res.locals.adminSession?.adminId || '',
@@ -6039,12 +6083,30 @@ router.patch('/api/admin/crypto-orders/orders/:id', requireDb, requireAdminSecre
         ...(nextStatus === 'completed' ? { completedAt: FieldValue.serverTimestamp() } : {}),
         ...(nextStatus === 'cancelled' ? { cancelledAt: FieldValue.serverTimestamp() } : {}),
         ...(nextStatus === 'rejected' ? { rejectedAt: FieldValue.serverTimestamp() } : {}),
+        ...(requiresRefund ? { paymentStatus: 'refunded', refundTransactionId: refundTransactionRef.id, refundedAt: FieldValue.serverTimestamp() } : {}),
       };
       transaction.update(orderRef, updates);
+      if (requiresRefund) {
+        const clientRef = adminDb.collection('clients').doc(String(current.userId));
+        transaction.update(clientRef, { balance: FieldValue.increment(refundAmount), updatedAt: FieldValue.serverTimestamp() });
+        transaction.set(refundTransactionRef, {
+          clientId: current.userId, clientName: current.clientName || '', type: 'crypto_refund',
+          amount: refundAmount, usdAmount: refundAmount, status: 'completed', method: 'rena_balance',
+          description: `Remboursement commande crypto ${current.orderNumber || orderRef.id}`,
+          cryptoOrderId: orderRef.id, orderNumber: current.orderNumber || '', relatedTransactionId: current.paymentTransactionId,
+          createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
       if (['completed', 'cancelled', 'rejected'].includes(nextStatus) && current.dedupeId) {
         transaction.update(adminDb.collection('crypto_order_dedupes').doc(current.dedupeId), { active: false, updatedAt: FieldValue.serverTimestamp() });
       }
-      transaction.set(auditRef, { orderId: orderRef.id, userId: current.userId, actorType: 'admin', actorId: res.locals.adminSession?.adminId || '', action: 'status_changed', fromStatus: current.status, toStatus: nextStatus, note: adminNote || null, transactionHash: transactionHash || null, createdAt: FieldValue.serverTimestamp() });
+      transaction.set(auditRef, {
+        orderId: orderRef.id, userId: current.userId, actorType: 'admin', actorId: res.locals.adminSession?.adminId || '',
+        action: requiresRefund ? 'status_changed_and_refunded' : 'status_changed',
+        fromStatus: current.status, toStatus: nextStatus, note: adminNote || null, transactionHash: transactionHash || null,
+        ...(requiresRefund ? { refundTransactionId: refundTransactionRef.id, refundAmount } : {}),
+        createdAt: FieldValue.serverTimestamp(),
+      });
       updated = { id: orderRef.id, ...current, ...updates };
     });
     const notification = orderStatusMessage(nextStatus, updated.cryptoSymbol || 'crypto', adminNote);

@@ -369,18 +369,24 @@ export const useClientTransactions = (clientId: string | null) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!clientId) { setLoading(false); return; }
-    const q = query(
-      collection(db, 'client_transactions'),
-      where('clientId', '==', clientId),
-      orderBy('createdAt', 'desc'),
-      limit(100)
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientTransaction)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsubscribe();
+    if (!clientId) { setTransactions([]); setLoading(false); return; }
+    let cancelled = false;
+    const loadTransactions = async () => {
+      try {
+        const response = await fetch(`/api/client/transactions/${encodeURIComponent(clientId)}`, { credentials: 'include' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Impossible de charger les transactions.');
+        if (!cancelled) setTransactions((payload.transactions || []).map(fromApi<ClientTransaction>));
+      } catch {
+        if (!cancelled) setTransactions([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    setLoading(true);
+    void loadTransactions();
+    const interval = window.setInterval(() => { void loadTransactions(); }, 20_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
   }, [clientId]);
 
   return { transactions, loading };
