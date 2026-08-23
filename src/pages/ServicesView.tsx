@@ -1,16 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import * as LucideIcons from 'lucide-react';
 import {
-  Globe, Package, Truck, ArrowRight, ExternalLink,
+  Globe, Package, Truck, ArrowRight, ExternalLink, ArrowLeft,
   Zap, ShieldCheck, Clock, Phone, MessageCircle,
+  Coins, ChevronRight,
 } from 'lucide-react';
 import { useOnlineServices } from '../services/parcelService';
 import { useSettingsCtx } from '../contexts/SettingsContext';
+import { Client } from '../types';
+import CryptoMarketView from '../components/CryptoMarketView';
+import cryptoServiceImage from '../../attached_assets/96ede975caf4ec2657e6906958f42af6_1787453007148.jpg';
 
 interface ServicesViewProps {
   onTrackingClick: () => void;
   onViewChange: (view: any) => void;
+  loggedClient?: Client | null;
+  onRequestAuth?: () => void;
 }
 
 const DEFAULT_SERVICES = [
@@ -47,9 +53,10 @@ const SERVICE_COLORS = [
   'from-cyan-500 to-blue-600',
 ];
 
-export default function ServicesView({ onTrackingClick, onViewChange }: ServicesViewProps) {
+export default function ServicesView({ onTrackingClick, onViewChange, loggedClient, onRequestAuth }: ServicesViewProps) {
   const { services: rawServices } = useOnlineServices();
   const { settings } = useSettingsCtx();
+  const [showCryptoMarket, setShowCryptoMarket] = useState(false);
 
   const activeServices = rawServices.filter(s => s.active);
   const displayServices = activeServices.length > 0 ? activeServices : DEFAULT_SERVICES;
@@ -64,6 +71,35 @@ export default function ServicesView({ onTrackingClick, onViewChange }: Services
     const num = settings?.whatsappAdminNumber || '+50944813185';
     window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements sur vos services.')}`, '_blank');
   };
+
+  if (showCryptoMarket) {
+    return (
+      <div className="min-h-screen bg-slate-50 pb-24">
+        <div className="relative overflow-hidden bg-slate-950 px-4 pb-8 pt-5">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_80%_10%,rgba(234,179,8,0.28),transparent_34%),radial-gradient(circle_at_0%_100%,rgba(14,165,233,0.22),transparent_42%)]" />
+          <div className="relative mx-auto max-w-3xl">
+            <button onClick={() => setShowCryptoMarket(false)} className="mb-6 inline-flex items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-black text-white transition-colors hover:bg-white/20">
+              <ArrowLeft className="h-4 w-4" /> Retour aux services
+            </button>
+            <div className="flex items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex items-center gap-2 text-amber-300">
+                  <Coins className="h-4 w-4" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.18em]">Service Rena</span>
+                </div>
+                <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Marché Crypto</h1>
+                <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300">Choisissez votre actif, renseignez votre adresse et notre équipe traite votre demande en toute sécurité.</p>
+              </div>
+              <img src={cryptoServiceImage} alt="Cryptomonnaies proposées par Rena" className="h-28 w-28 shrink-0 rounded-3xl border border-white/15 object-cover shadow-2xl shadow-black/50 sm:h-36 sm:w-36" />
+            </div>
+          </div>
+        </div>
+        <div className="mx-auto max-w-3xl px-4 py-6">
+          <CryptoMarketView client={loggedClient || null} onRequestAuth={onRequestAuth || (() => undefined)} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -99,6 +135,34 @@ export default function ServicesView({ onTrackingClick, onViewChange }: Services
 
       {/* Services cards — floated over header */}
       <div className="max-w-3xl mx-auto px-4 -mt-4 space-y-4">
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          onClick={() => setShowCryptoMarket(true)}
+          className="group relative min-h-48 w-full overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-left shadow-xl shadow-slate-950/15 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl"
+        >
+          <div className="absolute inset-y-0 right-0 w-[48%] sm:w-[44%]">
+            <img src={cryptoServiceImage} alt="" className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/50 to-transparent" />
+          </div>
+          <div className="relative flex min-h-48 max-w-[68%] flex-col justify-between p-5 sm:p-6">
+            <div>
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-400/15 text-amber-300">
+                <Coins className="h-5 w-5" />
+              </div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-black text-white sm:text-xl">Marché Crypto</h2>
+                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-950">Nouveau</span>
+              </div>
+              <p className="max-w-xs text-xs font-medium leading-relaxed text-slate-300 sm:text-sm">Achetez des cryptomonnaies via une demande traitée par notre équipe.</p>
+            </div>
+            <div className="mt-5 flex items-center gap-2 text-sm font-black text-amber-300">
+              Découvrir le service <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </div>
+        </motion.button>
+
         {displayServices.map((svc: any, i: number) => {
           const IconComp = (LucideIcons as any)[svc.icon] || Package;
           const colorClass = svc.color || SERVICE_COLORS[i % SERVICE_COLORS.length];

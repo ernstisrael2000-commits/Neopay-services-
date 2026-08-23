@@ -433,6 +433,8 @@ function AppInner() {
                     <ServicesView
                       onTrackingClick={() => handleViewChange('tracking')}
                       onViewChange={handleViewChange}
+                      loggedClient={loggedClient}
+                      onRequestAuth={() => setShowAuthModal(true)}
                     />
                   )}
 

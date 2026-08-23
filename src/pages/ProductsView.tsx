@@ -5,7 +5,7 @@ import * as LucideIcons from 'lucide-react';
 import {
   ShoppingBag, CreditCard, Gamepad2, MessageCircle, ArrowRight,
   Info, Wallet, Smartphone, Landmark, Zap, ShieldCheck,
-  DollarSign, Clock, Package, Star, QrCode, Loader2, X, Gift, Coins
+  DollarSign, Clock, Package, Star, QrCode, Loader2, X, Gift
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -19,7 +19,6 @@ import {
 import { useProducts, useCardTopups } from '../services/parcelService';
 import GamesTab from '../components/GamesTab';
 import GiftCardsTab from '../components/GiftCardsTab';
-import CryptoMarketView from '../components/CryptoMarketView';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { submitClientPurchase, useClientData, useClientPendingPurchase, validatePromoCode, usePromoCode } from '../services/clientService';
 import { ProductGridSkeleton } from '../components/skeletons/ProductGridSkeleton';
@@ -90,7 +89,7 @@ interface ProductsViewProps {
   onProductDetailChange?: (open: boolean) => void;
 }
 
-type TabKey = 'cards' | 'games' | 'products' | 'giftcards' | 'crypto';
+type TabKey = 'cards' | 'games' | 'products' | 'giftcards';
 
 export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth, onViewChange, onProductDetailChange }: ProductsViewProps) {
   const { products, loading: productsLoading } = useProducts();
@@ -219,7 +218,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
     { key: 'products',  label: 'Produits',    icon: <ShoppingBag className="h-4 w-4" /> },
     { key: 'games',     label: 'Jeux',        icon: <Gamepad2 className="h-4 w-4" /> },
     { key: 'giftcards', label: 'Gift Cards',  icon: <Gift className="h-4 w-4" /> },
-    { key: 'crypto',    label: 'Crypto',      icon: <Coins className="h-4 w-4" /> },
     { key: 'cards',     label: 'Cartes',      icon: <CreditCard className="h-4 w-4" /> },
   ];
 
@@ -459,13 +457,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                   ))}
                 </div>
               )}
-            </motion.div>
-          )}
-
-          {/* ── CRYPTO MARKET TAB ── */}
-          {activeTab === 'crypto' && (
-            <motion.div key="crypto" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28 }}>
-              <CryptoMarketView client={effectiveClient || null} onRequestAuth={() => onRequestAuth?.()} />
             </motion.div>
           )}
 
