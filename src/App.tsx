@@ -5,6 +5,7 @@ import FormationsNavbar from './layouts/FormationsNavbar';
 import LoadingScreen from './components/LoadingScreen';
 import { PageSkeleton } from './components/skeletons/PageSkeleton';
 import { SettingsProvider, useSettingsCtx } from './contexts/SettingsContext';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 
 // Heavy pages — loaded only when the user navigates to them
 const HomeView = lazy(() => import('./pages/HomeView'));
@@ -24,7 +25,6 @@ const AffiliateLogin = lazy(() => import('./components/AffiliateLogin'));
 const AgentLogin = lazy(() => import('./components/AgentLogin'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const TeacherLogin = lazy(() => import('./components/TeacherLogin'));
-const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import UserAuthModal from './components/UserAuthModal';
@@ -537,7 +537,7 @@ function AppInner() {
           onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
         />
 
-        <Suspense fallback={null}><PWAInstallPrompt /></Suspense>
+        <PWAInstallPrompt />
       </div>
     </ErrorBoundary>
   );
