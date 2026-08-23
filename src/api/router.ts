@@ -5606,7 +5606,20 @@ router.post('/api/client/update-google-uid', requireDb, async (req, res) => {
 // accounting. A request merely records a manual fulfillment instruction.
 const CRYPTO_MARKET_STATUSES = ['pending', 'processing', 'sent', 'rejected'] as const;
 const SUPPORTED_CRYPTO_NETWORKS = ['TRC20', 'ERC20', 'BEP20', 'BTC'] as const;
+const CRYPTO_ORDER_STATUSES = ['pending', 'payment_pending', 'payment_confirmed', 'processing', 'completed', 'cancelled', 'rejected'] as const;
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function normalizeCryptoNetworkCode(value: unknown): 'TRC20' | 'ERC20' | 'BEP20' | 'BTC' | 'SOL' | '' {
+  const normalized = typeof value === 'string' ? value.trim().toUpperCase().replace(/[\s_-]/g, '') : '';
+  const aliases: Record<string, 'TRC20' | 'ERC20' | 'BEP20' | 'BTC' | 'SOL'> = {
+    TRC20: 'TRC20', TRON: 'TRC20',
+    ERC20: 'ERC20', ETHEREUM: 'ERC20', ETH: 'ERC20',
+    BEP20: 'BEP20', BSC: 'BEP20', BINANCESMARTCHAIN: 'BEP20',
+    BTC: 'BTC', BITCOIN: 'BTC',
+    SOL: 'SOL', SOLANA: 'SOL',
+  };
+  return aliases[normalized] || '';
+}
 
 function normalizeCryptoMarketOffer(input: any): any {
   const assetName = typeof input?.assetName === 'string' ? input.assetName.trim() : '';
@@ -5701,24 +5714,27 @@ function isValidBitcoinBech32(value: string): boolean {
 
 function validateCryptoDestination(address: string, networkCode: string): boolean {
   if (!address || address.length < 20 || address.length > 160 || /\s/.test(address)) return false;
-  const normalized = networkCode.toUpperCase();
+  const normalized = normalizeCryptoNetworkCode(networkCode);
   if (normalized === 'TRC20') return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address) && isBase58Check(address, 0x41);
   if (normalized === 'ERC20' || normalized === 'BEP20') return /^0x[a-fA-F0-9]{40}$/.test(address);
   if (normalized === 'BTC') return isValidBitcoinBech32(address) || (/^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/.test(address) && (isBase58Check(address, 0x00) || isBase58Check(address, 0x05)));
+  if (normalized === 'SOL') return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) && decodeBase58(address)?.length === 32;
   return false;
 }
 
 function validateCryptoTransactionHash(hash: string, networkCode: string): boolean {
-  const normalized = networkCode.toUpperCase();
+  const normalized = normalizeCryptoNetworkCode(networkCode);
   if (normalized === 'ERC20' || normalized === 'BEP20') return /^0x[a-fA-F0-9]{64}$/.test(hash);
   if (normalized === 'TRC20' || normalized === 'BTC') return /^[a-fA-F0-9]{64}$/.test(hash);
+  if (normalized === 'SOL') return /^[1-9A-HJ-NP-Za-km-z]{43,88}$/.test(hash);
   return false;
 }
 
 function canonicalCryptoAddress(address: string, networkCode: string): string {
   // EVM addresses are case-insensitive. Bitcoin bech32 is normalized to lower
   // case, while Base58 and Tron remain case-sensitive by design.
-  if (networkCode === 'ERC20' || networkCode === 'BEP20' || (networkCode === 'BTC' && address.startsWith('bc1'))) return address.toLowerCase();
+  const normalized = normalizeCryptoNetworkCode(networkCode);
+  if (normalized === 'ERC20' || normalized === 'BEP20' || (normalized === 'BTC' && address.startsWith('bc1'))) return address.toLowerCase();
   return address;
 }
 
@@ -5728,6 +5744,394 @@ function cryptoRequestStatusMessage(status: string, symbol: string, note?: strin
   if (status === 'sent') return { title: '✅ Crypto envoyée', message: `Votre demande ${symbol} a été finalisée. Vérifiez le hash de transaction dans son suivi.${suffix}` };
   return { title: '❌ Demande crypto refusée', message: `Votre demande ${symbol} n’a pas pu être finalisée.${suffix}` };
 }
+
+// ─── Commandes crypto manuelles — catalogue séparé ────────────────────────────
+// These records are deliberately independent from wallet accounting, deposits,
+// and the former crypto_market_* collections. Creating an order never performs
+// a payment or blockchain transfer.
+function normalizeCryptoAsset(input: any): any {
+  const name = typeof input?.name === 'string' ? input.name.trim() : '';
+  const symbol = typeof input?.symbol === 'string' ? input.symbol.trim().toUpperCase() : '';
+  const coingeckoId = typeof input?.coingeckoId === 'string' ? input.coingeckoId.trim().toLowerCase() : '';
+  const logo = typeof input?.logo === 'string' ? input.logo.trim().slice(0, 500) : '';
+  if (!name || name.length > 80 || !/^[A-Z0-9._-]{2,16}$/.test(symbol) || !/^[a-z0-9-]{1,120}$/.test(coingeckoId)) {
+    throw new Error('Les informations de la crypto sont invalides.');
+  }
+  if (logo && !/^https:\/\//i.test(logo)) throw new Error('Le logo doit utiliser une URL HTTPS.');
+  return { name, symbol, coingeckoId, logo, enabled: input?.enabled !== false };
+}
+
+function normalizeCryptoNetwork(input: any, crypto: any): any {
+  const networkName = typeof input?.networkName === 'string' ? input.networkName.trim() : '';
+  const requestedCode = typeof input?.networkCode === 'string' ? input.networkCode.trim().toUpperCase() : '';
+  const canonicalCode = normalizeCryptoNetworkCode(requestedCode);
+  const walletAddress = typeof input?.walletAddress === 'string' ? input.walletAddress.trim() : '';
+  if (!networkName || networkName.length > 80 || !canonicalCode || !walletAddress || !validateCryptoDestination(walletAddress, canonicalCode)) {
+    throw new Error('Le réseau ou l’adresse wallet administrateur est invalide.');
+  }
+  return {
+    cryptoId: String(crypto.id || input.cryptoId || ''),
+    cryptoSymbol: String(crypto.symbol || '').toUpperCase(),
+    networkName,
+    // Store a canonical code; the human label remains networkName.
+    networkCode: canonicalCode,
+    walletAddress: canonicalCryptoAddress(walletAddress, canonicalCode),
+    enabled: input?.enabled !== false,
+  };
+}
+
+function publicCryptoNetwork(network: any): any {
+  const { walletAddress: _walletAddress, ...publicNetwork } = network;
+  return publicNetwork;
+}
+
+function clientCryptoOrder(order: any): any {
+  // Internal settlement metadata must never cross the client API boundary.
+  // `walletAddress` is intentionally retained: it is the client's requested
+  // receiving address, whereas networkWalletAddress is an operational address.
+  const {
+    networkWalletAddress: _networkWalletAddress,
+    normalizedWalletAddress: _normalizedWalletAddress,
+    dedupeId: _dedupeId,
+    processedBy: _processedBy,
+    ...clientOrder
+  } = order;
+  return clientOrder;
+}
+
+function orderStatusMessage(status: string, symbol: string, note?: string): { title: string; message: string } {
+  const suffix = note ? ` Note : ${note}` : '';
+  if (status === 'payment_pending') return { title: '⏳ Paiement à confirmer', message: `Votre commande ${symbol} attend la confirmation de paiement.${suffix}` };
+  if (status === 'payment_confirmed') return { title: '✅ Paiement confirmé', message: `Le paiement de votre commande ${symbol} est confirmé.${suffix}` };
+  if (status === 'processing') return { title: '🔄 Commande crypto en cours', message: `Votre commande ${symbol} est en préparation par notre équipe.${suffix}` };
+  if (status === 'completed') return { title: '✅ Commande crypto finalisée', message: `Votre commande ${symbol} est finalisée. Consultez le hash dans votre suivi.${suffix}` };
+  if (status === 'cancelled') return { title: 'Commande crypto annulée', message: `Votre commande ${symbol} a été annulée.${suffix}` };
+  return { title: '❌ Commande crypto refusée', message: `Votre commande ${symbol} n’a pas pu être finalisée.${suffix}` };
+}
+
+async function getCryptoCatalog(includeDisabled = false): Promise<{ cryptos: any[]; networks: any[] }> {
+  const [cryptoSnap, networkSnap] = await Promise.all([
+    adminDb.collection('cryptos').get(),
+    adminDb.collection('crypto_networks').get(),
+  ]);
+  const cryptos = cryptoSnap.docs.map(serializeDoc)
+    .filter(crypto => includeDisabled || crypto.enabled === true)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const cryptoIds = new Set(cryptos.map(crypto => crypto.id));
+  const networks = networkSnap.docs.map(serializeDoc)
+    .filter(network => cryptoIds.has(network.cryptoId) && (includeDisabled || network.enabled === true))
+    .sort((a, b) => `${a.cryptoSymbol}-${a.networkName}`.localeCompare(`${b.cryptoSymbol}-${b.networkName}`));
+  return { cryptos, networks };
+}
+
+router.get('/api/crypto-orders/catalog', requireDb, async (_req, res) => {
+  try {
+    const { cryptos, networks } = await getCryptoCatalog(false);
+    res.json({ cryptos, networks: networks.map(publicCryptoNetwork) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Impossible de charger le catalogue crypto.' });
+  }
+});
+
+router.get('/api/client/crypto-orders', requireDb, requireClientSession, async (_req, res) => {
+  try {
+    const userId = String(res.locals.clientSession.clientId);
+    const snap = await adminDb.collection('crypto_orders').where('userId', '==', userId).limit(200).get();
+    res.json({ orders: snap.docs.map(doc => clientCryptoOrder(serializeDoc(doc))).sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0)) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Impossible de charger vos commandes crypto.' });
+  }
+});
+
+router.get('/api/client/crypto-orders/:id', requireDb, requireClientSession, async (req, res) => {
+  try {
+    const order = await adminDb.collection('crypto_orders').doc(req.params.id).get();
+    if (!order.exists || order.data()?.userId !== res.locals.clientSession.clientId) return res.status(404).json({ error: 'Commande introuvable.' });
+    res.json({ order: clientCryptoOrder(serializeDoc(order)) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Impossible de charger cette commande.' });
+  }
+});
+
+router.post('/api/client/crypto-orders', requireDb, requireClientSession, async (req, res) => {
+  try {
+    const cryptoId = typeof req.body?.cryptoId === 'string' ? req.body.cryptoId.trim() : '';
+    const networkId = typeof req.body?.networkId === 'string' ? req.body.networkId.trim() : '';
+    const amount = Number(req.body?.amount);
+    const walletAddress = typeof req.body?.walletAddress === 'string' ? req.body.walletAddress.trim() : '';
+    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+    if (!cryptoId || !networkId || !Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000 || req.body?.consent !== true || !/^[A-Za-z0-9_-]{16,128}$/.test(idempotencyKey)) {
+      return res.status(400).json({ error: 'Les informations de la commande sont incomplètes.' });
+    }
+    const userId = String(res.locals.clientSession.clientId);
+    const clientData = res.locals.clientRecord.data() || {};
+    const orderRef = adminDb.collection('crypto_orders').doc();
+    const auditRef = adminDb.collection('crypto_order_audit').doc();
+    const idempotencyRef = adminDb.collection('crypto_order_idempotency').doc(createHash('sha256').update(`${userId}|${idempotencyKey}`).digest('hex'));
+    let createdOrder: any;
+    let existingOrderId = '';
+
+    await adminDb.runTransaction(async transaction => {
+      const [cryptoSnap, networkSnap, idempotencySnap] = await Promise.all([
+        transaction.get(adminDb.collection('cryptos').doc(cryptoId)),
+        transaction.get(adminDb.collection('crypto_networks').doc(networkId)),
+        transaction.get(idempotencyRef),
+      ]);
+      if (idempotencySnap.exists) {
+        existingOrderId = String(idempotencySnap.data()?.orderId || '');
+        if (existingOrderId) return;
+        throw new Error('Clé de commande invalide.');
+      }
+      if (!cryptoSnap.exists || cryptoSnap.data()?.enabled !== true) throw new Error('Cette crypto n’est plus disponible.');
+      if (!networkSnap.exists) throw new Error('Ce réseau n’est plus disponible.');
+      const cryptoAsset: any = { id: cryptoSnap.id, ...(cryptoSnap.data() || {}) };
+      const network: any = { id: networkSnap.id, ...(networkSnap.data() || {}) };
+      if (network.cryptoId !== cryptoAsset.id || network.enabled !== true) throw new Error('Ce réseau n’est pas disponible pour cette crypto.');
+      if (!validateCryptoDestination(walletAddress, network.networkCode)) throw new Error(`Cette adresse ne correspond pas au réseau ${network.networkName}.`);
+      const normalizedAddress = canonicalCryptoAddress(walletAddress, network.networkCode);
+      const dedupeId = createHash('sha256').update(`${userId}|${cryptoAsset.id}|${network.id}|${normalizedAddress}`).digest('hex');
+      const dedupeRef = adminDb.collection('crypto_order_dedupes').doc(dedupeId);
+      const dedupeSnap = await transaction.get(dedupeRef);
+      if (dedupeSnap.exists && dedupeSnap.data()?.active === true) throw new Error('Une commande active existe déjà pour cette adresse, cette crypto et ce réseau.');
+      const orderNumber = `CR-${Date.now().toString(36).toUpperCase()}-${orderRef.id.slice(0, 5).toUpperCase()}`;
+      createdOrder = {
+        id: orderRef.id, orderNumber, userId,
+        clientName: String(clientData.name || 'Client Rena').slice(0, 120),
+        phone: String(clientData.phone || clientData.phoneNumber || '').slice(0, 40),
+        email: String(clientData.email || '').slice(0, 160),
+        cryptoId: cryptoAsset.id, cryptoName: cryptoAsset.name, cryptoSymbol: cryptoAsset.symbol, cryptoLogo: cryptoAsset.logo || '',
+        networkId: network.id, networkName: network.networkName, networkCode: network.networkCode,
+        amount: Number(amount.toFixed(12)), walletAddress, normalizedWalletAddress: normalizedAddress,
+        status: 'pending', priceUSD: Number.isFinite(Number(cryptoAsset.priceUSD)) ? Number(cryptoAsset.priceUSD) : null,
+        priceUpdatedAt: cryptoAsset.priceUpdatedAt || null, consentedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), dedupeId,
+      };
+      transaction.set(orderRef, createdOrder);
+      transaction.set(dedupeRef, { active: true, orderId: orderRef.id, userId, cryptoId, networkId, updatedAt: FieldValue.serverTimestamp() });
+      transaction.set(idempotencyRef, { orderId: orderRef.id, userId, createdAt: FieldValue.serverTimestamp() });
+      transaction.set(auditRef, { orderId: orderRef.id, userId, actorType: 'client', actorId: userId, action: 'created', fromStatus: null, toStatus: 'pending', createdAt: FieldValue.serverTimestamp() });
+    });
+
+    if (existingOrderId) {
+      const existing = await adminDb.collection('crypto_orders').doc(existingOrderId).get();
+      if (!existing.exists) return res.status(409).json({ error: 'Commande en cours de synchronisation. Réessayez dans un instant.' });
+      return res.json({ order: clientCryptoOrder(serializeDoc(existing)), idempotent: true });
+    }
+    await adminDb.collection('admin_notifications').add({
+      type: 'crypto_order', title: 'Nouvelle commande crypto',
+      message: `${createdOrder.clientName} demande ${createdOrder.amount} ${createdOrder.cryptoSymbol} sur ${createdOrder.networkName}.`,
+      clientId: userId, orderId: orderRef.id, read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+    sendFcmToClient(userId, '✅ Commande crypto reçue', 'Votre demande sera examinée manuellement par notre équipe.', { type: 'crypto_order', orderId: orderRef.id });
+    pushClientEvent(userId, 'crypto_order_created', { id: orderRef.id, status: 'pending' });
+    const created = await orderRef.get();
+    res.status(201).json({ order: clientCryptoOrder(serializeDoc(created)) });
+  } catch (e: any) {
+    const message = e.message || 'Impossible de créer la commande.';
+    res.status(/incomplètes|disponible|adresse ne correspond|commande active|invalide/.test(message) ? 400 : 500).json({ error: message });
+  }
+});
+
+router.get('/api/admin/crypto-orders/catalog', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (_req, res) => {
+  try { res.json(await getCryptoCatalog(true)); }
+  catch (e: any) { res.status(500).json({ error: e.message || 'Impossible de charger le catalogue crypto.' }); }
+});
+
+router.post('/api/admin/crypto-orders/cryptos', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    const asset = normalizeCryptoAsset(req.body);
+    if (id) {
+      const ref = adminDb.collection('cryptos').doc(String(id));
+      if (!(await ref.get()).exists) return res.status(404).json({ error: 'Crypto introuvable.' });
+      await ref.update({ ...asset, updatedAt: FieldValue.serverTimestamp(), updatedBy: res.locals.adminSession?.adminId || '' });
+      return res.json({ id: ref.id });
+    }
+    const ref = await adminDb.collection('cryptos').add({ ...asset, priceUSD: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), createdBy: res.locals.adminSession?.adminId || '' });
+    res.status(201).json({ id: ref.id });
+  } catch (e: any) { res.status(400).json({ error: e.message || 'Crypto invalide.' }); }
+});
+
+router.post('/api/admin/crypto-orders/networks', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    const cryptoId = typeof req.body?.cryptoId === 'string' ? req.body.cryptoId : '';
+    const cryptoSnap = await adminDb.collection('cryptos').doc(cryptoId).get();
+    if (!cryptoSnap.exists) return res.status(400).json({ error: 'La crypto sélectionnée est introuvable.' });
+    const network = normalizeCryptoNetwork(req.body, { id: cryptoSnap.id, ...cryptoSnap.data() });
+    if (id) {
+      const ref = adminDb.collection('crypto_networks').doc(String(id));
+      if (!(await ref.get()).exists) return res.status(404).json({ error: 'Réseau introuvable.' });
+      await ref.update({ ...network, updatedAt: FieldValue.serverTimestamp(), updatedBy: res.locals.adminSession?.adminId || '' });
+      return res.json({ id: ref.id });
+    }
+    const ref = await adminDb.collection('crypto_networks').add({ ...network, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), createdBy: res.locals.adminSession?.adminId || '' });
+    res.status(201).json({ id: ref.id });
+  } catch (e: any) { res.status(400).json({ error: e.message || 'Réseau crypto invalide.' }); }
+});
+
+router.get('/api/admin/crypto-orders/orders', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    if (status && !CRYPTO_ORDER_STATUSES.includes(status as any)) return res.status(400).json({ error: 'Statut invalide.' });
+    let query: FirebaseFirestore.Query = adminDb.collection('crypto_orders');
+    if (status) query = query.where('status', '==', status);
+    const snap = await query.limit(500).get();
+    res.json({ orders: snap.docs.map(serializeDoc).sort((a, b) => (b.createdAt?._seconds || 0) - (a.createdAt?._seconds || 0)) });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'Impossible de charger les commandes.' }); }
+});
+
+router.patch('/api/admin/crypto-orders/orders/:id', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (req, res) => {
+  try {
+    const nextStatus = typeof req.body?.status === 'string' ? req.body.status : '';
+    const adminNote = typeof req.body?.adminNote === 'string' ? req.body.adminNote.trim().slice(0, 1000) : '';
+    const transactionHash = typeof req.body?.transactionHash === 'string' ? req.body.transactionHash.trim().slice(0, 256) : '';
+    if (!CRYPTO_ORDER_STATUSES.includes(nextStatus as any)) return res.status(400).json({ error: 'Statut invalide.' });
+    const orderRef = adminDb.collection('crypto_orders').doc(req.params.id);
+    const auditRef = adminDb.collection('crypto_order_audit').doc();
+    let updated: any;
+    await adminDb.runTransaction(async transaction => {
+      const snap = await transaction.get(orderRef);
+      if (!snap.exists) throw new Error('Commande introuvable.');
+      const current = snap.data()!;
+      const allowed: Record<string, string[]> = {
+        pending: ['payment_pending', 'payment_confirmed', 'processing', 'cancelled', 'rejected'],
+        payment_pending: ['payment_confirmed', 'cancelled', 'rejected'],
+        payment_confirmed: ['processing', 'cancelled', 'rejected'],
+        processing: ['completed', 'cancelled', 'rejected'],
+        completed: [], cancelled: [], rejected: [],
+      };
+      if (!allowed[current.status]?.includes(nextStatus)) throw new Error('Cette transition de statut n’est pas autorisée.');
+      if (nextStatus === 'completed' && !validateCryptoTransactionHash(transactionHash, String(current.networkCode || ''))) {
+        throw new Error('Le hash de transaction est requis et doit correspondre au réseau de la commande.');
+      }
+      const updates: any = {
+        status: nextStatus, updatedAt: FieldValue.serverTimestamp(), processedBy: res.locals.adminSession?.adminId || '',
+        ...(adminNote ? { adminNote } : {}), ...(transactionHash ? { transactionHash } : {}),
+        ...(nextStatus === 'completed' ? { completedAt: FieldValue.serverTimestamp() } : {}),
+        ...(nextStatus === 'cancelled' ? { cancelledAt: FieldValue.serverTimestamp() } : {}),
+        ...(nextStatus === 'rejected' ? { rejectedAt: FieldValue.serverTimestamp() } : {}),
+      };
+      transaction.update(orderRef, updates);
+      if (['completed', 'cancelled', 'rejected'].includes(nextStatus) && current.dedupeId) {
+        transaction.update(adminDb.collection('crypto_order_dedupes').doc(current.dedupeId), { active: false, updatedAt: FieldValue.serverTimestamp() });
+      }
+      transaction.set(auditRef, { orderId: orderRef.id, userId: current.userId, actorType: 'admin', actorId: res.locals.adminSession?.adminId || '', action: 'status_changed', fromStatus: current.status, toStatus: nextStatus, note: adminNote || null, transactionHash: transactionHash || null, createdAt: FieldValue.serverTimestamp() });
+      updated = { id: orderRef.id, ...current, ...updates };
+    });
+    const notification = orderStatusMessage(nextStatus, updated.cryptoSymbol || 'crypto', adminNote);
+    await adminDb.collection('client_notifications').add({ clientId: updated.userId, type: 'crypto_order', title: notification.title, message: notification.message, orderId: orderRef.id, read: false, createdAt: FieldValue.serverTimestamp() });
+    sendFcmToClient(updated.userId, notification.title, notification.message, { type: 'crypto_order', orderId: orderRef.id, status: nextStatus });
+    pushClientEvent(updated.userId, 'crypto_order_updated', { id: orderRef.id, status: nextStatus });
+    res.json({ order: updated });
+  } catch (e: any) {
+    const message = e.message || 'Mise à jour impossible.';
+    res.status(/introuvable|autorisée|requis|correspondre/.test(message) ? 400 : 500).json({ error: message });
+  }
+});
+
+router.post('/api/admin/crypto-orders/sync-coingecko', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (_req, res) => {
+  try {
+    const cryptoSnap = await adminDb.collection('cryptos').get();
+    const assets: any[] = cryptoSnap.docs
+      .map(doc => ({ id: doc.id, ...((doc.data() || {}) as any) }))
+      .filter((asset: any) => asset.coingeckoId);
+    if (!assets.length) return res.json({ synced: 0, failed: 0 });
+    const ids = assets.map(asset => encodeURIComponent(String(asset.coingeckoId))).join(',');
+    const headers: Record<string, string> = { accept: 'application/json' };
+    if (process.env.COINGECKO_API_KEY) headers['x-cg-demo-api-key'] = process.env.COINGECKO_API_KEY;
+    const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=250&page=1&sparkline=false`, { headers });
+    if (!response.ok) throw new Error(`CoinGecko a répondu ${response.status}.`);
+    const quotes = await response.json() as Array<{ id: string; current_price?: number; image?: string; name?: string; symbol?: string }>;
+    const byId = new Map(quotes.map(quote => [quote.id, quote]));
+    const batch = adminDb.batch();
+    let synced = 0;
+    for (const asset of assets) {
+      const quote = byId.get(String(asset.coingeckoId));
+      if (!quote || !Number.isFinite(Number(quote.current_price))) continue;
+      batch.update(adminDb.collection('cryptos').doc(asset.id), {
+        priceUSD: Number(quote.current_price), priceUpdatedAt: FieldValue.serverTimestamp(),
+        ...(quote.image && !asset.logo ? { logo: quote.image } : {}), updatedAt: FieldValue.serverTimestamp(),
+      });
+      synced++;
+    }
+    if (synced) await batch.commit();
+    res.json({ synced, failed: assets.length - synced });
+  } catch (e: any) { res.status(502).json({ error: e.message || 'Synchronisation CoinGecko impossible.' }); }
+});
+
+router.post('/api/admin/crypto-orders/migrate-legacy', requireDb, requireAdminSecret, requireAdminPermission('settings'), async (_req, res) => {
+  try {
+    // The source collections are never changed. Deterministic IDs make this
+    // operation safe to retry if a deployment is interrupted.
+    const [offerSnap, requestSnap] = await Promise.all([
+      adminDb.collection('crypto_market_offers').get(),
+      adminDb.collection('crypto_market_requests').get(),
+    ]);
+    const cryptoByLegacyKey = new Map<string, any>();
+    const networkByLegacyKey = new Map<string, any>();
+    let cryptosCreated = 0; let networksCreated = 0; let ordersCreated = 0;
+
+    for (const offerDoc of offerSnap.docs) {
+      const offer = offerDoc.data();
+      const symbol = String(offer.symbol || '').trim().toUpperCase();
+      const networkCode = normalizeCryptoNetworkCode(offer.networkCode);
+      if (!symbol || !networkCode) continue;
+      const cryptoId = `legacy-${createHash('sha256').update(symbol).digest('hex').slice(0, 20)}`;
+      const networkId = `legacy-${createHash('sha256').update(`${symbol}|${networkCode}`).digest('hex').slice(0, 20)}`;
+      const cryptoRef = adminDb.collection('cryptos').doc(cryptoId);
+      const networkRef = adminDb.collection('crypto_networks').doc(networkId);
+      if (!(await cryptoRef.get()).exists) {
+        await cryptoRef.set({
+          name: String(offer.assetName || symbol).slice(0, 80), symbol, logo: '', coingeckoId: 'legacy-unconfigured',
+          enabled: offer.enabled === true, priceUSD: Number.isFinite(Number(offer.unitPriceUSD)) ? Number(offer.unitPriceUSD) : null,
+          migratedFrom: 'crypto_market_offers', createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+        cryptosCreated++;
+      }
+      // Legacy offers did not store an operational wallet. They are retained as
+      // disabled network records until an administrator provides one.
+      if (!(await networkRef.get()).exists) {
+        await networkRef.set({
+          cryptoId, cryptoSymbol: symbol, networkName: String(offer.networkName || networkCode).slice(0, 80), networkCode,
+          walletAddress: '', enabled: false, migratedFrom: 'crypto_market_offers', requiresWalletConfiguration: true,
+          createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+        networksCreated++;
+      }
+      cryptoByLegacyKey.set(symbol, { id: cryptoId, name: String(offer.assetName || symbol), symbol, logo: '', priceUSD: offer.unitPriceUSD });
+      networkByLegacyKey.set(`${symbol}|${networkCode}`, { id: networkId, name: String(offer.networkName || networkCode), code: networkCode });
+    }
+
+    for (const legacyDoc of requestSnap.docs) {
+      const legacy = legacyDoc.data();
+      const snapshot = legacy.offerSnapshot || {};
+      const symbol = String(snapshot.symbol || '').trim().toUpperCase();
+      const networkCode = normalizeCryptoNetworkCode(snapshot.networkCode);
+      const crypto = cryptoByLegacyKey.get(symbol);
+      const network = networkByLegacyKey.get(`${symbol}|${networkCode}`);
+      if (!crypto || !network) continue;
+      const ref = adminDb.collection('crypto_orders').doc(`legacy-${legacyDoc.id}`);
+      if ((await ref.get()).exists) continue;
+      const statusMap: Record<string, string> = { pending: 'pending', processing: 'processing', sent: 'completed', rejected: 'rejected' };
+      await ref.set({
+        orderNumber: `LEGACY-${legacyDoc.id.slice(0, 8).toUpperCase()}`, userId: String(legacy.clientId || ''),
+        clientName: String(legacy.clientName || 'Client Rena'), phone: '', email: String(legacy.clientEmail || ''),
+        cryptoId: crypto.id, cryptoName: crypto.name, cryptoSymbol: crypto.symbol, cryptoLogo: '',
+        networkId: network.id, networkName: network.name, networkCode: network.code,
+        amount: Number.isFinite(Number(legacy.estimatedCryptoAmount)) ? Number(legacy.estimatedCryptoAmount) : 0,
+        walletAddress: String(legacy.destinationAddress || ''), normalizedWalletAddress: String(legacy.normalizedDestinationAddress || ''),
+        status: statusMap[String(legacy.status)] || 'pending', adminNote: legacy.adminNote || '',
+        transactionHash: legacy.transactionHash || '', priceUSD: Number.isFinite(Number(snapshot.unitPriceUSD)) ? Number(snapshot.unitPriceUSD) : null,
+        legacyRequestId: legacyDoc.id, legacyOfferSnapshot: snapshot, migratedFrom: 'crypto_market_requests',
+        createdAt: legacy.createdAt || FieldValue.serverTimestamp(), updatedAt: legacy.updatedAt || FieldValue.serverTimestamp(),
+        ...(legacy.completedAt ? { completedAt: legacy.completedAt } : {}), ...(legacy.rejectedAt ? { rejectedAt: legacy.rejectedAt } : {}),
+      });
+      ordersCreated++;
+    }
+    res.json({ cryptos: cryptosCreated, networks: networksCreated, orders: ordersCreated });
+  } catch (e: any) { res.status(500).json({ error: e.message || 'Migration historique impossible.' }); }
+});
 
 router.get('/api/crypto-market/offers', requireDb, async (_req, res) => {
   try {

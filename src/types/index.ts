@@ -370,6 +370,71 @@ export interface CryptoMarketRequest {
   processedBy?: string;
 }
 
+// ─── Commandes crypto manuelles (catalogue séparé) ────────────────────────────
+// Ces collections sont la nouvelle source de vérité. Les prix CoinGecko sont
+// strictement indicatifs et ne déclenchent jamais un mouvement de fonds.
+export interface CryptoAsset {
+  id?: string;
+  name: string;
+  symbol: string;
+  logo: string;
+  coingeckoId: string;
+  enabled: boolean;
+  priceUSD?: number | null;
+  priceUpdatedAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface CryptoNetwork {
+  id?: string;
+  cryptoId: string;
+  cryptoSymbol: string;
+  networkName: string;
+  networkCode: string;
+  walletAddress: string;
+  enabled: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export type CryptoOrderStatus =
+  | 'pending'
+  | 'payment_pending'
+  | 'payment_confirmed'
+  | 'processing'
+  | 'completed'
+  | 'cancelled'
+  | 'rejected';
+
+export interface CryptoOrder {
+  id?: string;
+  orderNumber: string;
+  userId: string;
+  clientName: string;
+  cryptoId: string;
+  cryptoName: string;
+  cryptoSymbol: string;
+  cryptoLogo?: string;
+  networkId: string;
+  networkName: string;
+  networkCode: string;
+  amount: number;
+  walletAddress: string;
+  phone: string;
+  email?: string;
+  status: CryptoOrderStatus;
+  adminNote?: string;
+  transactionHash?: string;
+  priceUSD?: number | null;
+  priceUpdatedAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
+  completedAt?: any;
+  cancelledAt?: any;
+  rejectedAt?: any;
+}
+
 export interface PromoCode {
   id?: string;
   code: string;

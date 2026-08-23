@@ -307,6 +307,32 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Nouveau catalogue et commandes crypto : accès exclusivement via API
+    // serveur, pour empêcher la falsification des prix, wallets et statuts.
+    match /cryptos/{cryptoId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_networks/{networkId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_order_audit/{auditId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_order_dedupes/{dedupeId} {
+      allow read, write: if false;
+    }
+
+    match /crypto_order_idempotency/{key} {
+      allow read, write: if false;
+    }
+
     match /affiliate_notifications/{notifId} {
       allow read: if isAdmin();
       allow write: if false;
