@@ -1,5 +1,4 @@
 import express from 'express';
-import nodemailer from 'nodemailer';
 import { createHash, createHmac, randomInt, randomBytes, timingSafeEqual, scryptSync } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
@@ -16,6 +15,7 @@ import {
   emailAgentNewRequest, emailAgentProcessed,
   emailServiceCredentials,
   send2FAOtp,
+  sendTextEmail,
   ADMIN_EMAIL,
 } from '../lib/email.ts';
 
@@ -407,17 +407,7 @@ async function verifyRecaptcha(token: string): Promise<boolean> {
 }
 
 function sendAdminEmail(subject: string, text: string): void {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return;
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
-  transporter.sendMail({
-    from: `"Rena System" <${process.env.SMTP_USER}>`,
-    to: process.env.SMTP_USER,
-    subject,
-    text,
-  }).catch((err: any) => console.error('[Email] Erreur envoi:', err.message));
+  void sendTextEmail(ADMIN_EMAIL, subject, text, 'admin_notification');
 }
 
 // ── Resend email + Firestore audit log (fire-and-forget) ─────────────────────
@@ -754,20 +744,13 @@ router.get('/api/debug', requireDb, requireAdminSession, async (req, res) => {
 router.post('/api/notify-registration', async (req, res) => {
   const { name, email, phone, message, date } = req.body;
   try {
-    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.warn('SMTP credentials missing. Skipping email notification.');
-      return res.status(200).json({ success: true, warning: 'SMTP credentials missing' });
-    }
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    await transporter.sendMail({
-      from: `"Rena System" <${process.env.SMTP_USER}>`,
-      to: process.env.SMTP_USER,
-      subject: `Nouvelle demande d'inscription affilié : ${name}`,
-      text: `Nouvelle demande d'inscription reçue !\n\nNom: ${name}\nEmail: ${email}\nTéléphone: ${phone || 'Non fourni'}\nMessage: ${message || 'Aucun message'}\nDate: ${date}\n\nConnectez-vous au tableau de bord administrateur pour approuver ou rejeter cette demande.`,
-    });
+    const result = await sendTextEmail(
+      ADMIN_EMAIL,
+      `Nouvelle demande d'inscription affilié : ${name}`,
+      `Nouvelle demande d'inscription reçue !\n\nNom: ${name}\nEmail: ${email}\nTéléphone: ${phone || 'Non fourni'}\nMessage: ${message || 'Aucun message'}\nDate: ${date}\n\nConnectez-vous au tableau de bord administrateur pour approuver ou rejeter cette demande.`,
+      'affiliate_registration',
+    );
+    if (!result.success) throw new Error(result.error || 'Resend n’a pas accepté la notification');
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('Error sending notification:', error);

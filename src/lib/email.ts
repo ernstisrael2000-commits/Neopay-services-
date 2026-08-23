@@ -1,24 +1,10 @@
-import { Resend } from 'resend';
+import { ReplitConnectors } from '@replit/connectors-sdk';
 export type TwoFARole = 'admin' | 'agent' | 'affiliate';
-
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 export const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@rena.ht';
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || FROM_EMAIL;
 
-let _resend: Resend | null = null;
-
-function getResendClient(): Resend | null {
-  if (!RESEND_API_KEY) return null;
-  if (!_resend) _resend = new Resend(RESEND_API_KEY);
-  return _resend;
-}
-
-if (RESEND_API_KEY) {
-  console.log(`[Email] Mode Resend activé — FROM: ${FROM_EMAIL}`);
-} else {
-  console.warn('[Email] Aucun service email configuré (RESEND_API_KEY requis)');
-}
+console.log(`[Email] Mode Resend via connexion Replit activé — FROM: ${FROM_EMAIL}`);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +88,17 @@ export interface SendResult {
   error?: string;
 }
 
+function textAsHtml(text: string): string {
+  const safe = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\n/g, '<br />');
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:14px;line-height:1.6;color:#334155;">${safe}</div>`;
+}
+
 export async function send(
   to: string | string[],
   subject: string,
@@ -115,29 +112,38 @@ export async function send(
     return { success: false, error: 'No recipient' };
   }
 
-  const resend = getResendClient();
-  if (resend) {
-    try {
-      const { data, error } = await resend.emails.send({
+  try {
+    const response = await new ReplitConnectors().proxy('resend', '/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         from: `Rena Intelligence <${FROM_EMAIL}>`,
         to: validTo,
         subject,
         html,
-      });
-      if (error) {
-        console.error(`[Email] Resend error "${type}" → ${validTo}:`, error);
-        return { success: false, error: error.message };
-      }
-      console.log(`[Email] ✓ Resend "${type}" → ${validTo} (id: ${data?.id})`);
-      return { success: true, id: data?.id };
-    } catch (e: any) {
-      console.error(`[Email] Resend exception "${type}" → ${validTo}:`, e?.message);
-      return { success: false, error: e?.message };
+      }),
+    });
+    const data: any = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = data?.message || data?.error?.message || `Resend returned HTTP ${response.status}`;
+      console.error(`[Email] Resend error "${type}" → ${validTo}:`, error);
+      return { success: false, error };
     }
+    console.log(`[Email] ✓ Resend "${type}" → ${validTo} (id: ${data?.id || 'unknown'})`);
+    return { success: true, id: data?.id };
+  } catch (e: any) {
+    console.error(`[Email] Resend exception "${type}" → ${validTo}:`, e?.message);
+    return { success: false, error: e?.message };
   }
+}
 
-  console.warn(`[Email] Skipped (RESEND_API_KEY manquant) — ${type} → ${validTo}`);
-  return { success: false, error: 'No email service configured' };
+export async function sendTextEmail(
+  to: string | string[],
+  subject: string,
+  text: string,
+  type: string,
+): Promise<SendResult> {
+  return send(to, subject, textAsHtml(text), type);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
