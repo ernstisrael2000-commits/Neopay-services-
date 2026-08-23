@@ -62,6 +62,7 @@ export default function CryptoMarketView({ client, onRequestAuth }: CryptoMarket
   const availableNetworks = useMemo(() => networks.filter(network => network.cryptoId === cryptoId), [networks, cryptoId]);
   const selectedNetwork = useMemo(() => availableNetworks.find(network => network.id === networkId) || null, [availableNetworks, networkId]);
   const amountValue = Number(amount);
+  const selectedCryptoPrice = selectedCrypto?.priceUSD ? formatUSD(selectedCrypto.priceUSD) : 'Prix indicatif indisponible';
   const estimateUSD = selectedCrypto?.priceUSD && amountValue > 0 ? Number((amountValue * selectedCrypto.priceUSD).toFixed(2)) : null;
   const feePercent = selectedCrypto?.feePercent ?? 2;
   const feeAmountUSD = estimateUSD ? Number((estimateUSD * feePercent / 100).toFixed(2)) : 0;
@@ -69,8 +70,16 @@ export default function CryptoMarketView({ client, onRequestAuth }: CryptoMarket
   const hasFunds = totalUSD > 0 && totalUSD <= balance;
 
   useEffect(() => {
-    if (!availableNetworks.some(network => network.id === networkId)) setNetworkId(availableNetworks[0]?.id || '');
+    if (networkId && !availableNetworks.some(network => network.id === networkId)) setNetworkId('');
   }, [availableNetworks, networkId]);
+
+  const selectCrypto = (id: string) => {
+    setCryptoId(id);
+    setNetworkId('');
+    setAmount('');
+    setWalletAddress('');
+    setConsent(false);
+  };
 
   const submit = async () => {
     if (!client) { onRequestAuth(); return; }
@@ -117,10 +126,24 @@ export default function CryptoMarketView({ client, onRequestAuth }: CryptoMarket
          {!client && <div className="flex items-start gap-3 rounded-2xl border border-[#b9eee8] bg-[#effaf8] p-3.5"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#167d73]" /><div><p className="text-sm font-black text-[#102a43]">Connexion requise</p><p className="mt-0.5 text-[11px] leading-relaxed text-[#167d73]">Votre solde Rena protège votre commande et son suivi.</p><button type="button" onClick={onRequestAuth} className="mt-2 text-xs font-black text-[#167d73] underline underline-offset-2">Se connecter</button></div></div>}
         {cryptos.length === 0 ? <Empty icon={<Coins />} title="Le catalogue crypto est en cours de configuration." /> : <>
           <SelectGroup label="1. Choisissez votre crypto">
-            <div className="grid gap-2 sm:grid-cols-2">{cryptos.map(asset => <Choice key={asset.id} selected={asset.id === cryptoId} onClick={() => setCryptoId(asset.id || '')} icon={asset.logo ? <img src={asset.logo} alt="" className="h-7 w-7 rounded-full" /> : asset.symbol.slice(0, 1)} title={`${asset.name} (${asset.symbol})`} subtitle={asset.priceUSD ? `≈ ${formatUSD(asset.priceUSD)} / ${asset.symbol}` : 'Prix indicatif indisponible'} />)}</div>
+            <div className="grid gap-2 sm:grid-cols-2">{cryptos.map(asset => <Choice key={asset.id} selected={asset.id === cryptoId} onClick={() => selectCrypto(asset.id || '')} icon={asset.logo ? <img src={asset.logo} alt="" className="h-7 w-7 rounded-full" /> : asset.symbol.slice(0, 1)} title={`${asset.name} (${asset.symbol})`} subtitle={asset.priceUSD ? `≈ ${formatUSD(asset.priceUSD)} / ${asset.symbol}` : 'Prix indicatif indisponible'} />)}</div>
           </SelectGroup>
-          <SelectGroup label="2. Choisissez le réseau">
-            {availableNetworks.length === 0 ? <Empty icon={<WalletCards />} title="Aucun réseau disponible pour cette crypto." /> : <div className="grid gap-2 sm:grid-cols-2">{availableNetworks.map(network => <Choice key={network.id} selected={network.id === networkId} onClick={() => setNetworkId(network.id || '')} icon={<WalletCards className="h-5 w-5" />} title={network.networkName} subtitle={network.networkCode} />)}</div>}
+          {selectedCrypto && <section data-testid="crypto-selection-summary" className="overflow-hidden rounded-2xl border border-[#b9eee8] bg-[#effaf8]">
+            <div className="flex items-center gap-3 p-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-lg font-black text-[#167d73] shadow-sm">{selectedCrypto.logo ? <img src={selectedCrypto.logo} alt="" className="h-full w-full object-cover" /> : selectedCrypto.symbol.slice(0, 1)}</div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#167d73]">Crypto sélectionnée</p>
+                <p className="mt-0.5 font-black text-[#102a43]">{selectedCrypto.name} <span className="text-[#167d73]">({selectedCrypto.symbol})</span></p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-widest text-[#167d73]">Prix actuel</p>
+                <p data-testid="text-selected-crypto-price" className="mt-0.5 text-sm font-black text-[#102a43]">{selectedCryptoPrice}</p>
+              </div>
+            </div>
+            <p className="border-t border-[#b9eee8] px-4 py-2.5 text-[11px] font-semibold text-[#167d73]">Choisissez maintenant le réseau qui correspond à votre wallet.</p>
+          </section>}
+          <SelectGroup label={selectedCrypto ? `2. Réseaux disponibles pour ${selectedCrypto.symbol}` : '2. Choisissez le réseau'}>
+            {availableNetworks.length === 0 ? <Empty icon={<WalletCards />} title="Aucun réseau disponible pour cette crypto." /> : <div className="grid gap-2 sm:grid-cols-2">{availableNetworks.map(network => <Choice key={network.id} selected={network.id === networkId} onClick={() => setNetworkId(network.id || '')} icon={<WalletCards className="h-5 w-5" />} title={network.networkName} subtitle={`${network.networkCode} · ${selectedCrypto?.symbol ?? 'Crypto'} : ${selectedCryptoPrice}`} />)}</div>}
           </SelectGroup>
           {selectedCrypto && selectedNetwork && <div className="space-y-4">
             <div className="space-y-1.5"><Label htmlFor="crypto-amount" className="text-[10px] font-black uppercase tracking-widest text-slate-400">3. Montant souhaité ({selectedCrypto.symbol})</Label><Input id="crypto-amount" type="number" min="0" step="any" value={amount} onChange={event => setAmount(event.target.value)} placeholder={`Ex. 50 ${selectedCrypto.symbol}`} className="h-12 rounded-xl text-base font-black" /></div>
