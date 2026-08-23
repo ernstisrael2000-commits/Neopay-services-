@@ -36,13 +36,13 @@ function renderSeoFallback(pathname: string): string {
   const page = getSeoPage(pathname);
   if (!page) return '';
 
-  return `<noscript><main><header><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.description)}</p></header><nav aria-label="Navigation Rena Services"><a href="/produits">Produits et recharges</a> | <a href="/services">Services</a> | <a href="/suivi-colis">Suivi de colis</a> | <a href="/expedition">Expédition</a> | <a href="/formations">Formations</a> | <a href="/contact">Contact</a></nav></main></noscript>`;
+  return `<noscript><main><header><h1>${escapeHtml(page.h1)}</h1><p>${escapeHtml(page.description)}</p></header><nav aria-label="Navigation Solutionpam"><a href="/produits">Produits et recharges</a> | <a href="/services">Services</a> | <a href="/suivi-colis">Suivi de colis</a> | <a href="/expedition">Expédition</a> | <a href="/formations">Formations</a> | <a href="/contact">Contact</a></nav></main></noscript>`;
 }
 
 function renderSeoDocument(template: string, pathname: string): string {
   const page = getSeoPage(pathname);
-  const title = page?.title || 'Rena Services';
-  const description = page?.description || 'Services numériques et logistiques Rena Services.';
+  const title = page?.title || 'Solutionpam';
+  const description = page?.description || 'Services numériques et logistiques Solutionpam.';
   const canonical = page ? getCanonicalUrl(page.path) : SEO_SITE_URL;
   const robots = page ? 'index, follow' : 'noindex, nofollow';
   const schema = JSON.stringify(getStructuredData()).replace(/</g, '\\u003c');
@@ -95,7 +95,7 @@ async function startServer() {
     if (process.env.NODE_ENV !== 'production') return next();
     const host = req.get('host')?.split(':')[0];
     const isInternalProbe = !host || host === 'localhost' || host === '127.0.0.1' || host.startsWith('169.254.');
-    if (!isInternalProbe && host !== 'renaservices.shop') {
+    if (!isInternalProbe && host !== 'solutionpam.com') {
       return res.redirect(301, `${SEO_SITE_URL}${req.originalUrl}`);
     }
     next();

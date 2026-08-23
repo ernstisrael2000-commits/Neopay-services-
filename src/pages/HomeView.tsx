@@ -166,7 +166,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
   const imagesToDisplay = sliderImages.length > 0
     ? sliderImages.map(img => ({ url: img.url, description: img.description || '' }))
-    : SLIDER_IMAGES.map(url => ({ url, description: 'Rena Digital Services' }));
+    : SLIDER_IMAGES.map(url => ({ url, description: 'Solutionpam Digital Services' }));
 
   useEffect(() => {
     if (imagesToDisplay.length <= 1) return;
@@ -206,7 +206,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
   const openWhatsApp = () => {
     const num = settings?.whatsappAdminNumber || '+50944813185';
-    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements.')}`, '_blank');
+    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Solutionpam, je souhaite avoir plus de renseignements.')}`, '_blank');
   };
 
   return (
@@ -257,7 +257,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[8px] font-black uppercase tracking-[0.4em] mb-1" style={{ color: 'rgba(251,191,36,0.55)' }}>
-                      Rena Wallet
+                      Solutionpam Wallet
                     </p>
                     <p className="text-white font-black text-[15px] leading-snug tracking-wide max-w-[200px] truncate">
                       {effectiveClient?.name || loggedClient.name}
@@ -363,7 +363,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       >
                         <img
                           src={img.url}
-                          alt={img.description || 'Offre numérique proposée par Rena Services'}
+                          alt={img.description || 'Offre numérique proposée par Solutionpam'}
                           width={1600}
                           height={900}
                           fetchPriority={idx === 0 ? 'high' : 'auto'}
@@ -393,10 +393,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       </AnimatePresence>
 
       <section className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-5 shadow-sm sm:p-7">
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Rena Services en Haïti</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Solutionpam en Haïti</p>
         <h1 className="mt-2 max-w-3xl text-2xl font-black tracking-tight text-dark sm:text-3xl">Services numériques, paiements et logistique en Haïti</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">Découvrez des recharges de jeux, abonnements numériques, services de paiement, suivi de colis, expédition internationale et formations en ligne réunis sur une même plateforme.</p>
-        <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-black text-primary" aria-label="Découvrir les services Rena">
+        <nav className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-black text-primary" aria-label="Découvrir les services Solutionpam">
           <a href="/recharge-free-fire" className="hover:underline">Recharge Free Fire</a>
           <a href="/abonnements" className="hover:underline">Abonnements numériques</a>
           <a href="/paiements" className="hover:underline">Paiements et recharges</a>
@@ -571,7 +571,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                           loading={i === 0 ? 'eager' : 'lazy'}
                           decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/200/150'; }}
+                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/solutionpam/200/150'; }}
                         />
                         {/* gradient overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
@@ -599,9 +599,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         <FeaturedFormations onGoToFormations={() => onViewChange('formations')} />
       </section>
 
-      {/* ── Why Rena ── */}
+      {/* ── Why Solutionpam ── */}
       <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-        <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>
+        <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Solutionpam ?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { icon: LucideIcons.Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', color: 'text-amber-500 bg-amber-50' },
@@ -732,7 +732,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                             setSelectedItem(null);
                             const adminNum = (window as any).__renaAdminPhone || '';
                             const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                            const msg = `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n👤 Client: *${effectiveClient.name}*\n🔑 ID Wallet: *#${effectiveClient.walletId || '—'}*\n🛒 Service: *${selectedItem.name}*\n💰 Montant: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
+                            const msg = `🛍️ *ACHAT EFFECTUÉ — Solutionpam*\n\n👤 Client: *${effectiveClient.name}*\n🔑 ID Wallet: *#${effectiveClient.walletId || '—'}*\n🛒 Service: *${selectedItem.name}*\n💰 Montant: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
                             if (adminNum) window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                           } catch (err: any) {
                             toast.error(err.message || "Erreur lors de l'achat.");
@@ -897,7 +897,7 @@ function FeaturedFormations({ onGoToFormations }: { onGoToFormations: () => void
               {/* Footer */}
               <div className="px-2.5 py-2 bg-white flex items-center justify-between gap-1">
                 <p className="text-[9px] text-gray-400 truncate">
-                  {f.instructor || 'Rena Academy'}
+                  {f.instructor || 'Solutionpam Academy'}
                 </p>
                 {f.studentsCount > 0 && (
                   <p className="text-[9px] text-gray-400 shrink-0 flex items-center gap-0.5">

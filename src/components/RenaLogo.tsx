@@ -1,12 +1,12 @@
 import { motion } from 'motion/react';
 
-interface RenaLogoProps {
+interface SolutionpamLogoProps {
   size?: number;
   className?: string;
   animated?: boolean;
 }
 
-export default function RenaLogo({ size = 48, className = '', animated = true }: RenaLogoProps) {
+export default function SolutionpamLogo({ size = 48, className = '', animated = true }: SolutionpamLogoProps) {
   return (
     <motion.div
       className={className}
@@ -15,8 +15,8 @@ export default function RenaLogo({ size = 48, className = '', animated = true }:
       transition={animated ? { duration: 2.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 } : undefined}
     >
       <img
-        src="/logo.png"
-        alt="Rena"
+        src="/solution-pam-logo.png"
+        alt="Solutionpam"
         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
       />
     </motion.div>

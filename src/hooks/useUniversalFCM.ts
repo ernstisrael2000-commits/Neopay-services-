@@ -43,7 +43,7 @@ export function useUniversalFCM(role: FcmRole, userId: string | null) {
 
   useEffect(() => {
     const unsub = onForegroundMessage((payload) => {
-      const title = payload?.notification?.title || 'Rena';
+      const title = payload?.notification?.title || 'Solutionpam';
       const body  = payload?.notification?.body  || '';
       if (body) toast(title, { description: body, duration: 7000 });
       else toast(title, { duration: 5000 });

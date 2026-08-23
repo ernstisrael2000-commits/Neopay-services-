@@ -69,7 +69,7 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
 
   const openWhatsApp = () => {
     const num = settings?.whatsappAdminNumber || '+50944813185';
-    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements sur vos services.')}`, '_blank');
+    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Solutionpam, je souhaite avoir plus de renseignements sur vos services.')}`, '_blank');
   };
 
   if (showCryptoMarket) {
@@ -85,12 +85,12 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
               <div className="min-w-0 flex-1">
                 <div className="mb-2 flex items-center gap-2 text-amber-300">
                   <Coins className="h-4 w-4" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.18em]">Service Rena</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.18em]">Service Solutionpam</span>
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Marché Crypto</h1>
                 <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300">Choisissez votre actif, renseignez votre adresse et notre équipe traite votre demande en toute sécurité.</p>
               </div>
-              <img src={cryptoServiceImage} alt="Cryptomonnaies proposées par Rena" className="h-28 w-28 shrink-0 rounded-3xl border border-white/15 object-cover shadow-2xl shadow-black/50 sm:h-36 sm:w-36" />
+              <img src={cryptoServiceImage} alt="Cryptomonnaies proposées par Solutionpam" className="h-28 w-28 shrink-0 rounded-3xl border border-white/15 object-cover shadow-2xl shadow-black/50 sm:h-36 sm:w-36" />
             </div>
           </div>
         </div>

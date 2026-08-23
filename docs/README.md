@@ -1,6 +1,6 @@
-# Rena — Documentation
+# Solutionpam — Documentation
 
-Rena est une plateforme logistique et fintech multi-rôles (clients, affiliés, agents, admins).
+Solutionpam est une plateforme logistique et fintech multi-rôles (clients, affiliés, agents, admins).
 
 ## Stack technique
 

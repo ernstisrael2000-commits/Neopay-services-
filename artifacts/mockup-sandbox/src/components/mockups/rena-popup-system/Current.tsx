@@ -1,5 +1,5 @@
 /**
- * Current.tsx — Static reference extract of the Rena product-detail / purchase popup.
+ * Current.tsx — Static reference extract of the Solutionpam product-detail / purchase popup.
  * Source: src/pages/ProductsView.tsx lines 718-987
  *
  * ⚠️  This is a faithful STATIC mockup for the design sandbox only.
@@ -111,9 +111,9 @@ export function Current() {
     : rawPrice;
 
   const handleApplyPromo = () => {
-    // Static mock: "RENA20" gives 20 % off
-    if (promoInput.trim().toUpperCase() === 'RENA20') {
-      setAppliedPromo({ code: 'RENA20', discountPercent: 20 });
+    // Static mock: "SPM20" gives 20 % off
+    if (promoInput.trim().toUpperCase() === 'SPM20') {
+      setAppliedPromo({ code: 'SPM20', discountPercent: 20 });
     }
   };
 
@@ -224,7 +224,7 @@ export function Current() {
                     {product.name}
                   </h2>
                   <p className="text-gray-400 text-sm mt-0.5">
-                    Rena Digital · Livraison instantanée
+                    Solutionpam Digital · Livraison instantanée
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
@@ -349,7 +349,7 @@ export function Current() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="ex: RENA20"
+                      placeholder="ex: SPM20"
                       value={promoInput}
                       onChange={(e) =>
                         setPromoInput(e.target.value.toUpperCase())
@@ -379,7 +379,7 @@ export function Current() {
                 {/* Hint for sandbox */}
                 {!appliedPromo && (
                   <p className="text-[10px] text-gray-300 px-1">
-                    Essayez le code <span className="font-mono font-bold">RENA20</span> pour tester
+                    Essayez le code <span className="font-mono font-bold">SPM20</span> pour tester
                   </p>
                 )}
               </div>

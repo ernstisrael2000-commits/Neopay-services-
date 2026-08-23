@@ -181,7 +181,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
             <CardDescription className="text-gray-500 font-medium pt-1">
               {showLink
                 ? 'Liez votre compte Google à votre profil administrateur.'
-                : 'Connectez-vous pour gérer la plateforme Rena.'}
+                : 'Connectez-vous pour gérer la plateforme Solutionpam.'}
             </CardDescription>
           </CardHeader>
 
@@ -217,7 +217,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
                 )}
 
                 <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-                  Seuls les comptes autorisés par Rena peuvent accéder au tableau de bord administrateur.
+                  Seuls les comptes autorisés par Solutionpam peuvent accéder au tableau de bord administrateur.
                 </p>
               </div>
             ) : (

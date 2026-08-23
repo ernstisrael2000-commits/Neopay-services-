@@ -649,7 +649,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
         toast.success('Demande de dépôt soumise !');
         const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
-        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
+        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Solutionpam.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
       }
       setIsDepositModalOpen(false); setDepositAmount(''); setAgentCode(''); setDepositWallet('principal');
@@ -753,7 +753,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-white font-black text-base shrink-0">R</div>
             <div>
-              <p className="text-sm font-black text-gray-900 leading-tight">Rena</p>
+              <p className="text-sm font-black text-gray-900 leading-tight">Solutionpam</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Affilié Vérifié</p>
@@ -1461,7 +1461,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <Copy className="h-4 w-4" />
                   </button>
                   <button onClick={() => {
-                    const text = `Rejoignez-moi sur Rena ! Utilisez mon code ${affiliate.code} pour vous inscrire et profiter d'avantages exclusifs.`;
+                    const text = `Rejoignez-moi sur Solutionpam ! Utilisez mon code ${affiliate.code} pour vous inscrire et profiter d'avantages exclusifs.`;
                     if (navigator.share) navigator.share({ text });
                     else { navigator.clipboard.writeText(text); toast.success('Message copié !'); }
                   }} className="h-10 w-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">

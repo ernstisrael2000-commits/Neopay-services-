@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://renaservices.shop/sitemap.xml
+Sitemap: https://solutionpam.com/sitemap.xml

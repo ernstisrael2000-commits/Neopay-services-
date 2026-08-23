@@ -886,7 +886,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                       </div>
                       <div>
                         <p className="text-amber-800 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
-                        <p className="text-amber-600 text-xs mt-0.5">Votre certificat sera émis par l'équipe Rena.</p>
+                        <p className="text-amber-600 text-xs mt-0.5">Votre certificat sera émis par l'équipe Solutionpam.</p>
                       </div>
                     </div>
                   )}

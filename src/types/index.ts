@@ -325,7 +325,7 @@ export interface ClientNotification {
 // ─── Marché crypto manuel ─────────────────────────────────────────────────────
 // Ces offres représentent des combinaisons actif/réseau configurées par
 // l'administration. Elles ne contiennent jamais de clé privée ni d'adresse de
-// portefeuille Rena : le client renseigne uniquement son adresse de réception.
+// portefeuille Solutionpam : le client renseigne uniquement son adresse de réception.
 export interface CryptoMarketOffer {
   id?: string;
   assetName: string;

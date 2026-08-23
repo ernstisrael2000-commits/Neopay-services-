@@ -58,7 +58,7 @@ const WalletPayButton = ({
       onSuccess();
       const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
       const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      const msg = `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n👤 Client: *${client.name}*\n🔑 ID Wallet: *#${client.walletId || '—'}*\n📱 Téléphone: *${client.phone || '—'}*\n🛒 Service: *${productName || '—'}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
+      const msg = `🛍️ *ACHAT EFFECTUÉ — Solutionpam*\n\n👤 Client: *${client.name}*\n🔑 ID Wallet: *#${client.walletId || '—'}*\n📱 Téléphone: *${client.phone || '—'}*\n🛒 Service: *${productName || '—'}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
       window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de l'achat.");
@@ -177,7 +177,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
   const handleFinalPaymentSubmit = () => {
     if (!paymentTarget || !selectedPaymentMethod) return;
     const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
-    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
+    const message = `Bonjour Solutionpam,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
     openWhatsApp(message);
     setIsPaymentModalOpen(false);
     setPaymentTransactionInfo('');
@@ -199,7 +199,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
     if (!selectedCardForRecharge || !rechargeAmountUSD) return;
     const usd = parseFloat(rechargeAmountUSD);
     const gourdes = usd * (settings?.exchangeRate || 146);
-    const message = `Bonjour Rena,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n🇭🇹 Équivalent en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
+    const message = `Bonjour Solutionpam,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n🇭🇹 Équivalent en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
     openWhatsApp(message);
     setIsPaymentMethodDialogOpen(false);
     setRechargeAmountUSD('');
@@ -431,7 +431,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                           loading="lazy"
                           decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/300'; }}
+                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/solutionpam/400/300'; }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
                         <div className="absolute top-2 right-2">
@@ -444,7 +444,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                         </div>
                       </div>
                       <div className="p-2.5">
-                        <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{product.description || 'Service digital Rena'}</p>
+                        <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{product.description || 'Service digital Solutionpam'}</p>
                         <div className="flex items-center gap-1 mt-2 text-[9px] text-primary font-black">
                           <Clock className="h-2.5 w-2.5" />
                           <span>24/7</span>
@@ -740,7 +740,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
               {/* Header remains visible while the product details scroll. */}
                <div className="z-10 flex shrink-0 items-center justify-between border-b border-gray-100 bg-white/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur sm:px-5 sm:pt-4">
                   <div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Rena Digital</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Solutionpam Digital</span>
                     <p className="mt-0.5 text-sm font-black text-gray-900">Finaliser l’achat</p>
                   </div>
                  <button
@@ -783,7 +783,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-2xl font-black text-gray-900 leading-tight">{selectedProduct.name}</h2>
-                      <p className="text-gray-400 text-sm mt-0.5">Rena Digital · Livraison instantanée</p>
+                      <p className="text-gray-400 text-sm mt-0.5">Solutionpam Digital · Livraison instantanée</p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
                       <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
@@ -997,7 +997,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onRequestAuth
                   </div>
                   <div>
                     <DialogTitle className="text-lg font-black uppercase text-white">Finaliser Paiement</DialogTitle>
-                    <DialogDescription className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Paiement Sécurisé Rena</DialogDescription>
+                    <DialogDescription className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Paiement Sécurisé Solutionpam</DialogDescription>
                   </div>
                 </div>
                 <DialogClose className="rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">

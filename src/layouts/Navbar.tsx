@@ -1,6 +1,6 @@
 import { Package, ShieldCheck, LogIn, LogOut, ScanSearch, House, UsersRound, PackageCheck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Key, Copy, Check } from 'lucide-react';
 import { motion } from 'motion/react';
-import RenaLogo from '../components/RenaLogo';
+import SolutionpamLogo from '../components/RenaLogo';
 import { Button } from '../components/ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -224,13 +224,13 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             >
               {/* Fixed width prevents CLS when logo URL loads asynchronously */}
               {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="Rena Logo" width={28} height={28}
+                <img src={settings.logoUrl} alt="Logo Solutionpam" width={28} height={28}
                   className="h-7 w-7 object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <RenaLogo size={28} />
+                <SolutionpamLogo size={28} />
               )}
-              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Rena</span>
+              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Solutionpam</span>
             </div>
 
             {/* Desktop nav — always visible on md+ */}

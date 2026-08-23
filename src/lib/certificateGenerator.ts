@@ -223,12 +223,12 @@ export function printCertificate(cert: CertificateData): void {
     <div class="corner c-tr"></div>
     <div class="corner c-bl"></div>
     <div class="corner c-br"></div>
-    <div class="bg-watermark">RENA</div>
+    <div class="bg-watermark">SOLUTIONPAM</div>
 
     <div class="seal-ring"></div>
-    <div class="seal">RENA<br>✦<br>CERTIFIÉ</div>
+    <div class="seal">SOLUTIONPAM<br>✦<br>CERTIFIÉ</div>
 
-    <div class="logo">RENA</div>
+    <div class="logo">SOLUTIONPAM</div>
     <div class="cert-type">Certificat de Réussite</div>
     <div class="divider"></div>
     <div class="certify">Ce certificat est fièrement décerné à</div>

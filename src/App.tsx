@@ -141,7 +141,7 @@ function AppInner() {
   useEffect(() => {
     const handleOffline = () => {
       setIsOffline(true);
-      toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
+        toast.error("Connexion perdue. Solutionpam fonctionne en mode hors-ligne.", {
         description: "Certaines fonctionnalités peuvent être limitées.",
         duration: Infinity,
         icon: <WifiOff className="h-4 w-4" />,
@@ -366,7 +366,7 @@ function AppInner() {
                           Annonce Spéciale
                         </h3>
                         <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
-                          Rena Intelligence
+                          Solutionpam
                         </p>
                       </div>
                     </div>
@@ -568,10 +568,10 @@ function AppInner() {
                 <div className="bg-muted p-1.5 rounded-md">
                   <Package className="h-5 w-5 text-subtext" />
                 </div>
-                <span className="text-xl font-bold text-dark">Rena</span>
+                <span className="text-xl font-bold text-dark">Solutionpam</span>
               </div>
               <p className="text-subtext text-sm">
-                © {new Date().getFullYear()} Rena Services. Tous droits réservés.
+                © {new Date().getFullYear()} Solutionpam. Tous droits réservés.
               </p>
               <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
                 <a href="/services" className="hover:text-subtext transition-colors">Services</a>

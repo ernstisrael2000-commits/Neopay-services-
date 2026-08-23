@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Solutionpam</title>
+  <defs>
+    <linearGradient id="surface" x1="72" y1="52" x2="452" y2="462" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#123F53"/>
+      <stop offset="1" stop-color="#27677D"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="148" y1="118" x2="350" y2="389" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E7F7F5"/>
+      <stop offset="1" stop-color="#A9DAD7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#surface)"/>
+  <path d="M136 151c31-29 75-43 125-43 63 0 111 20 143 59l-52 47c-23-23-53-34-89-34-29 0-51 7-66 21-15 14-23 30-23 47 0 17 8 31 25 42 16 11 42 20 78 28 45 10 79 26 102 48 23 22 35 50 35 85 0 43-16 78-48 105-32 27-75 41-128 41-71 0-128-23-171-69l54-49c31 31 69 47 114 47 30 0 54-7 70-21 17-14 25-32 25-53 0-20-8-35-24-46-16-11-43-21-81-29-44-10-77-26-99-47-22-22-33-50-33-84 0-41 15-75 44-101Z" fill="url(#shine)"/>
+  <path d="M254 115v286" stroke="#FFF" stroke-width="19" stroke-linecap="round" opacity=".86"/>
+  <circle cx="255" cy="116" r="13" fill="#FFF"/>
+</svg>

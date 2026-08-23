@@ -402,7 +402,7 @@ export default function UserAuthModal({
                 <div className="h-16 w-16 rounded-[20px] bg-white/15 backdrop-blur-md flex items-center justify-center mx-auto mb-4 border border-white/25 shadow-xl">
                   <Wallet className="h-8 w-8 text-white" />
                 </div>
-                <DialogTitle className="text-2xl font-black text-white">Bienvenue sur Rena</DialogTitle>
+                <DialogTitle className="text-2xl font-black text-white">Bienvenue sur Solutionpam</DialogTitle>
                 <DialogDescription className="text-white/70 text-sm mt-1.5">Votre plateforme de services digitaux</DialogDescription>
               </div>
             </div>
@@ -425,7 +425,7 @@ export default function UserAuthModal({
                 </div>
                 <div className="flex-1">
                   <p className="font-black text-dark text-sm">Créer un compte</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Nouveau chez Rena ? Inscrivez-vous</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Nouveau chez Solutionpam ? Inscrivez-vous</p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
@@ -496,7 +496,7 @@ export default function UserAuthModal({
                   </button>
                 )}
                 <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                  Seuls les comptes autorisés par Rena peuvent accéder au tableau de bord admin.
+                  Seuls les comptes autorisés par Solutionpam peuvent accéder au tableau de bord admin.
                 </p>
               </div>
               <Divider />
@@ -541,7 +541,7 @@ export default function UserAuthModal({
                 <ArrowLeft className="h-4 w-4" /> Retour
               </button>
               <DialogTitle className="text-xl font-black text-white">Connexion Client</DialogTitle>
-              <DialogDescription className="text-white/70 text-xs mt-1">Accédez à votre wallet Rena</DialogDescription>
+              <DialogDescription className="text-white/70 text-xs mt-1">Accédez à votre wallet Solutionpam</DialogDescription>
             </div>
             <div className="p-6 space-y-4 bg-white">
               <GoogleBtn onClick={handleGoogleClientLogin} label="Se connecter avec Google" loading={loading} />
@@ -592,7 +592,7 @@ export default function UserAuthModal({
                 <ArrowLeft className="h-4 w-4" /> Retour
               </button>
               <DialogTitle className="text-xl font-black text-white">Créer un compte</DialogTitle>
-              <DialogDescription className="text-white/70 text-xs mt-1">Rejoignez Rena gratuitement</DialogDescription>
+              <DialogDescription className="text-white/70 text-xs mt-1">Rejoignez Solutionpam gratuitement</DialogDescription>
             </div>
             <div className="p-6 space-y-4 bg-white">
               <GoogleBtn onClick={handleGoogleClientLogin} label="S'inscrire avec Google" loading={loading} />
@@ -721,7 +721,7 @@ export default function UserAuthModal({
                 </div>
                 <div>
                   <DialogTitle className="text-lg font-black text-white">Vérification en deux étapes</DialogTitle>
-                  <DialogDescription className="text-white/60 text-xs mt-0.5">Administration Rena</DialogDescription>
+                  <DialogDescription className="text-white/60 text-xs mt-0.5">Administration Solutionpam</DialogDescription>
                 </div>
               </div>
             </div>

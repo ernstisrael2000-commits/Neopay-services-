@@ -573,7 +573,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       <div className="max-w-md mx-auto mt-20 text-center space-y-4 px-4">
         <XCircle className="h-16 w-16 text-red-500 mx-auto" />
         <h2 className="text-2xl font-black">Accès Refusé</h2>
-        <p className="text-gray-500">Vous n'êtes pas enregistré en tant qu'agent Rena.</p>
+        <p className="text-gray-500">Vous n'êtes pas enregistré en tant qu'agent Solutionpam.</p>
         <Button onClick={onLogout} variant="outline" className="rounded-2xl h-12 w-full">Retour au Login</Button>
       </div>
     );
@@ -846,7 +846,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-baseline gap-2">
-                          <p className="font-bold text-slate-900 truncate">{tx.type === 'deposit' ? 'Dépôt Rena' : 'Retrait Cash'}</p>
+                          <p className="font-bold text-slate-900 truncate">{tx.type === 'deposit' ? 'Dépôt Solutionpam' : 'Retrait Cash'}</p>
                           <p className={`font-bold shrink-0 ${tx.type === 'deposit' ? 'text-[#00C853]' : 'text-slate-900'}`}>
                             {tx.type === 'deposit' ? '+' : '-'}{Math.round((tx.amount || 0) * rate).toLocaleString()}
                           </p>
@@ -869,7 +869,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               </div>
               <div>
                 <p className="text-slate-900 font-bold text-sm">Sécurité Renforcée</p>
-                <p className="text-slate-500 text-xs">Chiffrement AES-256 actif. Vos données et fonds sont protégés par Rena Safe.</p>
+                <p className="text-slate-500 text-xs">Chiffrement AES-256 actif. Vos données et fonds sont protégés par Solutionpam Safe.</p>
               </div>
             </section>
 
@@ -1615,7 +1615,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50 border border-blue-100">
               <AlertCircle className="h-4 w-4 text-blue-500 shrink-0" />
               <p className="text-xs text-blue-700 leading-relaxed">
-                Pour modifier vos informations ou votre solde, contactez l'administrateur Rena.
+                Pour modifier vos informations ou votre solde, contactez l'administrateur Solutionpam.
               </p>
             </div>
 

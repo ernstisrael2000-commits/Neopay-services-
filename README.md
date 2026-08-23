@@ -1,4 +1,4 @@
-# Rena — Logistics & Fintech Platform
+# Solutionpam — Logistics & Fintech Platform
 
 Application web multi-rôles (clients, affiliés, agents, admins) pour la gestion de colis, paiements, portefeuilles et formations en ligne.
 

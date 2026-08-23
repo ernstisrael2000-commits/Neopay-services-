@@ -84,7 +84,7 @@ export function ModernMobile() {
           <div className="rena-grabber" />
           <div className="rena-header-row">
             <div>
-              <p className="rena-kicker"><Sparkles size={13} /> RENA MARKETPLACE</p>
+              <p className="rena-kicker"><Sparkles size={13} /> SOLUTIONPAM MARKETPLACE</p>
               <h1>Acheter un service</h1>
             </div>
             <button className="rena-close-button" type="button" onClick={() => setIsOpen(false)} aria-label="Fermer">
@@ -149,7 +149,7 @@ export function ModernMobile() {
 
           <div className="rena-detail-row">
             <div><Clock3 size={16} /><span><b>Instantané</b><small>Disponible 24/7</small></span></div>
-            <div><LockKeyhole size={16} /><span><b>Garanti Rena</b><small>Support local</small></span></div>
+            <div><LockKeyhole size={16} /><span><b>Garanti Solutionpam</b><small>Support local</small></span></div>
           </div>
 
           <div className="rena-section rena-promo-section">

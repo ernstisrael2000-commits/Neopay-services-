@@ -46,7 +46,7 @@ export function useFCM(clientId: string | null) {
   // Handle foreground messages as toasts
   useEffect(() => {
     const unsub = onForegroundMessage((payload) => {
-      const title = payload?.notification?.title || 'Rena';
+      const title = payload?.notification?.title || 'Solutionpam';
       const body  = payload?.notification?.body  || '';
       if (body) {
         toast(title, { description: body, duration: 7000 });

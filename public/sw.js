@@ -12,14 +12,14 @@ try {
   });
   const fcmMessaging = firebase.messaging();
   fcmMessaging.onBackgroundMessage(function (payload) {
-    const title = (payload.notification && payload.notification.title) || 'Rena';
+    const title = (payload.notification && payload.notification.title) || 'Solutionpam';
     const body  = (payload.notification && payload.notification.body)  || '';
     const data  = payload.data || {};
     return self.registration.showNotification(title, {
       body,
-      icon: '/icon.svg',
-      badge: '/icon.svg',
-      tag: data.tag || 'rena-fcm',
+      icon: '/solutionpam-icon.svg',
+      badge: '/solutionpam-icon.svg',
+      tag: data.tag || 'solutionpam-fcm',
       data,
       vibrate: [200, 100, 200],
     });
@@ -29,17 +29,16 @@ try {
 }
 
 // ── Cache names (bump version to force refresh) ───────────────────────────────
-const SHELL_CACHE   = 'rena-shell-v4';      // App shell: JS, CSS, fonts
-const IMAGE_CACHE   = 'rena-images-v4';     // Local + Firebase Storage images
+const SHELL_CACHE   = 'solutionpam-shell-v1'; // App shell: JS, CSS, fonts
+const IMAGE_CACHE   = 'solutionpam-images-v1'; // Local + Firebase Storage images
 const OFFLINE_URL   = '/';
 
 // Assets pre-cached at install time
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.webmanifest',
-  '/icon.svg',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/solutionpam-icon.svg',
+  '/solution-pam-logo.png',
 ];
 
 // ── Install: pre-cache app shell ──────────────────────────────────────────────
@@ -147,7 +146,7 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push Notifications ────────────────────────────────────────────────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'Rena', body: 'Nouvelle notification', icon: '/icon.svg', badge: '/icon.svg', tag: 'rena-notif' };
+  let data = { title: 'Solutionpam', body: 'Nouvelle notification', icon: '/solutionpam-icon.svg', badge: '/solutionpam-icon.svg', tag: 'solutionpam-notif' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch (e) {}
@@ -157,7 +156,7 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: data.icon || '/icon.svg',
       badge: data.badge || '/icon.svg',
-      tag: data.tag || 'rena-notif',
+      tag: data.tag || 'solutionpam-notif',
       renotify: true,
       vibrate: [200, 100, 200],
       data: { url: data.url || '/' },

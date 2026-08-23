@@ -167,7 +167,7 @@ const generatePDFReport = (stats: any) => {
   doc.setFontSize(24);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.text('RENA', 14, 20);
+  doc.text('SOLUTIONPAM', 14, 20);
   
   doc.setFontSize(14);
   doc.setFont('helvetica', 'normal');
@@ -258,11 +258,11 @@ const generatePDFReport = (stats: any) => {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(...greyColor);
-    doc.text('Rena - Report Generated Automatically - Highly Confidential', 14, 285);
+    doc.text('Solutionpam - Report Generated Automatically - Highly Confidential', 14, 285);
     doc.text(`Page ${i} of ${totalPages}`, 190, 285);
   }
 
-  doc.save(`RAPPORT_RENA_INTELLIGENCE_${format(now, 'yyyy_MM_dd')}.pdf`);
+  doc.save(`RAPPORT_SOLUTIONPAM_${format(now, 'yyyy_MM_dd')}.pdf`);
   toast.success("Rapport professionnel généré avec succès !");
 };
 
@@ -744,7 +744,7 @@ function PurchaseNotifCard({
             setApproving(false);
             const phone = (notif as any).clientPhone;
             if (phone) {
-              const msg = `✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${notif.amount.toLocaleString()} HTG* a été *approuvé* et sera traité immédiatement.\n\nMerci de votre confiance — Équipe Rena 🙏`;
+              const msg = `✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${notif.amount.toLocaleString()} HTG* a été *approuvé* et sera traité immédiatement.\n\nMerci de votre confiance — Équipe Solutionpam 🙏`;
               openWhatsApp(phone, msg);
             }
           }}
@@ -917,7 +917,7 @@ function AiChatPanel() {
             <div>
               <h2 className="text-lg font-black text-gray-900">Chat Dev IA</h2>
               <p className="text-[10px] text-gray-400 flex items-center gap-1.5">
-                Développeur senior — connaît votre projet Rena
+                Développeur senior — connaît votre projet Solutionpam
                 {savedKey && <span className="inline-flex items-center gap-0.5 text-emerald-600 font-black"><LucideIcons.KeyRound className="h-2.5 w-2.5" />Clé active</span>}
               </p>
             </div>
@@ -1007,7 +1007,7 @@ function AiChatPanel() {
             </div>
             <div className="text-center space-y-1">
               <p className="text-sm font-black text-gray-800">Posez une question sur votre code</p>
-              <p className="text-xs text-gray-400">Je connais la structure de Rena, les fichiers, les routes et les patterns utilisés.</p>
+              <p className="text-xs text-gray-400">Je connais la structure de Solutionpam, les fichiers, les routes et les patterns utilisés.</p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-xl">
               {CHAT_SUGGESTIONS.map((s, i) => (
@@ -1601,8 +1601,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     // Standardize phone number: remove non-digits
     const cleanPhone = phone.replace(/\D/g, '');
     const message = isAffiliate 
-      ? `Bonjour ${name}, nous vous contactons concernant votre statut d'affilié sur Rena.` 
-      : `Bonjour, nous vous contactons concernant votre dossier client Rena (N° ${phone}).`;
+      ? `Bonjour ${name}, nous vous contactons concernant votre statut d'affilié sur Solutionpam.`
+      : `Bonjour, nous vous contactons concernant votre dossier client Solutionpam (N° ${phone}).`;
     
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
@@ -4044,7 +4044,7 @@ function EmailLogsPanel() {
       try {
         await updateWithdrawalStatus(request.id!, status);
         toast.success(`Demande approuvée !`);
-        const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Rena Affilié.\n\nCordialement,\nL'équipe Rena`;
+        const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Solutionpam Affilié.\n\nCordialement,\nL'équipe Solutionpam`;
         toast.success("Message de confirmation prêt.");
         console.log("Message pour l'affilié:", message);
       } catch (error) {
@@ -5029,7 +5029,7 @@ function EmailLogsPanel() {
                               src={product.image} 
                               className="h-10 w-10 object-cover rounded-lg border"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/100/100';
+                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/solutionpam/100/100';
                               }}
                             />
                           </TableCell>
@@ -5593,7 +5593,7 @@ function EmailLogsPanel() {
                   <div className="space-y-2">
                     <Label>Titre du slide</Label>
                     <Input 
-                      placeholder="Ex: Rena Services" 
+                      placeholder="Ex: Solutionpam"
                       value={sliderTitle}
                       onChange={(e) => setSliderTitle(e.target.value)}
                     />
@@ -5770,7 +5770,7 @@ function EmailLogsPanel() {
                     <Input 
                       value={editingSliderImage?.title || ''}
                       onChange={(e) => setEditingSliderImage(prev => prev ? {...prev, title: e.target.value} : null)}
-                      placeholder="Ex: Rena Services"
+                      placeholder="Ex: Solutionpam"
                     />
                   </div>
                   <div className="space-y-2">
@@ -7699,7 +7699,7 @@ function EmailLogsPanel() {
                                 </Button>
                                 {(notif as any).clientPhone && (
                                   <a
-                                    href={`https://wa.me/${((notif as any).clientPhone || '').replace(/\D/g, '')}?text=${encodeURIComponent(`✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${(notif.amount || 0).toLocaleString()} HTG* a été *traité* avec succès.\n\nMerci de votre confiance — Équipe Rena 🙏`)}`}
+                                    href={`https://wa.me/${((notif as any).clientPhone || '').replace(/\D/g, '')}?text=${encodeURIComponent(`✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${(notif.amount || 0).toLocaleString()} HTG* a été *traité* avec succès.\n\nMerci de votre confiance — Équipe Solutionpam 🙏`)}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="h-9 px-3 rounded-xl text-xs font-black border-2 border-green-200 text-green-700 hover:bg-green-50 flex items-center gap-1 transition-colors"
@@ -7952,7 +7952,7 @@ function EmailLogsPanel() {
           <Card className="max-w-2xl mx-auto sm:mx-0">
             <CardHeader>
               <CardTitle>Identité Visuelle</CardTitle>
-              <CardDescription>Gérez le logo de votre plateforme Rena.</CardDescription>
+              <CardDescription>Gérez le logo de votre plateforme Solutionpam.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -11116,7 +11116,7 @@ function EmailLogsPanel() {
                       src={productFormData.image} 
                       className="w-full h-full object-contain"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/400';
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/solutionpam/400/400';
                       }}
                     />
                     <Button 
@@ -11862,7 +11862,7 @@ function EmailLogsPanel() {
                       src={formData.proofOfDelivery} 
                       className="w-full h-full object-contain"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/400';
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/solutionpam/400/400';
                       }}
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">

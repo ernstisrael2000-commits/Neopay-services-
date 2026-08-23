@@ -10,8 +10,8 @@ export default function SeoHead({ pathname, indexable = true }: { pathname: stri
   useEffect(() => {
     const page = getSeoPage(pathname);
     const canonical = page ? getCanonicalUrl(page.path) : SEO_SITE_URL;
-    const title = page?.title || 'Espace sécurisé | Rena Services';
-    const description = page?.description || 'Espace sécurisé de Rena Services.';
+    const title = page?.title || 'Espace sécurisé | Solutionpam';
+    const description = page?.description || 'Espace sécurisé de Solutionpam.';
 
     document.title = title;
     document.documentElement.lang = 'fr';

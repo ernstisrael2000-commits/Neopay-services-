@@ -294,7 +294,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
             )}
           </form>
           <p className="mt-6 text-center text-sm text-subtext">
-            Identifiants fournis par l'administrateur Rena après approbation.
+            Identifiants fournis par l'administrateur Solutionpam après approbation.
           </p>
 
           <div className="mt-8 pt-6 border-t text-center">
@@ -310,7 +310,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
               />
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>Devenir Affilié Rena</DialogTitle>
+                  <DialogTitle>Devenir Affilié Solutionpam</DialogTitle>
                   <DialogDescription>
                     {googleRegistration
                       ? "Complétez votre demande d'inscription Google. Elle sera examinée par l'administrateur."

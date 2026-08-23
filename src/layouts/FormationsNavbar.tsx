@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Client } from '../types';
 import { useSettingsCtx } from '../contexts/SettingsContext';
-import RenaLogo from '../components/RenaLogo';
+import SolutionpamLogo from '../components/RenaLogo';
 import { AnimatePresence, motion } from 'motion/react';
 
 interface FormationsNavbarProps {
@@ -98,15 +98,15 @@ export default function FormationsNavbar({
             {settings?.logoUrl ? (
               <img
                 src={settings.logoUrl}
-                alt="Rena"
+                alt="Solutionpam"
                 className="h-7 w-auto object-contain"
                 onError={e => (e.currentTarget.style.display = 'none')}
               />
             ) : (
-              <RenaLogo size={26} />
+              <SolutionpamLogo size={26} />
             )}
             <div className="flex flex-col leading-none">
-              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rena</span>
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Solutionpam</span>
               <span className="text-[13px] font-black text-gray-800 leading-none">Academy</span>
             </div>
           </div>

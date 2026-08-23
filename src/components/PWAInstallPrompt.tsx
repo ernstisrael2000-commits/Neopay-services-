@@ -99,7 +99,7 @@ export default function PWAInstallPrompt() {
                       </svg>
                     </div>
                     <div>
-                      <p className="text-white font-black text-base leading-tight">Installer Rena</p>
+                      <p className="text-white font-black text-base leading-tight">Installer Solutionpam</p>
                       <p className="text-violet-200 text-xs mt-0.5">Application gratuite & complète</p>
                     </div>
                   </div>

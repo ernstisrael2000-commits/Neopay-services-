@@ -96,7 +96,7 @@ const DEFAULT_PRIZE = (rank: 1 | 2 | 3): PrizeCfg => ({
 const DEFAULT_CONTEST_CONFIG: ContestConfig = {
   contestActive: false,
   contestType: 'both',
-  contestTitle: 'Grand Concours Rena',
+  contestTitle: 'Grand Concours Solutionpam',
   contestPeriod: 'month',
   affiliateContestMetric: 'points',
   agentContestMetric: 'monthlyTransactions',
@@ -149,7 +149,7 @@ export default function ContestPodium({ participantId, participantType }: Contes
             <Trophy className="h-5 w-5 text-amber-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-black text-gray-900">Concours Rena</p>
+            <p className="text-sm font-black text-gray-900">Concours Solutionpam</p>
             <p className="text-[11px] text-gray-500 mt-0.5">
               Le prochain concours affiliés & agents sera bientôt disponible.
             </p>
@@ -197,7 +197,7 @@ export default function ContestPodium({ participantId, participantType }: Contes
               <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">Concours en cours</span>
             </div>
             <p className="text-[19px] font-black text-white leading-snug">
-              {config.contestTitle || 'Grand Concours Rena'}
+              {config.contestTitle || 'Grand Concours Solutionpam'}
             </p>
             <p className="text-[11px] text-white/50 mt-0.5">
               {participantType === 'affiliate' ? '🤝 Affiliés' : '⚡ Agents'} &nbsp;·&nbsp;

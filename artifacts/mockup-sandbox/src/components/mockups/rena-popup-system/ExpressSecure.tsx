@@ -57,7 +57,7 @@ export function ExpressSecure() {
       <section className="fixed inset-0 z-10 mx-auto flex w-full max-w-[430px] flex-col overflow-hidden bg-[#fbfcff] shadow-2xl">
         <header className="relative z-20 flex h-[62px] shrink-0 items-center justify-between border-b border-[#e7ebf4] bg-[#fbfcff]/95 px-5 backdrop-blur">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[.18em] text-[#8190ad]">Rena Digital</p>
+            <p className="text-[10px] font-black uppercase tracking-[.18em] text-[#8190ad]">Solutionpam Digital</p>
             <p className="mt-0.5 text-sm font-extrabold text-[#17213b]">Finaliser l’achat</p>
           </div>
           <button
@@ -157,7 +157,7 @@ export function ExpressSecure() {
                       {payment === 'wallet' && <Check className="h-3 w-3 text-white" />}
                     </div>
                     <WalletCards className="h-4 w-4 text-[#3159dc]" />
-                    <span className="text-sm font-black text-[#17213b]">Mon solde Rena</span>
+                    <span className="text-sm font-black text-[#17213b]">Mon solde Solutionpam</span>
                     <span className="ml-auto text-xs font-bold text-[#8190ad]">2 628 HTG</span>
                   </div>
                 </button>

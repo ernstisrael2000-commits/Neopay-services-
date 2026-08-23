@@ -138,7 +138,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
                 </div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Accès Agent</h1>
                 <p className="text-gray-500 text-sm font-medium mt-1.5">
-                  Connectez-vous avec votre compte Google autorisé par l'administration Rena.
+                  Connectez-vous avec votre compte Google autorisé par l'administration Solutionpam.
                 </p>
               </div>
             </div>
@@ -191,7 +191,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
                 Seuls les agents enregistrés par l'administrateur peuvent accéder à cet espace.
               </p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
-                Système de Sécurité Rena · 2FA Activé
+                Système de Sécurité Solutionpam · 2FA Activé
               </p>
             </div>
           </div>

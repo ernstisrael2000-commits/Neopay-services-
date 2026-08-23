@@ -1,7 +1,7 @@
 import { ReplitConnectors } from '@replit/connectors-sdk';
 export type TwoFARole = 'admin' | 'agent' | 'affiliate';
 
-export const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@rena.ht';
+export const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@solutionpam.com';
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || FROM_EMAIL;
 
 console.log(`[Email] Mode Resend via connexion Replit activé — FROM: ${FROM_EMAIL}`);
@@ -33,7 +33,7 @@ function baseHtml(title: string, accentColor: string, body: string): string {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);max-width:100%;">
         <tr>
           <td style="background:${accentColor};padding:28px 32px;text-align:center;">
-            <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.75);">RENA INTELLIGENCE</p>
+            <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.75);">SOLUTIONPAM</p>
             <h1 style="margin:8px 0 0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${title}</h1>
           </td>
         </tr>
@@ -45,7 +45,7 @@ function baseHtml(title: string, accentColor: string, body: string): string {
         <tr>
           <td style="padding:20px 32px 28px;border-top:1px solid #f0f0f0;text-align:center;">
             <p style="margin:0;font-size:11px;color:#aaa;line-height:1.6;">
-              Cet email a été envoyé automatiquement par le système Rena Intelligence.<br/>
+              Cet email a été envoyé automatiquement par le système Solutionpam.<br/>
               Ne répondez pas à cet email. Pour toute question, contactez le support.
             </p>
           </td>
@@ -117,7 +117,7 @@ export async function send(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: `Rena Intelligence <${FROM_EMAIL}>`,
+        from: `Solutionpam <${FROM_EMAIL}>`,
         to: validTo,
         subject,
         html,
@@ -621,7 +621,7 @@ export async function emailAgentNewRequest(opts: {
   const html = baseHtml(`${emoji} Nouvelle demande de ${label}`, color,
     `<p style="margin:0 0 16px;font-size:15px;color:#444;">Bonjour <strong>${agentName}</strong>,</p>
     <p style="margin:0 0 20px;font-size:15px;color:#444;">
-      Un client vient de soumettre une <strong>demande de ${label}</strong> chez vous via l'application Rena.
+      Un client vient de soumettre une <strong>demande de ${label}</strong> chez vous via l'application Solutionpam.
       Connectez-vous à votre tableau de bord pour la traiter.
     </p>
     <table width="100%" cellpadding="0" cellspacing="0">
@@ -632,7 +632,7 @@ export async function emailAgentNewRequest(opts: {
       ${row('Statut', statusBadge('pending'))}
     </table>
     <p style="margin:24px 0 0;padding:16px;background:${isDeposit ? '#f0fdf4' : '#faf5ff'};border-radius:10px;font-size:13px;color:${isDeposit ? '#065f46' : '#6d28d9'};border-left:4px solid ${color};">
-      ⚡ Ouvrez votre application Rena — section <strong>Demandes</strong> — pour approuver ou rejeter cette opération.
+      ⚡ Ouvrez votre application Solutionpam — section <strong>Demandes</strong> — pour approuver ou rejeter cette opération.
     </p>`
   );
   await send(agentEmail, `${emoji} Demande de ${label} — ${clientName} (${fmt(amount)})`, html, `agent_new_${type}_request`);
@@ -711,7 +711,7 @@ export async function emailAgentProcessed(opts: {
             ${row('Statut', statusBadge('rejected'))}
           </table>
           <p style="margin:24px 0 0;padding:16px;background:#fef2f2;border-radius:10px;font-size:13px;color:#991b1b;border-left:4px solid #dc2626;">
-            Si vous avez des questions, contactez le support Rena.
+            Si vous avez des questions, contactez le support Solutionpam.
           </p>`
         );
     await send(clientEmail, `${emoji} Demande de ${label} ${verb} — ${fmt(amount)}`, clientHtml, `agent_${type}_${action}_client`);
@@ -779,7 +779,7 @@ export async function emailServiceCredentials(opts: {
       ⚠️ Si vous n'êtes pas à l'origine de cet achat, contactez notre support immédiatement.
     </p>`
   );
-  await send(clientEmail, `🔑 Vos identifiants ${productName} — Rena`, html, 'service_credentials');
+  await send(clientEmail, `🔑 Vos identifiants ${productName} — Solutionpam`, html, 'service_credentials');
 }
 
 // ── 2FA OTP ───────────────────────────────────────────────────────────────────
@@ -809,7 +809,7 @@ export async function send2FAOtp(opts: {
     </p>
     <div style="margin:24px 0 0;padding:12px 16px;background:#fef2f2;border-radius:12px;border-left:4px solid #ef4444;">
       <p style="margin:0;font-size:12px;color:#991b1b;line-height:1.6;">
-        ⚠️ Si vous n'avez pas tenté de vous connecter à l'espace <strong>${roleLabel}</strong> Rena,
+        ⚠️ Si vous n'avez pas tenté de vous connecter à l'espace <strong>${roleLabel}</strong> Solutionpam,
         ignorez ce message et changez votre mot de passe immédiatement.
       </p>
     </div>

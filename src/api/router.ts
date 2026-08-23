@@ -4658,7 +4658,7 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
     const googleUser = {
       email: String(decoded.email || '').trim().toLowerCase(),
       uid: decoded.uid,
-      name: String(decoded.name || 'Client Rena'),
+      name: String(decoded.name || 'Client Solutionpam'),
       photoUrl: String(decoded.picture || ''),
     };
     if (!googleUser.email) return res.status(400).json({ error: 'Le compte Google doit contenir un email.' });
@@ -5441,7 +5441,7 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
     }
     if (adminSnap.empty) {
       await adminDb.collection('admin_login_logs').add({ adminName: email, success: false, ip: clientIp, reason: 'not_admin', timestamp: FieldValue.serverTimestamp() });
-      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Rena.` });
+      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Solutionpam.` });
     }
 
     const adminDoc = adminSnap.docs[0];
@@ -5731,7 +5731,7 @@ function cryptoRequestStatusMessage(status: string, symbol: string, note?: strin
 
 // ─── Commandes crypto manuelles — catalogue séparé ────────────────────────────
 // These records remain separate from deposits and external blockchain handling.
-// The Rena-balance debit and any refund are nevertheless recorded atomically
+// The branded-balance debit and any refund are nevertheless recorded atomically
 // with the order so no browser-supplied amount can alter wallet accounting.
 function normalizeCryptoAsset(input: any): any {
   const name = typeof input?.name === 'string' ? input.name.trim() : '';
@@ -5793,8 +5793,8 @@ function orderStatusMessage(status: string, symbol: string, note?: string): { ti
   if (status === 'payment_confirmed') return { title: '✅ Paiement confirmé', message: `Le paiement de votre commande ${symbol} est confirmé.${suffix}` };
   if (status === 'processing') return { title: '🔄 Commande crypto en cours', message: `Votre commande ${symbol} est en préparation par notre équipe.${suffix}` };
   if (status === 'completed') return { title: '✅ Commande crypto finalisée', message: `Votre commande ${symbol} est finalisée. Consultez le hash dans votre suivi.${suffix}` };
-  if (status === 'cancelled') return { title: 'Commande crypto annulée', message: `Votre commande ${symbol} a été annulée. Votre solde Rena a été remboursé automatiquement.${suffix}` };
-  return { title: '❌ Commande crypto refusée', message: `Votre commande ${symbol} n’a pas pu être finalisée. Votre solde Rena a été remboursé automatiquement.${suffix}` };
+  if (status === 'cancelled') return { title: 'Commande crypto annulée', message: `Votre commande ${symbol} a été annulée. Votre solde Solutionpam a été remboursé automatiquement.${suffix}` };
+  return { title: '❌ Commande crypto refusée', message: `Votre commande ${symbol} n’a pas pu être finalisée. Votre solde Solutionpam a été remboursé automatiquement.${suffix}` };
 }
 
 const DEFAULT_CRYPTO_ASSETS = [
@@ -5926,7 +5926,7 @@ router.post('/api/client/crypto-orders', requireDb, requireClientSession, async 
       const orderNumber = `CR-${Date.now().toString(36).toUpperCase()}-${orderRef.id.slice(0, 5).toUpperCase()}`;
       createdOrder = {
         id: orderRef.id, orderNumber, userId,
-        clientName: String(clientData.name || 'Client Rena').slice(0, 120),
+        clientName: String(clientData.name || 'Client Solutionpam').slice(0, 120),
         phone: String(clientData.phone || clientData.phoneNumber || '').slice(0, 40),
         email: String(clientData.email || '').slice(0, 160),
         cryptoId: cryptoAsset.id, cryptoName: cryptoAsset.name, cryptoSymbol: cryptoAsset.symbol, cryptoLogo: cryptoAsset.logo || '',
@@ -5962,7 +5962,7 @@ router.post('/api/client/crypto-orders', requireDb, requireClientSession, async 
       message: `${createdOrder.clientName} demande ${createdOrder.amount} ${createdOrder.cryptoSymbol} sur ${createdOrder.networkName}.`,
       clientId: userId, orderId: orderRef.id, read: false, createdAt: FieldValue.serverTimestamp(),
     });
-    sendFcmToClient(userId, '✅ Paiement crypto confirmé', 'Votre solde Rena a été débité. Notre équipe prépare votre envoi.', { type: 'crypto_order', orderId: orderRef.id });
+    sendFcmToClient(userId, '✅ Paiement crypto confirmé', 'Votre solde Solutionpam a été débité. Notre équipe prépare votre envoi.', { type: 'crypto_order', orderId: orderRef.id });
     pushClientEvent(userId, 'crypto_order_created', { id: orderRef.id, status: 'payment_confirmed' });
     const [created, currentClient] = await Promise.all([orderRef.get(), clientRef.get()]);
     res.status(201).json({ order: clientCryptoOrder(serializeDoc(created)), balanceAfter: Number(currentClient.data()?.balance || 0) });
@@ -6044,7 +6044,7 @@ router.patch('/api/admin/crypto-orders/orders/:id', requireDb, requireAdminSecre
       };
       if (!allowed[current.status]?.includes(nextStatus)) throw new Error('Cette transition de statut n’est pas autorisée.');
       if (nextStatus === 'payment_confirmed' && !current.paymentTransactionId) {
-        throw new Error('Cette commande historique n’a pas été réglée depuis le solde Rena.');
+        throw new Error('Cette commande historique n’a pas été réglée depuis le solde Solutionpam.');
       }
       if (nextStatus === 'completed' && !validateCryptoTransactionHash(transactionHash, String(current.networkCode || ''))) {
         throw new Error('Le hash de transaction est requis et doit correspondre au réseau de la commande.');
@@ -6189,7 +6189,7 @@ router.post('/api/admin/crypto-orders/migrate-legacy', requireDb, requireAdminSe
       const statusMap: Record<string, string> = { pending: 'pending', processing: 'processing', sent: 'completed', rejected: 'rejected' };
       await ref.set({
         orderNumber: `LEGACY-${legacyDoc.id.slice(0, 8).toUpperCase()}`, userId: String(legacy.clientId || ''),
-        clientName: String(legacy.clientName || 'Client Rena'), phone: '', email: String(legacy.clientEmail || ''),
+        clientName: String(legacy.clientName || 'Client Solutionpam'), phone: '', email: String(legacy.clientEmail || ''),
         cryptoId: crypto.id, cryptoName: crypto.name, cryptoSymbol: crypto.symbol, cryptoLogo: '',
         networkId: network.id, networkName: network.name, networkCode: network.code,
         amount: Number.isFinite(Number(legacy.estimatedCryptoAmount)) ? Number(legacy.estimatedCryptoAmount) : 0,
@@ -6272,7 +6272,7 @@ router.post('/api/client/crypto-market/requests', requireDb, requireClientSessio
       requestData = {
         id: requestRef.id,
         clientId,
-        clientName: String(clientData.name || 'Client Rena'),
+        clientName: String(clientData.name || 'Client Solutionpam'),
         clientEmail: String(clientData.email || ''),
         status: 'pending',
         destinationAddress,
@@ -6657,7 +6657,7 @@ if (webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
         privKey = trimmed.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       }
     } catch {}
-    webpush.setVapidDetails('mailto:renaservices@gmail.com', VAPID_PUBLIC_KEY, privKey);
+    webpush.setVapidDetails('mailto:support@solutionpam.com', VAPID_PUBLIC_KEY, privKey);
     pushEnabled = true;
     console.log('[Push] VAPID configured');
   } catch (e) {
@@ -6706,7 +6706,7 @@ router.post('/api/push/send', requireDb, requireAdminSession, async (req, res) =
     return res.status(503).json({ error: 'Push notifications non configurées.' });
 
   const { title, body, url, tag } = req.body;
-  const payload = JSON.stringify({ title: title || 'Rena', body: body || '', url: url || '/', tag: tag || 'rena-notif', icon: '/icon.svg', badge: '/icon.svg' });
+  const payload = JSON.stringify({ title: title || 'Solutionpam', body: body || '', url: url || '/', tag: tag || 'solutionpam-notif', icon: '/solutionpam-icon.svg', badge: '/solutionpam-icon.svg' });
 
   const snap = await adminDb.collection('push_subscriptions').get();
   const subs = snap.docs.map(d => d.data().subscription);
@@ -6734,7 +6734,7 @@ async function sendPushToAdmins(title: string, body: string, url = '/'): Promise
   try {
     const snap = await adminDb.collection('push_subscriptions').get();
     if (snap.empty) return;
-    const payload = JSON.stringify({ title, body, url, icon: '/icon.svg', badge: '/icon.svg', tag: 'rena-admin' });
+    const payload = JSON.stringify({ title, body, url, icon: '/solutionpam-icon.svg', badge: '/solutionpam-icon.svg', tag: 'solutionpam-admin' });
     await Promise.allSettled(
       snap.docs.map(async (d) => {
         const sub = d.data().subscription;
@@ -6832,7 +6832,7 @@ router.post('/api/admin/formations/certificate', requireDb, requireAdminSecret, 
     const existing = await adminDb.collection('formation_certificates')
       .where('userId', '==', userId).where('formationId', '==', formationId).limit(1).get();
     if (!existing.empty) return res.status(409).json({ error: 'Certificat déjà émis pour cet étudiant.' });
-    const certificateCode = 'RENA-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const certificateCode = 'SPM-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
     const certData: any = {
       userId, userName, userEmail: userEmail || '', formationId, formationTitle,
       issuedBy, certificateCode, issuedAt: FieldValue.serverTimestamp(),
@@ -7965,9 +7965,9 @@ router.post('/api/admin/analyze', async (req, res) => {
 });
 
 // ── AI Chat libre ─────────────────────────────────────────────────────────────
-const AI_CHAT_SYSTEM = `Tu es un développeur senior qui travaille EXCLUSIVEMENT sur le projet "Rena".
+const AI_CHAT_SYSTEM = `Tu es un développeur senior qui travaille EXCLUSIVEMENT sur le projet "Solutionpam".
 
-## Architecture Rena (mémorise-la)
+## Architecture Solutionpam (mémorise-la)
 - **Frontend** : React 19 + Vite 6 + Tailwind CSS 4 + shadcn/ui
   - \`src/pages/AdminDashboard.tsx\` — tableau de bord admin (12 000+ lignes, très grand fichier)
   - \`src/pages/ClientDashboard.tsx\` — tableau de bord client
@@ -7983,10 +7983,10 @@ const AI_CHAT_SYSTEM = `Tu es un développeur senior qui travaille EXCLUSIVEMENT
 
 ## Règles ABSOLUES de réponse
 1. Réponds TOUJOURS en français
-2. **JAMAIS de conseils génériques** qui s'appliquent à n'importe quel projet Node/React. Chaque réponse doit être spécifique à Rena.
+2. **JAMAIS de conseils génériques** qui s'appliquent à n'importe quel projet Node/React. Chaque réponse doit être spécifique à Solutionpam.
 3. Cite toujours le fichier exact (\`src/api/router.ts\`, \`src/pages/AdminDashboard.tsx\`, etc.)
 4. Pour du code : indique la fonction/section à modifier et fournis un extrait complet prêt à coller
-5. Si tu ne sais pas quelque chose sur Rena, dis-le clairement — ne devine pas
+5. Si tu ne sais pas quelque chose sur Solutionpam, dis-le clairement — ne devine pas
 6. Ne suggère JAMAIS : react-query, express-cache, express-error-handler, react-router-dom, ou toute lib non déjà dans le projet
 7. Libs déjà disponibles : shadcn/ui, Recharts, Framer Motion, Nodemailer, Zod — utilise-les si besoin
 8. Format : ## sections, \`\`\`ts blocs de code, **gras** points importants`;
@@ -8054,13 +8054,13 @@ router.post('/api/admin/ai-chat', async (req, res) => {
 });
 
 // ── Ernst — Agent AI Assistant ────────────────────────────────────────────────
-const ERNST_SYSTEM = `Tu es Ernst, l'assistant IA personnel des agents de la plateforme Rena.
-Rena est une plateforme logistique et fintech multi-rôles basée en Haïti.
+const ERNST_SYSTEM = `Tu es Ernst, l'assistant IA personnel des agents de la plateforme Solutionpam.
+Solutionpam est une plateforme logistique et fintech multi-rôles basée en Haïti.
 
 ## Ton rôle
-Tu aides les agents Rena dans leurs tâches quotidiennes : dépôts, retraits, gestion des clients, commissions, portefeuille, procédures, et tout problème opérationnel qu'ils rencontrent.
+Tu aides les agents Solutionpam dans leurs tâches quotidiennes : dépôts, retraits, gestion des clients, commissions, portefeuille, procédures, et tout problème opérationnel qu'ils rencontrent.
 
-## Ce que font les agents Rena
+## Ce que font les agents Solutionpam
 - Effectuer des **dépôts** et **retraits** pour les clients (en HTG, converti en USD selon le taux du jour)
 - Rechercher des clients par téléphone, nom ou ID Wallet
 - Gérer leur propre portefeuille agent (solde en USD)
@@ -8401,14 +8401,14 @@ router.post('/api/admin/test-email', async (req, res) => {
   const { send, FROM_EMAIL } = await import('../lib/email.ts');
   const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:32px;">
     <h2 style="color:#059669;">✅ Test email Resend</h2>
-    <p>Si vous lisez ceci, Resend est correctement configuré sur <strong>Rena</strong>.</p>
+    <p>Si vous lisez ceci, Resend est correctement configuré sur <strong>Solutionpam</strong>.</p>
     <table style="border-collapse:collapse;width:100%;max-width:400px;">
       <tr><td style="padding:8px;border:1px solid #eee;color:#888;">FROM</td><td style="padding:8px;border:1px solid #eee;">${FROM_EMAIL}</td></tr>
       <tr><td style="padding:8px;border:1px solid #eee;color:#888;">TO</td><td style="padding:8px;border:1px solid #eee;">${recipient}</td></tr>
       <tr><td style="padding:8px;border:1px solid #eee;color:#888;">Date</td><td style="padding:8px;border:1px solid #eee;">${new Date().toLocaleString('fr-FR')}</td></tr>
     </table>
   </body></html>`;
-  const result = await send(recipient, '✅ Test email Rena — Resend opérationnel', html, 'test_email');
+  const result = await send(recipient, '✅ Test email Solutionpam — Resend opérationnel', html, 'test_email');
   if (result.success) {
     return res.json({ ok: true, id: result.id, from: FROM_EMAIL, to: recipient });
   }
@@ -8512,7 +8512,7 @@ router.post('/api/crypto/create-payment', requireDb, async (req, res) => {
       ? `https://${process.env.REPLIT_DEV_DOMAIN}`
       : (process.env.APP_URL || '');
     const ipnCallbackUrl = `${domain}/api/crypto/ipn`;
-    const orderId = `RENA-${String(clientId).slice(0, 8)}-${Date.now()}`;
+    const orderId = `SPM-${String(clientId).slice(0, 8)}-${Date.now()}`;
 
     const payment = await nowPayFetch('/payment', 'POST', {
       price_amount:        Number(amount),

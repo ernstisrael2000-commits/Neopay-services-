@@ -32,7 +32,7 @@ export function mapGoogleAuthError(error: any): string {
     return "La connexion Google a échoué : l'état de session est inaccessible. Cela arrive lorsque l'application tourne dans un iframe ou que les cookies tiers sont bloqués. Ouvrez le site dans un onglet normal de votre navigateur et réessayez.";
 
   if (code === 'auth/unauthorized-domain')
-    return "Ce domaine n'est pas autorisé pour la connexion Google. Contactez l'administrateur Rena.";
+    return "Ce domaine n'est pas autorisé pour la connexion Google. Contactez l'administrateur Solutionpam.";
 
   if (code === 'auth/network-request-failed')
     return "Erreur réseau. Vérifiez votre connexion internet et réessayez.";

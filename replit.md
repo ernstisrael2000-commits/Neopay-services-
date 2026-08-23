@@ -1,4 +1,4 @@
-# Rena — Logistics & Fintech Platform
+# Solutionpam — Logistics & Fintech Platform
 
 Application web multi-rôles (clients, affiliés, agents, admins) pour la gestion de colis, paiements, portefeuilles et formations en ligne.
 
@@ -45,7 +45,7 @@ Le serveur expose le port **5000** (Express + Vite SSR proxy).
 | Variable | Valeur | Description |
 |----------|--------|-------------|
 | `FIRESTORE_DB_ID` | `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2` | ID de la base Firestore nommée |
-| `FROM_EMAIL` | `noreply@rena.ht` | Adresse expéditeur emails |
+| `FROM_EMAIL` | `noreply@solutionpam.com` | Adresse expéditeur emails |
 | `PORT` | `5000` | Port du serveur Express |
 
 ## Firestore

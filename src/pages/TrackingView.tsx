@@ -83,7 +83,7 @@ export default function TrackingView() {
               transition={{ delay: 0.2 }}
               className="text-base sm:text-xl text-accent-light font-medium drop-shadow-md"
             >
-              Entrez votre numéro de suivi Rena pour voir l'état actuel de votre livraison.
+              Entrez votre numéro de suivi Solutionpam pour voir l'état actuel de votre livraison.
             </motion.p>
           </div>
 
