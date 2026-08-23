@@ -7,3 +7,4 @@
 - [Security rules applied](security-rules-applied.md) — résumé de tous les correctifs de sécurité appliqués (wallet, IPN, Fazer prix, 2FA, Firestore rules, requireAdminSecret)
 - [Fixed modal portals](fixed-modal-portals.md) — les overlays fixes doivent sortir des conteneurs de page animés via un portail
 - [Marché crypto manuel](crypto-market-manual.md) — demandes crypto séparées du wallet, évaluées côté serveur et traitées par un humain
+- [Connexion Google et CSP](google-auth-csp.md) — Firebase Google Auth requiert des origines script/frame Google explicitement autorisées par la CSP
