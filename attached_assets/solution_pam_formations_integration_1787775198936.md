@@ -40,9 +40,7 @@ Solution PAM doit donc être à la fois :
 - la plateforme d'authentification ;
 - la plateforme de paiement ;
 - la plateforme d'accès aux formations ;
-- la plateforme de suivi de progression.
-
----
+- la plateforme de suivi de progressi
 
 ## 3. PARCOURS UTILISATEUR
 
