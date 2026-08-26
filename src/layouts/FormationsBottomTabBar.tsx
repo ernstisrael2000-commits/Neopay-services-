@@ -3,7 +3,7 @@ import { Home, Compass, LibraryBig, UserCircle2 } from 'lucide-react';
 import { Client } from '../types';
 
 interface FormationsBottomTabBarProps {
-  activeTab: 'all' | 'my';
+  activeTab: 'all' | 'my' | 'profile';
   onGoHome: () => void;
   onExplore: () => void;
   onMyCourses: () => void;
@@ -17,7 +17,7 @@ export default function FormationsBottomTabBar({
     { id: 'home' as const, label: 'Accueil', icon: Home, onClick: onGoHome, active: false },
     { id: 'explore' as const, label: 'Explorer', icon: Compass, onClick: onExplore, active: activeTab === 'all' },
     { id: 'my' as const, label: 'Mes cours', icon: LibraryBig, onClick: onMyCourses, active: activeTab === 'my' },
-    { id: 'profile' as const, label: 'Profil', icon: UserCircle2, onClick: onProfile, active: false },
+    { id: 'profile' as const, label: 'Profil', icon: UserCircle2, onClick: onProfile, active: activeTab === 'profile' },
   ];
 
   return (

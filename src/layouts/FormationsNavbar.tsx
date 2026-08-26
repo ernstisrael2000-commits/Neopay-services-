@@ -11,8 +11,8 @@ interface FormationsNavbarProps {
   loggedClient: Client | null;
   onOpenWallet: () => void;
   onRequestAuth: () => void;
-  activeTab: 'all' | 'my';
-  onTabChange: (tab: 'all' | 'my') => void;
+  activeTab: 'all' | 'my' | 'profile';
+  onTabChange: (tab: 'all' | 'my' | 'profile') => void;
   searchQuery: string;
   onSearch: (q: string) => void;
 }

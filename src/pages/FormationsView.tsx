@@ -19,6 +19,7 @@ import { Client } from '../types';
 import { toast } from 'sonner';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { loginClientWithGoogle } from '../services/clientService';
+import { openCertificate } from '../lib/certificateGenerator';
 import { FormationGridSkeleton } from '../components/skeletons/FormationGridSkeleton';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -27,12 +28,13 @@ interface FormationsViewProps {
   loggedClient: Client | null;
   onOpenWallet: () => void;
   onClientLogin?: (client: Client) => void;
-  activeTab: 'all' | 'my';
-  onTabChange: (tab: 'all' | 'my') => void;
+  activeTab: 'all' | 'my' | 'profile';
+  onTabChange: (tab: 'all' | 'my' | 'profile') => void;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   onPlayerChange?: (active: boolean) => void;
   onDetailChange?: (active: boolean) => void;
+  resetSignal?: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -111,7 +113,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange }: FormationsViewProps) {
+export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange, resetSignal }: FormationsViewProps) {
   const { settings } = useSettingsCtx();
 
   // Data
@@ -132,6 +134,16 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   useEffect(() => {
     if (externalSearch !== undefined) setSearchQuery(externalSearch);
   }, [externalSearch]);
+
+  // Reset catalog filters when the parent signals a "go home" action
+  const isFirstResetSignal = React.useRef(true);
+  useEffect(() => {
+    if (isFirstResetSignal.current) { isFirstResetSignal.current = false; return; }
+    if (resetSignal === undefined) return;
+    setFilterCategory('all');
+    setFilterLevel('all');
+    setShowFilters(false);
+  }, [resetSignal]);
 
   // Notify parent when the course detail page is open (hides catalog-only chrome)
   useEffect(() => {
@@ -747,6 +759,32 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
             </motion.div>
           )}
 
+          {/* ── PROFILE TAB ──────────────────────────────────────────────── */}
+          {activeTab === 'profile' && (
+            <motion.div key="profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {!loggedClient ? (
+                <div className="text-center py-14">
+                  <div className="bg-violet-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-violet-100">
+                    <Lock className="h-7 w-7 text-violet-400" />
+                  </div>
+                  <h3 className="text-lg font-black text-gray-900 mb-1.5">Connectez-vous pour voir votre profil</h3>
+                  <p className="text-gray-500 text-sm mb-5 max-w-sm mx-auto">Retrouvez vos statistiques d'apprentissage et vos certificats.</p>
+                  <Button onClick={onOpenWallet} className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-6">
+                    Se connecter
+                  </Button>
+                </div>
+              ) : (
+                <AcademyProfilePage
+                  loggedClient={loggedClient}
+                  myCourses={myCourses}
+                  progressMap={progressMap}
+                  onTabChange={onTabChange}
+                  onOpenWallet={onOpenWallet}
+                />
+              )}
+            </motion.div>
+          )}
+
         </AnimatePresence>
       </div>
     </div>
@@ -954,6 +992,147 @@ function getCategoryColors(cat?: string) {
     if (key.includes(k)) return categoryColors[k];
   }
   return categoryColors.default;
+}
+
+interface AcademyCertificate {
+  id?: string;
+  formationId: string;
+  formationTitle: string;
+  userName?: string;
+  certificateCode?: string;
+  issuedBy?: string;
+  issuedAt?: any;
+  pdfUrl?: string;
+}
+
+function AcademyProfilePage({ loggedClient, myCourses, progressMap, onTabChange, onOpenWallet }: {
+  loggedClient: Client; myCourses: Formation[]; progressMap: Record<string, number>;
+  onTabChange: (t: 'all' | 'my' | 'profile') => void; onOpenWallet: () => void;
+}) {
+  const [certificates, setCertificates] = useState<AcademyCertificate[]>([]);
+  const [loadingCerts, setLoadingCerts] = useState(true);
+
+  const inProgress = myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100);
+  const completed = myCourses.filter(f => (progressMap[f.id!] ?? 0) >= 100);
+
+  useEffect(() => {
+    if (!loggedClient?.id || completed.length === 0) { setLoadingCerts(false); return; }
+    let cancelled = false;
+    setLoadingCerts(true);
+    Promise.all(
+      completed.filter(f => f.hasCertificate).map(f =>
+        fetch(`/api/formations/certificate/${loggedClient.id}/${f.id}`)
+          .then(r => r.json())
+          .then(data => (data.certificate ? { ...data.certificate, formationId: f.id, formationTitle: f.title } as AcademyCertificate : null))
+          .catch(() => null)
+      )
+    ).then(results => {
+      if (!cancelled) setCertificates(results.filter(Boolean) as AcademyCertificate[]);
+    }).finally(() => { if (!cancelled) setLoadingCerts(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedClient?.id, completed.map(f => f.id).join(',')]);
+
+  const initials = (loggedClient.name || '?').trim().charAt(0).toUpperCase();
+
+  return (
+    <div className="space-y-6 max-w-3xl mx-auto">
+
+      {/* ── Header ── */}
+      <div className="bg-white rounded-3xl border border-stone-200/80 p-6 flex items-center gap-4">
+        {loggedClient.photoUrl ? (
+          <img src={loggedClient.photoUrl} alt={loggedClient.name} className="h-16 w-16 rounded-full object-cover shrink-0 border border-stone-200" />
+        ) : (
+          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-violet-600 to-orange-500 flex items-center justify-center text-white text-2xl font-editorial font-semibold shrink-0">
+            {initials}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <h2 className="font-editorial text-xl font-semibold text-gray-900 truncate">{loggedClient.name}</h2>
+          {loggedClient.email && <p className="text-sm text-gray-400 truncate">{loggedClient.email}</p>}
+          <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">Étudiant</span>
+        </div>
+      </div>
+
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { value: myCourses.length, label: 'Formations' },
+          { value: inProgress.length, label: 'En cours' },
+          { value: completed.length, label: 'Terminées' },
+        ].map(s => (
+          <div key={s.label} className="bg-white rounded-2xl border border-stone-200/80 p-4 text-center">
+            <p className="font-editorial text-2xl font-semibold text-violet-700">{s.value}</p>
+            <p className="text-[11px] text-gray-400 font-semibold mt-0.5">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Certificates ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Award className="h-4 w-4 text-orange-500" />
+          <h3 className="font-editorial text-base font-semibold text-gray-900">Mes certificats</h3>
+        </div>
+        {loadingCerts ? (
+          <div className="bg-white rounded-2xl border border-stone-200/80 p-8 flex items-center justify-center">
+            <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
+          </div>
+        ) : certificates.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-stone-200/80 p-8 text-center">
+            <Trophy className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+            <p className="text-sm text-gray-500 font-semibold">Aucun certificat pour l'instant</p>
+            <p className="text-xs text-gray-400 mt-1">Terminez une formation pour obtenir votre premier certificat.</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {certificates.map(cert => (
+              <div key={cert.formationId} className="bg-white rounded-2xl border border-stone-200/80 p-4 flex items-center gap-3">
+                <div className="h-10 w-10 bg-orange-50 rounded-xl flex items-center justify-center shrink-0">
+                  <Award className="h-5 w-5 text-orange-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-900 truncate">{cert.formationTitle}</p>
+                  <p className="text-[11px] text-gray-400">
+                    {cert.issuedAt?.seconds ? new Date(cert.issuedAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
+                    {cert.certificateCode && ` · ${cert.certificateCode}`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => openCertificate({
+                    userName: cert.userName || loggedClient.name || 'Étudiant',
+                    formationTitle: cert.formationTitle,
+                    certificateCode: cert.certificateCode,
+                    issuedBy: cert.issuedBy,
+                    issuedAt: cert.issuedAt,
+                    pdfUrl: cert.pdfUrl,
+                  })}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Télécharger</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Account actions ── */}
+      <div className="bg-white rounded-2xl border border-stone-200/80 divide-y divide-stone-100 overflow-hidden">
+        <button onClick={() => onTabChange('my')} className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors">
+          <BookMarked className="h-4 w-4 text-violet-600 shrink-0" />
+          <span className="text-sm font-semibold text-gray-800 flex-1">Mes cours</span>
+          <ChevronRight className="h-4 w-4 text-gray-300" />
+        </button>
+        <button onClick={onOpenWallet} className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors">
+          <Wallet className="h-4 w-4 text-violet-600 shrink-0" />
+          <span className="text-sm font-semibold text-gray-800 flex-1">Mon wallet & solde</span>
+          <ChevronRight className="h-4 w-4 text-gray-300" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function StudentDashboard({ loggedClient, myCourses, progressMap, favorites, onPlay, onDetails, onOpenWallet, onTabChange, allFormations }: {

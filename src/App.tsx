@@ -71,7 +71,8 @@ function AppInner() {
   const [history, setHistory] = useState<AppView[]>([initialRoute.view]);
   // Direction for page slide: 1 = left (new page comes from right), -1 = right (back)
   const navDirection = useRef<1 | -1>(1);
-  const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
+  const [formationsTab, setFormationsTab] = useState<'all' | 'my' | 'profile'>('all');
+  const [formationsResetSignal, setFormationsResetSignal] = useState(0);
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'agent' | 'admin' | null>(null);
   const { loading } = useAuth();
   const [splashVisible, setSplashVisible] = useState(true);
@@ -341,7 +342,7 @@ function AppInner() {
               handleViewChange('admin');
             }}
             onTeacherAccess={() => handleViewChange('teacher')}
-            formationsTab={formationsTab}
+            formationsTab={formationsTab === 'profile' ? 'my' : formationsTab}
             onFormationsTabChange={setFormationsTab}
           />
         )}
@@ -362,13 +363,21 @@ function AppInner() {
         {view === 'formations' && !formationsInPlayer && !formationsDetailOpen && (
           <FormationsBottomTabBar
             activeTab={formationsTab}
-            onGoHome={() => { handleViewChange('home'); setFormationsSearch(''); }}
+            onGoHome={() => {
+              setFormationsTab('all');
+              setFormationsSearch('');
+              setFormationsResetSignal(s => s + 1);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             onExplore={() => setFormationsTab('all')}
             onMyCourses={() => {
               if (!loggedClient) { setShowAuthModal(true); return; }
               setFormationsTab('my');
             }}
-            onProfile={() => handleViewChange('wallet')}
+            onProfile={() => {
+              if (!loggedClient) { setShowAuthModal(true); return; }
+              setFormationsTab('profile');
+            }}
           />
         )}
 
@@ -450,7 +459,7 @@ function AppInner() {
             loggedClient={loggedClient}
             onOpenWallet={() => handleViewChange('wallet')}
             onRequestAuth={() => setShowAuthModal(true)}
-            formationsTab={formationsTab}
+            formationsTab={formationsTab === 'profile' ? 'my' : formationsTab}
             onFormationsTabChange={setFormationsTab}
           />
         )}
@@ -553,6 +562,7 @@ function AppInner() {
                       onSearchChange={setFormationsSearch}
                       onPlayerChange={setFormationsInPlayer}
                       onDetailChange={setFormationsDetailOpen}
+                      resetSignal={formationsResetSignal}
                     />
                   )}
 
