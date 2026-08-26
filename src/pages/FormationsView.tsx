@@ -32,6 +32,7 @@ interface FormationsViewProps {
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   onPlayerChange?: (active: boolean) => void;
+  onDetailChange?: (active: boolean) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,7 +111,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange }: FormationsViewProps) {
+export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange }: FormationsViewProps) {
   const { settings } = useSettingsCtx();
 
   // Data
@@ -131,6 +132,11 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   useEffect(() => {
     if (externalSearch !== undefined) setSearchQuery(externalSearch);
   }, [externalSearch]);
+
+  // Notify parent when the course detail page is open (hides catalog-only chrome)
+  useEffect(() => {
+    onDetailChange?.(!!selected);
+  }, [selected, onDetailChange]);
 
   // Ownership & progress
   const [purchasedIds, setPurchasedIds] = useState<string[]>([]);
@@ -366,7 +372,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   // ── Render: Loading ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f0f2ff] px-4 pt-6 pb-24">
+      <div className="min-h-screen bg-[#faf9f6] px-4 pt-6 pb-24">
         <FormationGridSkeleton count={6} />
       </div>
     );
@@ -374,7 +380,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
 
   // ── Render: Catalog ─────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f0f2ff]">
+    <div className="min-h-screen bg-[#faf9f6]">
 
       {/* ── Login prompt dialog ─────────────────────────────────────────────── */}
       <Dialog open={showLoginPrompt} onOpenChange={open => { setShowLoginPrompt(open); if (!open) setPendingFormation(null); }}>
@@ -423,26 +429,35 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         </DialogContent>
       </Dialog>
 
-      {/* ── SEARCH BAR (replaces hero card) ────────────────────────────────── */}
+      {/* ── EDITORIAL MASTHEAD ───────────────────────────────────────────────── */}
       {activeTab === 'all' && (
-        <div className="px-4 pt-4 pb-1 max-w-4xl mx-auto">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Rechercher un cours, instructeur…"
-              value={searchQuery}
-              onChange={e => onSearchChange?.(e.target.value)}
-              className="w-full h-12 pl-11 pr-10 rounded-2xl bg-white border border-gray-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 transition-all shadow-sm"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => onSearchChange?.('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+        <div className="border-b border-stone-200/70 bg-white">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-8 pb-5 text-center">
+            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-orange-600 mb-2">Solution PAM Academy</p>
+            <h1 className="font-editorial text-3xl sm:text-4xl font-semibold text-gray-900 tracking-tight">
+              Apprenez à votre rythme
+            </h1>
+            <p className="text-gray-500 text-sm mt-2 max-w-md mx-auto">
+              Des formations pensées pour progresser, une compétence à la fois.
+            </p>
+            <div className="relative mt-5 max-w-lg mx-auto">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Rechercher un cours, instructeur…"
+                value={searchQuery}
+                onChange={e => onSearchChange?.(e.target.value)}
+                className="w-full h-12 pl-11 pr-10 rounded-full bg-stone-50 border border-stone-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:border-violet-300 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => onSearchChange?.('')}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -494,68 +509,60 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                 </div>
               ) : (
                 <>
-                  {/* ── 1. Categories with icon boxes */}
-                  {categories.filter(c => c !== 'all').length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-[15px] font-black text-gray-900">Catégories</h3>
-                        <button
-                          onClick={() => setShowFilters(v => !v)}
-                          className={`text-xs font-bold flex items-center gap-1 transition-colors ${showFilters ? 'text-violet-700' : 'text-gray-400 hover:text-violet-600'}`}
-                        >
-                          <Filter className="h-3 w-3" /> {showFilters ? 'Fermer' : 'Filtres'}
-                        </button>
-                      </div>
-
-                      {/* Filters panel */}
-                      <AnimatePresence>
-                        {showFilters && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden mb-4"
-                          >
-                            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-3">
-                              <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-2">Niveau</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {['all', 'debutant', 'intermediaire', 'avance'].map(lvl => (
-                                  <button key={lvl} onClick={() => setFilterLevel(lvl)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${filterLevel === lvl ? 'bg-violet-600 text-white shadow-sm shadow-violet-400/30' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
-                                    {lvl === 'all' ? 'Tous' : levelLabels[lvl]}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Category pill chips - horizontal scroll */}
-                      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
-                        {['all', ...categories.filter(c => c !== 'all')].map(cat => {
-                          const Icon = getCategoryIcon(cat);
+                  {/* ── 1. Categories — editorial underline tabs */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3 border-b border-stone-200">
+                      <div className="flex gap-5 overflow-x-auto no-scrollbar">
+                        {['all', ...FIXED_CATEGORIES].map(cat => {
                           const active = filterCategory === cat;
                           return (
                             <button
                               key={cat}
                               onClick={() => setFilterCategory(cat)}
-                              className={`flex items-center gap-1.5 shrink-0 px-3.5 py-2 rounded-full border transition-all active:scale-95 ${
-                                active
-                                  ? 'bg-violet-600 border-violet-600 text-white shadow-md shadow-violet-300/40'
-                                  : 'bg-white border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-600 shadow-sm'
+                              className={`relative shrink-0 pb-2.5 text-[13px] font-semibold whitespace-nowrap transition-colors ${
+                                active ? 'text-violet-700' : 'text-gray-400 hover:text-gray-600'
                               }`}
                             >
-                              <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-white' : 'text-violet-500'}`} />
-                              <span className="text-[11px] font-bold whitespace-nowrap">
-                                {cat === 'all' ? 'Tous' : cat.length > 12 ? cat.slice(0, 11) + '…' : cat}
-                              </span>
+                              {cat === 'all' ? 'Tous' : cat}
+                              {active && (
+                                <motion.span layoutId="cat-underline" className="absolute left-0 right-0 -bottom-px h-[2px] bg-orange-500 rounded-full" />
+                              )}
                             </button>
                           );
                         })}
                       </div>
+                      <button
+                        onClick={() => setShowFilters(v => !v)}
+                        className={`text-xs font-semibold flex items-center gap-1 shrink-0 pl-3 transition-colors ${showFilters ? 'text-violet-700' : 'text-gray-400 hover:text-violet-600'}`}
+                      >
+                        <Filter className="h-3 w-3" /> {showFilters ? 'Fermer' : 'Filtres'}
+                      </button>
                     </div>
-                  )}
+
+                    {/* Filters panel */}
+                    <AnimatePresence>
+                      {showFilters && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="bg-stone-50 rounded-2xl border border-stone-100 p-4 mt-3">
+                            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Niveau</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {['all', 'debutant', 'intermediaire', 'avance'].map(lvl => (
+                                <button key={lvl} onClick={() => setFilterLevel(lvl)}
+                                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${filterLevel === lvl ? 'bg-violet-600 text-white shadow-sm shadow-violet-400/30' : 'bg-white text-gray-500 hover:bg-gray-100 border border-stone-200'}`}>
+                                  {lvl === 'all' ? 'Tous' : levelLabels[lvl]}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
                   {/* ── 2. Continue learning (if in-progress courses) */}
                   {loggedClient && myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100).length > 0 && (
@@ -658,19 +665,19 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                    className="rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-900 p-6 text-white shadow-lg shadow-violet-900/20"
+                    className="rounded-3xl bg-gradient-to-br from-violet-700 via-violet-800 to-orange-600 p-6 text-white shadow-lg shadow-violet-900/20"
                   >
                     <div>
-                      <Award className="h-10 w-10 mb-3 text-amber-300" />
-                      <h4 className="text-lg font-black mb-1.5">Certificats Solutionpam Academy</h4>
+                      <Award className="h-10 w-10 mb-3 text-orange-200" />
+                      <h4 className="font-editorial text-xl font-semibold mb-1.5">Certificats Solution PAM Academy</h4>
                       <p className="text-white/70 text-sm mb-5 max-w-xs leading-relaxed">
                         Obtenez un certificat reconnu après chaque formation complétée.
                       </p>
                       <button
                         onClick={() => loggedClient ? onTabChange('my') : onOpenWallet()}
-                        className="bg-white text-violet-700 font-black text-sm px-5 py-2.5 rounded-full hover:bg-violet-50 active:scale-95 transition-all inline-flex items-center gap-2 shadow-md"
+                        className="bg-white text-violet-800 font-bold text-sm px-5 py-2.5 rounded-full hover:bg-orange-50 active:scale-95 transition-all inline-flex items-center gap-2 shadow-md"
                       >
-                        👉 {loggedClient ? 'Voir mes certificats' : 'Se connecter'}
+                        {loggedClient ? 'Voir mes certificats' : 'Se connecter'}
                       </button>
                     </div>
                   </motion.div>
@@ -686,9 +693,9 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                         <motion.div
                           key={s.label}
                           whileTap={{ scale: 0.96 }}
-                          className="bg-white p-4 rounded-2xl shadow-sm text-center border border-white/80 hover:shadow-md transition-all cursor-default"
+                          className="bg-white p-4 rounded-2xl border border-stone-200/80 text-center hover:shadow-sm transition-all cursor-default"
                         >
-                          <span className="block text-2xl font-black text-violet-700">{s.value}</span>
+                          <span className="block font-editorial text-2xl font-semibold text-violet-700">{s.value}</span>
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{s.label}</span>
                         </motion.div>
                       ))}
@@ -790,12 +797,12 @@ function EditorialCourseCard({ formation, i = 0, owned, fav, disc, onOpen, onFav
       className={`bg-white rounded-2xl border border-stone-200/80 transition-all duration-300 overflow-hidden group flex flex-col h-full ${isComingSoon ? 'cursor-default opacity-90' : 'hover:shadow-lg hover:shadow-stone-300/40 hover:-translate-y-1 cursor-pointer'}`}
     >
       {/* Cover */}
-      <div className="relative aspect-[4/3] overflow-hidden shrink-0 bg-stone-100">
+      <div className="relative aspect-[16/10] overflow-hidden shrink-0 bg-stone-100">
         {formation.coverImage ? (
           <img src={formation.coverImage} alt={formation.title} className={`w-full h-full object-cover transition-transform duration-700 ${isComingSoon ? 'grayscale-[30%]' : 'group-hover:scale-105'}`} />
         ) : (
           <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${isComingSoon ? 'from-gray-400 to-gray-600' : levelGradients[formation.level] || 'from-violet-500 to-purple-700'}`}>
-            <GraduationCap className="h-12 w-12 text-white/25" />
+            <GraduationCap className="h-10 w-10 text-white/25" />
           </div>
         )}
 
@@ -1282,13 +1289,11 @@ function FormationDetailPage({
 
         {/* Title */}
         <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8">
-          {formation.category && (
-            <span className="inline-block px-3 py-1 bg-violet-500/30 text-violet-300 text-xs font-bold rounded-full border border-violet-400/30 mb-3">
-              {formation.category}
-            </span>
-          )}
-          <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight max-w-2xl">{formation.title}</h1>
-          <p className="text-gray-400 text-sm mt-2 line-clamp-2 max-w-xl">{formation.shortDescription || formation.description}</p>
+          <span className="inline-block text-[10px] font-bold uppercase tracking-[0.2em] text-orange-300 mb-3">
+            {bucketCategory(formation.category)}
+          </span>
+          <h1 className="font-editorial text-2xl sm:text-4xl font-semibold text-white leading-tight max-w-2xl">{formation.title}</h1>
+          <p className="text-gray-300 text-sm mt-2 line-clamp-2 max-w-xl">{formation.shortDescription || formation.description}</p>
         </div>
       </div>
 
@@ -1300,24 +1305,24 @@ function FormationDetailPage({
           <div className="lg:col-span-2 space-y-8">
 
             {/* Meta stats */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className="bg-white rounded-2xl border border-stone-200/80 p-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { icon: <Clock className="h-4 w-4 text-violet-500" />, label: 'Durée', value: formation.totalDuration || `${modules.length * 15} min` },
                   { icon: <BookOpen className="h-4 w-4 text-violet-500" />, label: 'Modules', value: modules.length },
                   { icon: <Users className="h-4 w-4 text-violet-500" />, label: 'Étudiants', value: (formation.studentsCount || 0).toLocaleString() },
-                  { icon: <Star className="h-4 w-4 text-amber-500" />, label: 'Note', value: formation.rating > 0 ? formation.rating.toFixed(1) : '—' },
+                  { icon: <Star className="h-4 w-4 text-orange-500" />, label: 'Note', value: formation.rating > 0 ? formation.rating.toFixed(1) : '—' },
                 ].map(({ icon, label, value }) => (
-                  <div key={label} className="text-center p-3 bg-gray-50 rounded-xl">
+                  <div key={label} className="text-center p-3 bg-stone-50 rounded-xl">
                     <div className="flex justify-center mb-1.5">{icon}</div>
-                    <p className="font-black text-gray-900 text-sm">{value}</p>
+                    <p className="font-bold text-gray-900 text-sm">{value}</p>
                     <p className="text-[11px] text-gray-500">{label}</p>
                   </div>
                 ))}
               </div>
               <div className="flex flex-wrap gap-2 mt-4">
                 {formation.hasCertificate && (
-                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-full border border-amber-200">
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 text-xs font-bold rounded-full border border-orange-200">
                     <BadgeCheck className="h-3.5 w-3.5" /> Certification incluse
                   </span>
                 )}
@@ -1336,13 +1341,13 @@ function FormationDetailPage({
 
             {/* Preview Video */}
             {formation.previewVideoUrl && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-50 flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-emerald-100 flex items-center justify-center">
-                    <Play className="h-3.5 w-3.5 text-emerald-600 fill-emerald-600" />
+              <div className="bg-white rounded-2xl border border-stone-200/80 overflow-hidden">
+                <div className="p-4 border-b border-stone-100 flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-orange-50 flex items-center justify-center">
+                    <Play className="h-3.5 w-3.5 text-orange-600 fill-orange-600" />
                   </div>
                   <div>
-                    <h2 className="font-black text-gray-900 text-sm">Aperçu gratuit du cours</h2>
+                    <h2 className="font-editorial font-semibold text-gray-900 text-[15px]">Aperçu gratuit du cours</h2>
                     <p className="text-[11px] text-gray-400">Regardez sans inscription</p>
                   </div>
                 </div>
@@ -1383,27 +1388,27 @@ function FormationDetailPage({
             )}
 
             {/* Description */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-              <h2 className="font-black text-gray-900 text-base mb-3">À propos de cette formation</h2>
+            <div className="bg-white rounded-2xl border border-stone-200/80 p-6">
+              <h2 className="font-editorial font-semibold text-gray-900 text-lg mb-3">À propos de cette formation</h2>
               <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">{formation.description}</p>
             </div>
 
             {/* Instructor */}
             {formation.instructor && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-                <h2 className="font-black text-gray-900 text-base mb-4">Votre Instructeur</h2>
+              <div className="bg-white rounded-2xl border border-stone-200/80 p-6">
+                <h2 className="font-editorial font-semibold text-gray-900 text-lg mb-4">Votre instructeur</h2>
                 <div className="flex items-start gap-4">
                   {formation.instructorAvatar ? (
                     <img src={formation.instructorAvatar} alt={formation.instructor}
-                      className="h-16 w-16 rounded-full object-cover border-2 border-violet-200 shrink-0"
+                      className="h-16 w-16 rounded-full object-cover border-2 border-orange-200 shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')} />
                   ) : (
-                    <div className="h-16 w-16 rounded-full bg-violet-100 flex items-center justify-center border-2 border-violet-200 shrink-0">
+                    <div className="h-16 w-16 rounded-full bg-violet-100 flex items-center justify-center border-2 border-orange-200 shrink-0">
                       <User className="h-8 w-8 text-violet-500" />
                     </div>
                   )}
                   <div>
-                    <p className="font-black text-gray-900 text-base">{formation.instructor}</p>
+                    <p className="font-bold text-gray-900 text-base">{formation.instructor}</p>
                     {formation.instructorBio && (
                       <p className="text-sm text-gray-500 mt-1 leading-relaxed">{formation.instructorBio}</p>
                     )}
@@ -1414,10 +1419,10 @@ function FormationDetailPage({
 
             {/* Curriculum */}
             {modules.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-gray-50 flex items-center justify-between">
+              <div className="bg-white rounded-2xl border border-stone-200/80 overflow-hidden">
+                <div className="p-5 border-b border-stone-100 flex items-center justify-between">
                   <div>
-                    <h2 className="font-black text-gray-900 text-base">Curriculum du cours</h2>
+                    <h2 className="font-editorial font-semibold text-gray-900 text-lg">Curriculum du cours</h2>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {modules.length} module{modules.length > 1 ? 's' : ''} · {(formation.chapters || []).length > 0 ? `${(formation.chapters || []).length} chapitres` : ''}
                     </p>
@@ -1434,7 +1439,7 @@ function FormationDetailPage({
 
                 {/* Chapters */}
                 {(formation.chapters || []).length > 0 ? (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-stone-100">
                     {(formation.chapters || []).map((chapter, ci) => {
                       const cms = chapterModules[chapter.id] || [];
                       const expanded = expandedChapters[chapter.id];
@@ -1442,13 +1447,13 @@ function FormationDetailPage({
                         <div key={chapter.id}>
                           <button
                             onClick={() => setExpandedChapters(prev => ({ ...prev, [chapter.id]: !prev[chapter.id] }))}
-                            className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50 transition-colors"
+                            className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors"
                           >
-                            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 ${expanded ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'}`}>
+                            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-editorial font-semibold shrink-0 ${expanded ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}`}>
                               {ci + 1}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-black text-gray-900 text-sm">{chapter.title}</p>
+                              <p className="font-bold text-gray-900 text-sm">{chapter.title}</p>
                               <p className="text-[11px] text-gray-400">{cms.length} leçon{cms.length !== 1 ? 's' : ''}</p>
                             </div>
                             {!isOwned && <Lock className="h-4 w-4 text-gray-300 shrink-0" />}
@@ -1463,11 +1468,11 @@ function FormationDetailPage({
                     {noChapter.map((mod, mi) => <ModuleRow key={mod.id} mod={mod} idx={mi} isOwned={isOwned} />)}
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-50">
+                  <div className="divide-y divide-stone-100">
                     {visibleModules.map((mod, mi) => <ModuleRow key={mod.id} mod={mod} idx={mi} isOwned={isOwned} />)}
                     {modules.length > 6 && (
                       <button onClick={() => setShowAllModules(v => !v)}
-                        className="w-full py-3.5 text-xs font-bold text-violet-600 hover:bg-violet-50 transition-colors flex items-center justify-center gap-1.5">
+                        className="w-full py-3.5 text-xs font-bold text-violet-600 hover:bg-stone-50 transition-colors flex items-center justify-center gap-1.5">
                         {showAllModules ? <><ChevronUp className="h-3.5 w-3.5" /> Réduire</> : <><ChevronDown className="h-3.5 w-3.5" /> Voir {modules.length - 6} modules de plus</>}
                       </button>
                     )}
@@ -1478,21 +1483,21 @@ function FormationDetailPage({
 
             {/* PDF Resources */}
             {formation.pdfUrl && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <h2 className="font-black text-gray-900 text-sm mb-3 flex items-center gap-2">
+              <div className="bg-white rounded-2xl border border-stone-200/80 p-5">
+                <h2 className="font-editorial font-semibold text-gray-900 text-[15px] mb-3 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-violet-500" /> Ressources
                 </h2>
                 {isOwned ? (
                   <a href={formation.pdfUrl} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors">
-                    <div className="h-10 w-10 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
-                      <FileText className="h-5 w-5 text-violet-600" />
+                    className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-100 rounded-xl hover:bg-orange-100 transition-colors">
+                    <div className="h-10 w-10 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                      <FileText className="h-5 w-5 text-orange-600" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-violet-800 text-sm">Support de cours PDF</p>
-                      <p className="text-xs text-violet-500">Télécharger</p>
+                      <p className="font-bold text-orange-800 text-sm">Support de cours PDF</p>
+                      <p className="text-xs text-orange-500">Télécharger</p>
                     </div>
-                    <Download className="h-4 w-4 text-violet-500 shrink-0" />
+                    <Download className="h-4 w-4 text-orange-500 shrink-0" />
                   </a>
                 ) : (
                   <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl">
@@ -1574,11 +1579,11 @@ function PurchaseCard({
 
   if (paymentStep === 'done') {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6 text-center">
+      <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 p-6 text-center">
         <div className="h-16 w-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle2 className="h-8 w-8 text-emerald-500" />
         </div>
-        <h3 className="font-black text-gray-900 text-lg mb-2">Paiement envoyé !</h3>
+        <h3 className="font-editorial font-semibold text-gray-900 text-lg mb-2">Paiement envoyé !</h3>
         <p className="text-sm text-gray-500 mb-5">Votre demande est en cours de validation. Vous recevrez un accès dès confirmation.</p>
         <div className="bg-emerald-50 rounded-xl p-4 text-left space-y-1 text-xs text-gray-600 mb-4">
           <p>✅ Transaction soumise avec succès</p>
@@ -1595,11 +1600,11 @@ function PurchaseCard({
 
   if (paymentStep === 'form' && selectedPayMethod) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6">
+      <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 p-6">
         <button onClick={() => setPaymentStep('external-method')} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-xs font-semibold mb-4 transition-colors">
           <ChevronLeft className="h-4 w-4" /> Retour
         </button>
-        <h3 className="font-black text-gray-900 text-base mb-1">Finaliser le paiement</h3>
+        <h3 className="font-editorial font-semibold text-gray-900 text-lg mb-1">Finaliser le paiement</h3>
         <p className="text-xs text-gray-500 mb-5">via {selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash'}</p>
 
         <div className="space-y-3 mb-5">
@@ -1630,11 +1635,11 @@ function PurchaseCard({
 
   if (paymentStep === 'external-method') {
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6">
+      <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 p-6">
         <button onClick={() => setPaymentStep('detail')} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-xs font-semibold mb-4 transition-colors">
           <ChevronLeft className="h-4 w-4" /> Retour
         </button>
-        <h3 className="font-black text-gray-900 text-base mb-4">Mode de paiement</h3>
+        <h3 className="font-editorial font-semibold text-gray-900 text-lg mb-4">Mode de paiement</h3>
 
         <div className="space-y-3 mb-5">
           {/* MonCash */}
@@ -1687,18 +1692,18 @@ function PurchaseCard({
 
   // Default: detail card
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-lg overflow-hidden">
+    <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 overflow-hidden">
       {/* Price header */}
-      <div className="p-5 border-b border-gray-50">
+      <div className="p-5 border-b border-stone-100">
         <div className="flex items-center gap-3 mb-1">
-          <span className="text-3xl font-black text-violet-700">
+          <span className="font-editorial text-3xl font-semibold text-violet-700">
             {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
           </span>
           {formation.originalPrice && formation.originalPrice > formation.price && (
             <span className="text-sm text-gray-400 line-through">{formation.originalPrice.toLocaleString()}</span>
           )}
           {discount > 0 && (
-            <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-xs font-black rounded-full">-{discount}%</span>
+            <span className="px-2 py-0.5 bg-orange-100 text-orange-600 text-xs font-black rounded-full">-{discount}%</span>
           )}
         </div>
         {loggedClient && formation.price > 0 && (
@@ -1765,10 +1770,10 @@ function PurchaseCard({
         )}
 
         {/* Trust badges */}
-        <div className="pt-3 border-t border-gray-50 space-y-2">
+        <div className="pt-3 border-t border-stone-100 space-y-2">
           {[
             { icon: <Shield className="h-3.5 w-3.5 text-emerald-500" />, text: 'Paiement 100% sécurisé' },
-            { icon: <Award className="h-3.5 w-3.5 text-amber-500" />, text: 'Accès à vie aux mises à jour' },
+            { icon: <Award className="h-3.5 w-3.5 text-orange-500" />, text: 'Accès à vie aux mises à jour' },
             { icon: <BadgeCheck className="h-3.5 w-3.5 text-violet-500" />, text: formation.hasCertificate ? 'Certificat d\'achèvement inclus' : 'Support d\'instructeur inclus' },
           ].map(b => (
             <div key={b.text} className="flex items-center gap-2 text-xs text-gray-500">
@@ -1782,20 +1787,6 @@ function PurchaseCard({
 }
 
 // ── Premium catalog sub-components ─────────────────────────────────────────────
-
-function getCategoryIcon(cat: string): React.FC<{ className?: string }> {
-  const l = cat.toLowerCase();
-  if (l === 'all' || l === 'tous' || l === 'toutes') return Grid;
-  if (l.includes('ia') || l.includes('intelligence') || l.includes('ai') || l.includes('tech')) return Cpu;
-  if (l.includes('marketing') || l.includes('publicité') || l.includes('ads')) return TrendingUp;
-  if (l.includes('business') || l.includes('entreprise') || l.includes('gestion')) return Briefcase;
-  if (l.includes('trading') || l.includes('finance') || l.includes('bourse') || l.includes('crypto')) return BarChart3;
-  if (l.includes('design') || l.includes('ui') || l.includes('ux') || l.includes('graphi')) return Palette;
-  if (l.includes('ecommerce') || l.includes('e-commerce') || l.includes('dropship') || l.includes('vente')) return ShoppingBag;
-  if (l.includes('dev') || l.includes('code') || l.includes('web') || l.includes('program')) return Globe;
-  if (l.includes('photo') || l.includes('vidéo') || l.includes('video') || l.includes('créa')) return Sparkles;
-  return GraduationCap;
-}
 
 function ContinueLearningMiniCard({ formation, pct, onResume, onDetails }: {
   formation: Formation; pct: number; onResume: () => void; onDetails: () => void;

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import Navbar from './layouts/Navbar';
 import BottomNav from './layouts/BottomNav';
 import FormationsNavbar from './layouts/FormationsNavbar';
+import FormationsBottomTabBar from './layouts/FormationsBottomTabBar';
 import LoadingScreen from './components/LoadingScreen';
 import { PageSkeleton } from './components/skeletons/PageSkeleton';
 import { SettingsProvider, useSettingsCtx } from './contexts/SettingsContext';
@@ -81,6 +82,7 @@ function AppInner() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsInPlayer, setFormationsInPlayer] = useState(false);
+  const [formationsDetailOpen, setFormationsDetailOpen] = useState(false);
   const [catalogTab, setCatalogTab] = useState<CatalogTab>('products');
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
@@ -357,6 +359,19 @@ function AppInner() {
           />
         )}
 
+        {view === 'formations' && !formationsInPlayer && !formationsDetailOpen && (
+          <FormationsBottomTabBar
+            activeTab={formationsTab}
+            onGoHome={() => { handleViewChange('home'); setFormationsSearch(''); }}
+            onExplore={() => setFormationsTab('all')}
+            onMyCourses={() => {
+              if (!loggedClient) { setShowAuthModal(true); return; }
+              setFormationsTab('my');
+            }}
+            onProfile={() => handleViewChange('wallet')}
+          />
+        )}
+
         <AnimatePresence>
           {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
             <div className="fixed inset-0 z-50 flex items-center justify-center px-4 p-6 pointer-events-none">
@@ -444,7 +459,11 @@ function AppInner() {
           className={`${
             view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
           } flex-grow relative ${
-            !['admin', 'affiliate', 'formations', 'wallet'].includes(view) ? 'pb-[64px]' : ''
+            !['admin', 'affiliate', 'formations', 'wallet'].includes(view)
+              ? 'pb-[64px]'
+              : view === 'formations' && !formationsInPlayer && !formationsDetailOpen
+              ? 'pb-[64px]'
+              : ''
           }`}
           style={{ overflowX: 'hidden' }}
         >
@@ -533,6 +552,7 @@ function AppInner() {
                       searchQuery={formationsSearch}
                       onSearchChange={setFormationsSearch}
                       onPlayerChange={setFormationsInPlayer}
+                      onDetailChange={setFormationsDetailOpen}
                     />
                   )}
 

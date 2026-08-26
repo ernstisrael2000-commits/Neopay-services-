@@ -4,8 +4,6 @@ import {
   Wallet, Menu, LayoutDashboard, Heart, Award, X
 } from 'lucide-react';
 import { Client } from '../types';
-import { useSettingsCtx } from '../contexts/SettingsContext';
-import SolutionpamLogo from '../components/RenaLogo';
 import { AnimatePresence, motion } from 'motion/react';
 
 interface FormationsNavbarProps {
@@ -23,7 +21,6 @@ export default function FormationsNavbar({
   onGoHome, loggedClient, onOpenWallet, onRequestAuth,
   activeTab, onTabChange, searchQuery, onSearch,
 }: FormationsNavbarProps) {
-  const { settings } = useSettingsCtx();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -93,22 +90,10 @@ export default function FormationsNavbar({
             </div>
           </button>
 
-          {/* Logo + label */}
-          <div className="flex items-center gap-2 shrink-0">
-            {settings?.logoUrl ? (
-              <img
-                src={settings.logoUrl}
-                alt="Solutionpam"
-                className="h-7 w-auto object-contain"
-                onError={e => (e.currentTarget.style.display = 'none')}
-              />
-            ) : (
-              <SolutionpamLogo size={26} />
-            )}
-            <div className="flex flex-col leading-none">
-              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Solutionpam</span>
-              <span className="text-[13px] font-black text-gray-800 leading-none">Academy</span>
-            </div>
+          {/* Wordmark */}
+          <div className="flex items-baseline gap-1.5 shrink-0">
+            <span className="font-editorial text-[17px] font-semibold text-gray-900 leading-none">Solution PAM</span>
+            <span className="text-[10px] font-bold text-orange-500 uppercase tracking-wider leading-none">Academy</span>
           </div>
 
           <div className="flex-1" />

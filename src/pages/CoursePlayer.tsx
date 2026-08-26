@@ -363,14 +363,14 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         disabled={locked}
         className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-all border-l-2 ${
           current
-            ? 'bg-violet-50 border-violet-500'
+            ? 'bg-violet-50 border-orange-500'
             : locked
             ? 'opacity-40 cursor-not-allowed border-transparent'
-            : 'hover:bg-gray-50 border-transparent'
+            : 'hover:bg-stone-50 border-transparent'
         }`}
       >
         {/* Status icon */}
-        <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-black transition-colors ${
+        <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-editorial font-semibold transition-colors ${
           completed ? 'bg-emerald-500' : current ? 'bg-violet-600' : 'bg-gray-200'
         }`}>
           {completed
@@ -395,7 +395,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
               </span>
             )}
             {!hasVideo && mod.pdfUrl && (
-              <span className="text-[10px] text-violet-500 flex items-center gap-1">
+              <span className="text-[10px] text-orange-600 flex items-center gap-1">
                 <FileText className="h-2.5 w-2.5" />PDF
               </span>
             )}
@@ -403,7 +403,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         </div>
 
         {current && !completed && (
-          <div className="mt-1 h-2 w-2 rounded-full bg-violet-500 shrink-0 animate-pulse" />
+          <div className="mt-1 h-2 w-2 rounded-full bg-orange-500 shrink-0 animate-pulse" />
         )}
       </button>
     );
@@ -426,12 +426,12 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
           <div key={chapter.id}>
             <button
               onClick={() => toggleChapter(chapter.id)}
-              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-stone-50 transition-colors"
             >
-              <span className="text-[10px] font-black text-violet-500 uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">
                 {String(ci + 1).padStart(2, '0')}
               </span>
-              <span className="text-xs font-black text-gray-800 flex-1 line-clamp-1">{chapter.title}</span>
+              <span className="font-editorial text-xs font-semibold text-gray-800 flex-1 line-clamp-1">{chapter.title}</span>
               {expandedChapters[chapter.id]
                 ? <ChevronUp className="h-3.5 w-3.5 text-gray-400 shrink-0" />
                 : <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
@@ -479,15 +479,15 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const SidebarContent = () => (
     <>
       {/* Header */}
-      <div className="p-4 border-b border-gray-100 shrink-0">
+      <div className="p-4 border-b border-stone-100 shrink-0">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-gray-900 font-black text-sm">Contenu du cours</span>
-          <span className="text-[11px] text-violet-600 font-bold">{progressPct}%</span>
+          <span className="font-editorial text-gray-900 font-semibold text-[15px]">Contenu du cours</span>
+          <span className="text-[11px] text-orange-600 font-bold">{progressPct}%</span>
         </div>
         {/* Progress bar */}
         <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
           <motion.div
-            className="h-full bg-violet-600 rounded-full"
+            className="h-full bg-gradient-to-r from-violet-600 to-orange-500 rounded-full"
             initial={{ width: 0 }}
             animate={{ width: `${progressPct}%` }}
             transition={{ duration: 0.5 }}
@@ -501,8 +501,8 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       <div className="flex-1 overflow-y-auto py-1">{renderModuleList()}</div>
       {/* Certificate banner */}
       {formation.hasCertificate && progressPct === 100 && (
-        <div className="p-3 border-t border-gray-100 bg-emerald-50 shrink-0">
-          <div className="flex items-center gap-2 text-emerald-600">
+        <div className="p-3 border-t border-stone-100 bg-orange-50 shrink-0">
+          <div className="flex items-center gap-2 text-orange-600">
             <Trophy className="h-4 w-4" />
             <span className="text-xs font-bold">Cours terminé — Certificat disponible !</span>
           </div>
@@ -512,10 +512,10 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[#faf9f6] flex flex-col">
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <div className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0 z-20 shadow-sm">
+      <div className="h-14 bg-white border-b border-stone-200 flex items-center px-4 gap-3 shrink-0 z-20">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-semibold shrink-0"
@@ -524,13 +524,13 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
           <span className="hidden sm:inline">Retour</span>
         </button>
         <div className="h-4 w-px bg-gray-200 shrink-0" />
-        <p className="text-gray-900 font-bold text-sm flex-1 truncate">{formation.title}</p>
+        <p className="font-editorial text-gray-900 font-semibold text-sm flex-1 truncate">{formation.title}</p>
 
         {/* Desktop progress */}
         <div className="hidden sm:flex items-center gap-3 shrink-0">
           <div className="w-28 bg-gray-200 rounded-full h-2 overflow-hidden">
             <motion.div
-              className="h-full bg-violet-600 rounded-full"
+              className="h-full bg-gradient-to-r from-violet-600 to-orange-500 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${progressPct}%` }}
               transition={{ duration: 0.5 }}
@@ -559,7 +559,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       {/* Mobile progress stripe */}
       <div className="md:hidden h-1 bg-gray-100 shrink-0">
         <motion.div
-          className="h-full bg-violet-600"
+          className="h-full bg-gradient-to-r from-violet-600 to-orange-500"
           initial={{ width: 0 }}
           animate={{ width: `${progressPct}%` }}
           transition={{ duration: 0.5 }}
@@ -578,7 +578,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
               animate={{ width: 300, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeInOut' }}
-              className="hidden md:flex flex-col bg-white border-r border-gray-200 shrink-0 overflow-hidden"
+              className="hidden md:flex flex-col bg-white border-r border-stone-200 shrink-0 overflow-hidden"
               style={{ minWidth: 0 }}
             >
               <SidebarContent />
@@ -598,7 +598,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
               <motion.div
                 initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                 transition={{ type: 'tween', duration: 0.25 }}
-                className="fixed right-0 top-14 bottom-0 w-80 max-w-[85vw] bg-white z-50 md:hidden flex flex-col shadow-2xl border-l border-gray-200"
+                className="fixed right-0 top-14 bottom-0 w-80 max-w-[85vw] bg-white z-50 md:hidden flex flex-col shadow-2xl border-l border-stone-200"
               >
                 {/* Close button row */}
                 <div className="flex items-center justify-between px-4 pt-3 pb-0 shrink-0">
@@ -617,7 +617,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         </AnimatePresence>
 
         {/* ── Main content ──────────────────────────────────────────────────── */}
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto min-h-0 flex flex-col bg-gray-50">
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto min-h-0 flex flex-col bg-[#faf9f6]">
 
           {!currentModule ? (
             <div className="flex items-center justify-center flex-1 text-gray-400">
@@ -708,13 +708,13 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                       {justCompleted && (
                         <motion.span
                           initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          className="flex items-center gap-1 text-[11px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full"
+                          className="flex items-center gap-1 text-[11px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full"
                         >
                           ✨ Bravo !
                         </motion.span>
                       )}
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                    <h2 className="font-editorial text-xl sm:text-2xl font-semibold text-gray-900 leading-tight">
                       {currentModule.title}
                     </h2>
                     {currentModule.description && (
@@ -741,7 +741,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                   <button
                     onClick={goPrev}
                     disabled={!canGoPrev}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" /> Précédente
                   </button>
@@ -756,7 +756,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                 </div>
 
                 {/* ── Tabs ───────────────────────────────────────────────── */}
-                <div className="border-b border-gray-200 mb-6">
+                <div className="border-b border-stone-200 mb-6">
                   <div className="flex gap-0 overflow-x-auto no-scrollbar">
                     {TABS.map(tab => (
                       <button
@@ -764,8 +764,8 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex items-center gap-2 px-5 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all ${
                           activeTab === tab.id
-                            ? 'text-violet-700 border-violet-600 bg-violet-50/50'
-                            : 'text-gray-400 border-transparent hover:text-gray-700 hover:bg-gray-50'
+                            ? 'text-violet-700 border-orange-500 bg-orange-50/40'
+                            : 'text-gray-400 border-transparent hover:text-gray-700 hover:bg-stone-50'
                         }`}
                       >
                         {tab.icon} {tab.label}
@@ -778,14 +778,14 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                 <AnimatePresence mode="wait">
                   {activeTab === 'overview' && (
                     <motion.div key="overview" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                      <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                      <div className="bg-white rounded-2xl border border-stone-200/80 p-5">
                         {currentModule.description ? (
                           <p className="text-gray-600 text-sm leading-relaxed">{currentModule.description}</p>
                         ) : (
                           <p className="text-gray-400 text-sm">Aucune description pour cette leçon.</p>
                         )}
                         {currentModule.duration && (
-                          <div className="flex items-center gap-2 mt-4 text-xs text-gray-400 pt-4 border-t border-gray-50">
+                          <div className="flex items-center gap-2 mt-4 text-xs text-gray-400 pt-4 border-t border-stone-100">
                             <Clock className="h-3.5 w-3.5" /> Durée estimée : {currentModule.duration}
                           </div>
                         )}
@@ -800,19 +800,19 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                           href={currentModule.pdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-4 p-4 bg-white hover:bg-violet-50 rounded-2xl border border-gray-100 hover:border-violet-200 transition-all group shadow-sm"
+                          className="flex items-center gap-4 p-4 bg-white hover:bg-orange-50 rounded-2xl border border-stone-200/80 hover:border-orange-200 transition-all group"
                         >
-                          <div className="h-12 w-12 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
-                            <FileText className="h-6 w-6 text-violet-600" />
+                          <div className="h-12 w-12 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                            <FileText className="h-6 w-6 text-orange-600" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-bold text-gray-900">Support de cours PDF</p>
                             <p className="text-xs text-gray-400 mt-0.5">Cliquez pour télécharger</p>
                           </div>
-                          <Download className="h-5 w-5 text-gray-300 group-hover:text-violet-600 transition-colors shrink-0" />
+                          <Download className="h-5 w-5 text-gray-300 group-hover:text-orange-600 transition-colors shrink-0" />
                         </a>
                       ) : (
-                        <div className="text-center py-14 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="text-center py-14 bg-white rounded-2xl border border-stone-200/80">
                           <FileText className="h-10 w-10 mx-auto mb-3 text-gray-200" />
                           <p className="text-sm text-gray-400">Aucune ressource pour cette leçon.</p>
                         </div>
@@ -822,7 +822,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
 
                   {activeTab === 'notes' && (
                     <motion.div key="notes" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                      <div className="bg-white rounded-2xl border border-stone-200/80 p-5">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-xs text-gray-400 font-semibold">Notes pour cette leçon</p>
                           <button
@@ -840,7 +840,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                           value={note}
                           onChange={e => setNote(e.target.value)}
                           placeholder="Commencez à écrire vos notes ici... Elles sont sauvegardées localement."
-                          className="w-full h-48 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:border-violet-400 transition-all resize-none"
+                          className="w-full h-48 bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:border-violet-400 transition-all resize-none"
                         />
                       </div>
                     </motion.div>
@@ -852,17 +852,17 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
               {formation.hasCertificate && progressPct === 100 && (
                 <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 pb-8">
                   {certificate ? (
-                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
-                      <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-                        <Award className="h-6 w-6 text-amber-500" />
+                    <div className="bg-gradient-to-r from-violet-50 to-orange-50 border border-orange-200 rounded-2xl p-5 flex items-center gap-4">
+                      <div className="h-12 w-12 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                        <Award className="h-6 w-6 text-orange-500" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-amber-800 font-black text-sm">🎓 Certificat obtenu !</p>
-                        <p className="text-amber-600 text-xs mt-0.5">
+                        <p className="font-editorial text-violet-800 font-semibold text-[15px]">🎓 Certificat obtenu !</p>
+                        <p className="text-orange-600 text-xs mt-0.5">
                           Émis le {certificate.issuedAt?.seconds ? new Date(certificate.issuedAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
                           {certificate.issuedBy && ` par ${certificate.issuedBy}`}
                         </p>
-                        <code className="text-[11px] font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded mt-1 inline-block">{certificate.certificateCode}</code>
+                        <code className="text-[11px] font-mono text-orange-700 bg-orange-100 px-2 py-0.5 rounded mt-1 inline-block">{certificate.certificateCode}</code>
                       </div>
                       <button
                         onClick={() => openCertificate({
@@ -873,20 +873,20 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                           issuedAt: certificate.issuedAt,
                           pdfUrl: certificate.pdfUrl,
                         })}
-                        className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm shadow-amber-200"
+                        className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm shadow-orange-200"
                       >
                         <Download className="h-3.5 w-3.5" />
                         <span className="hidden sm:inline">Télécharger</span>
                       </button>
                     </div>
                   ) : (
-                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
-                      <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-                        <Trophy className="h-6 w-6 text-amber-500" />
+                    <div className="bg-gradient-to-r from-violet-50 to-orange-50 border border-orange-200 rounded-2xl p-5 flex items-center gap-4">
+                      <div className="h-12 w-12 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                        <Trophy className="h-6 w-6 text-orange-500" />
                       </div>
                       <div>
-                        <p className="text-amber-800 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
-                        <p className="text-amber-600 text-xs mt-0.5">Votre certificat sera émis par l'équipe Solutionpam.</p>
+                        <p className="font-editorial text-violet-800 font-semibold text-[15px]">🎉 Félicitations ! Cours terminé</p>
+                        <p className="text-orange-600 text-xs mt-0.5">Votre certificat sera émis par l'équipe Solution PAM.</p>
                       </div>
                     </div>
                   )}
@@ -909,7 +909,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
               className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden"
             >
               {/* Header */}
-              <div className="bg-gradient-to-br from-violet-600 to-indigo-700 p-6 text-white shrink-0">
+              <div className="bg-gradient-to-br from-violet-700 to-orange-600 p-6 text-white shrink-0">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <ClipboardList className="h-5 w-5" />
@@ -921,7 +921,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     </button>
                   )}
                 </div>
-                <h2 className="text-xl font-black mt-2">{quizChapter.title}</h2>
+                <h2 className="font-editorial text-xl font-semibold mt-2">{quizChapter.title}</h2>
                 <p className="text-white/70 text-xs mt-1">
                   {quizChapter.quiz?.questions?.length} question{(quizChapter.quiz?.questions?.length ?? 0) > 1 ? 's' : ''} · Seuil de réussite : {quizChapter.quiz?.passPercent ?? 80}%
                 </p>
@@ -976,7 +976,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     return (
                       <div key={q.id + qi} className="space-y-2">
                         <p className="text-sm font-bold text-gray-900">
-                          <span className="text-violet-500 mr-1">Q{qi + 1}.</span> {q.question}
+                          <span className="text-orange-500 mr-1">Q{qi + 1}.</span> {q.question}
                         </p>
                         <div className="space-y-2">
                           {(q.options || []).map((opt, oi) => (
@@ -990,7 +990,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                               className={`w-full text-left px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
                                 quizAnswers[qi] === oi
                                   ? 'border-violet-500 bg-violet-50 text-violet-800'
-                                  : 'border-gray-100 bg-gray-50 hover:border-violet-200 hover:bg-violet-50/50 text-gray-700'
+                                  : 'border-stone-100 bg-stone-50 hover:border-violet-200 hover:bg-violet-50/50 text-gray-700'
                               }`}
                             >
                               <span className="inline-block w-6 h-6 rounded-full border-2 border-current mr-2 text-center text-xs leading-5 font-black shrink-0">
