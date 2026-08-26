@@ -86,6 +86,7 @@ function AppInner() {
   const [formationsDetailOpen, setFormationsDetailOpen] = useState(false);
   const [catalogTab, setCatalogTab] = useState<CatalogTab>('products');
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
+  const [sharedCourseId, setSharedCourseId] = useState<string | null>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
     window.location.pathname === '/payment-success'
@@ -171,6 +172,12 @@ function AppInner() {
     const ref = params.get('moncash_ref');
     if (ref) {
       setMoncashReturnRef(ref);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    // Detect a shared course link (?course=<id>) on the formations page
+    const courseId = params.get('course');
+    if (courseId) {
+      setSharedCourseId(courseId);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     // Detect MonCashConnect v2 return: /payment-success path
@@ -564,6 +571,7 @@ function AppInner() {
                       onPlayerChange={setFormationsInPlayer}
                       onDetailChange={setFormationsDetailOpen}
                       resetSignal={formationsResetSignal}
+                      initialCourseId={sharedCourseId}
                     />
                   )}
 

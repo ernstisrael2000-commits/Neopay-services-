@@ -35,6 +35,8 @@ interface FormationsViewProps {
   onPlayerChange?: (active: boolean) => void;
   onDetailChange?: (active: boolean) => void;
   resetSignal?: number;
+  /** Course id to open automatically once loaded — used for shared course links (?course=<id>) */
+  initialCourseId?: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,7 +115,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange, resetSignal }: FormationsViewProps) {
+export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange, resetSignal, initialCourseId }: FormationsViewProps) {
   const { settings } = useSettingsCtx();
 
   // Data
@@ -283,6 +285,17 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const closeDetail = () => { setSelected(null); setPaymentStep('detail'); setSelectedPayMethod(null); };
+
+  // ── Open shared course link (?course=<id>) once formations are loaded ────────
+  const openedInitialCourse = React.useRef(false);
+  useEffect(() => {
+    if (openedInitialCourse.current || !initialCourseId || formations.length === 0) return;
+    const target = formations.find(f => f.id === initialCourseId);
+    if (target) {
+      openedInitialCourse.current = true;
+      openDetail(target);
+    }
+  }, [initialCourseId, formations]);
 
   // ── Purchase ─────────────────────────────────────────────────────────────────
   const handleWalletPurchase = async (formation: Formation) => {

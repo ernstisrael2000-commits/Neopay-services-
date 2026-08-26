@@ -4,7 +4,7 @@ import {
   GraduationCap, LogOut, Plus, Pencil, Trash2, Eye, EyeOff,
   Wallet, ArrowDownCircle, CheckCircle2, Clock, XCircle,
   Loader2, BookOpen, Video, ChevronUp, ChevronDown, X,
-  BarChart2, DollarSign, AlertTriangle, RefreshCw, ArrowUpDown
+  BarChart2, DollarSign, AlertTriangle, RefreshCw, ArrowUpDown, Share2
 } from 'lucide-react';
 import { useRealtimeNotifs } from '../hooks/useRealtimeNotifs';
 import { useUniversalFCM } from '../hooks/useUniversalFCM';
@@ -255,6 +255,16 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
     }
   };
 
+  const shareFormation = async (formation: Formation) => {
+    const link = `${window.location.origin}/formations?course=${formation.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success('Lien du cours copié !');
+    } catch {
+      toast.error("Impossible de copier le lien. Copiez-le manuellement : " + link);
+    }
+  };
+
   // ── Module management ───────────────────────────────────────────────────────
   const addModule = () => setModules(prev => [...prev, { ...newModule(), order: prev.length }]);
 
@@ -486,6 +496,13 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
                         >
                           {f.published ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                           {f.published ? 'Dépublier' : 'Publier'}
+                        </button>
+                        <button
+                          onClick={() => shareFormation(f)}
+                          className="flex items-center justify-center gap-1 py-2 px-3 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                          title="Copier le lien du cours"
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => setConfirmDelete(f)}
