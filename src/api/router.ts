@@ -19,6 +19,7 @@ import {
   ADMIN_EMAIL,
 } from '../lib/email.ts';
 import { getEventBus } from './realtime.ts';
+import { createPlopPlopPayment, verifyPlopPlopPayment, PLOPPLOP_METHODS, type PlopPlopMethod } from './plopplop.ts';
 
 const _require = createRequire(import.meta.url);
 let webpush: typeof import('web-push') | null = null;
@@ -5090,6 +5091,19 @@ router.get('/api/formations', async (req, res) => {
 router.get('/api/formations/purchases/user/:userId', requireClientSession, async (req, res) => {
   try {
     if (res.locals.clientSession.clientId !== req.params.userId) return res.status(403).json({ error: 'Accès refusé.' });
+    // Lazy reconciliation: finalize any Paym Plop Plop payment that confirmed
+    // while this client's session/tab was gone. This guarantees a purchase is
+    // never lost just because the browser wasn't around to see the confirmation —
+    // the very next time this client's account is touched, it gets settled here.
+    try {
+      const pendingPpSnap = await adminDb.collection('formation_plopplop_payments')
+        .where('clientId', '==', req.params.userId).where('status', '==', 'pending').get();
+      if (!pendingPpSnap.empty) {
+        await Promise.all(pendingPpSnap.docs.map(d => verifyAndFinalizePlopPlopPayment(d.id).catch(() => {})));
+      }
+    } catch (reconcileErr: any) {
+      console.error('[formations purchases GET user] plopplop reconcile error:', reconcileErr.message);
+    }
     const snap = await adminDb.collection('formation_purchases')
       .where('userId', '==', req.params.userId).get();
     res.json({ purchases: snap.docs.map(serializeDoc) });
@@ -5121,22 +5135,90 @@ router.post('/api/formations/purchases', requireClientSession, async (req, res) 
   }
 });
 
+// Credits the formation's teacher (minus the platform's commission) for one
+// sale, and notifies them in real time. Shared by every automatic purchase
+// path (wallet, Paym Plop Plop) so the fee split never drifts between them.
+async function creditTeacherForFormationSale(params: {
+  formationId: string;
+  formationTitle?: string;
+  clientName?: string;
+  amountUSD: number;
+}): Promise<{ teacherAmount: number; platformCut: number } | null> {
+  if (!params.formationId || params.amountUSD <= 0) return null;
+  try {
+    const [formSnap, feeSettingsSnap] = await Promise.all([
+      adminDb.collection('formations').doc(params.formationId).get(),
+      adminDb.collection('settings').doc('main').get(),
+    ]);
+    const teacherId = formSnap.exists ? formSnap.data()!.teacherId : null;
+    const teacherName = formSnap.exists ? formSnap.data()!.teacherName : null;
+    const formationFee = feeSettingsSnap.exists ? (feeSettingsSnap.data()!.formationPurchaseFee ?? 0) : 0;
+    const platformCut = Math.round(params.amountUSD * formationFee) / 100;
+    const teacherAmount = params.amountUSD - platformCut;
+    if (!teacherId || teacherAmount <= 0) return null;
+    const teacherRef = adminDb.collection('teachers').doc(teacherId);
+    const teacherSnap = await teacherRef.get();
+    if (!teacherSnap.exists) return null;
+
+    const batch = adminDb.batch();
+    batch.update(teacherRef, {
+      balance: (teacherSnap.data()!.balance || 0) + teacherAmount,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const txRef = adminDb.collection('teacher_transactions').doc();
+    batch.set(txRef, {
+      teacherId, teacherName: teacherName || '',
+      type: 'sale_credit', amount: teacherAmount, platformFee: platformCut,
+      formationId: params.formationId, formationTitle: params.formationTitle || '',
+      clientName: params.clientName || '', status: 'completed',
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    const teacherNotifData = {
+      teacherId,
+      title: '💰 Nouvelle vente de formation',
+      message: `"${params.formationTitle || 'Formation'}" achetée par ${params.clientName || 'un client'}. Crédit : $${teacherAmount.toFixed(2)}`,
+      type: 'sale_credit', amount: teacherAmount, formationId: params.formationId,
+      read: false, createdAt: FieldValue.serverTimestamp(),
+    };
+    const teacherNotifRef = adminDb.collection('teacher_notifications').doc();
+    await teacherNotifRef.set(teacherNotifData);
+    pushRoleEvent('teacher', teacherId, 'new_notification', { id: teacherNotifRef.id, ...teacherNotifData, createdAt: { _seconds: Date.now() / 1000 } });
+    sendFcmToRole('teacher', teacherId, teacherNotifData.title, teacherNotifData.message).catch(() => {});
+
+    return { teacherAmount, platformCut };
+  } catch (e: any) {
+    console.error('[creditTeacherForFormationSale]', e.message);
+    return null;
+  }
+}
+
 router.post('/api/formations/purchases/wallet', requireClientSession, async (req, res) => {
   try {
     const clientId = res.locals.clientSession.clientId;
-    const { clientName, formationId, formationTitle, amount } = req.body;
+    const { clientName, formationId, formationTitle } = req.body;
     if (!formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
 
     const existingSnap = await adminDb.collection('formation_purchases')
       .where('userId', '==', clientId).where('formationId', '==', formationId).where('status', '==', 'active').get();
     if (!existingSnap.empty) return res.json({ success: true, alreadyOwned: true });
 
-    const clientRef = adminDb.collection('clients').doc(clientId);
-    const clientSnap = await clientRef.get();
+    const [clientSnap, formSnap, settingsSnap] = await Promise.all([
+      adminDb.collection('clients').doc(clientId).get(),
+      adminDb.collection('formations').doc(formationId).get(),
+      adminDb.collection('settings').doc('main').get(),
+    ]);
     if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
+    const clientRef = adminDb.collection('clients').doc(clientId);
     const clientData = clientSnap.data()!;
 
-    const price = Number(amount) || 0;
+    // Price is always computed server-side from the formation's real price —
+    // never trust a client-supplied amount for a real money debit.
+    const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
+    const priceHTG = Number(formSnap.data()!.price) || 0;
+    const price = priceHTG / exchangeRate;
     if (price > 0 && (clientData.balance || 0) < price)
       return res.status(400).json({ error: 'Solde insuffisant.' });
 
@@ -5172,51 +5254,14 @@ router.post('/api/formations/purchases/wallet', requireClientSession, async (req
         read: false, createdAt: FieldValue.serverTimestamp(),
       });
     }
+    await batch.commit();
+
     // Credit teacher if formation belongs to one (minus platform commission)
     if (price > 0 && formationId) {
-      try {
-        const [formSnap, feeSettingsSnap] = await Promise.all([
-          adminDb.collection('formations').doc(formationId).get(),
-          adminDb.collection('settings').doc('main').get(),
-        ]);
-        const teacherId = formSnap.exists ? formSnap.data()!.teacherId : null;
-        const teacherName = formSnap.exists ? formSnap.data()!.teacherName : null;
-        const formationFee = feeSettingsSnap.exists ? (feeSettingsSnap.data()!.formationPurchaseFee ?? 0) : 0;
-        const platformCut = Math.round(price * formationFee) / 100;
-        const teacherAmount = price - platformCut;
-        if (teacherId && teacherAmount > 0) {
-          const teacherRef = adminDb.collection('teachers').doc(teacherId);
-          const teacherSnap = await teacherRef.get();
-          if (teacherSnap.exists) {
-            const currentBalance = teacherSnap.data()!.balance || 0;
-            const teacherBatch = adminDb.batch();
-            teacherBatch.update(teacherRef, {
-              balance: currentBalance + teacherAmount,
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-            const txRef = adminDb.collection('teacher_transactions').doc();
-            teacherBatch.set(txRef, {
-              teacherId,
-              teacherName: teacherName || '',
-              type: 'sale_credit',
-              amount: teacherAmount,
-              platformFee: platformCut,
-              formationId,
-              formationTitle: formationTitle || '',
-              clientName: clientName || clientData.name || '',
-              status: 'completed',
-              createdAt: FieldValue.serverTimestamp(),
-              updatedAt: FieldValue.serverTimestamp(),
-            });
-            await teacherBatch.commit();
-          }
-        }
-      } catch (teacherErr: any) {
-        console.error('[formations/purchases/wallet] teacher credit error:', teacherErr.message);
-      }
+      creditTeacherForFormationSale({
+        formationId, formationTitle, clientName: clientName || clientData.name, amountUSD: price,
+      }).catch((teacherErr: any) => console.error('[formations/purchases/wallet] teacher credit error:', teacherErr?.message));
     }
-
-    await batch.commit();
 
     // Auto-commission pour le parrain du client (formation)
     if (price > 0 && clientData.directSponsorId) {
@@ -5242,6 +5287,167 @@ router.post('/api/formations/purchases/wallet', requireClientSession, async (req
     res.json({ success: true });
   } catch (e: any) {
     console.error('[formations/purchases/wallet]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ─── Paym Plop Plop (automatic MonCash / MonCash USSD / NatCash / Carte / Kashpaw) ──
+//
+// Reliability design: the pending payment doc is keyed by our own referenceId
+// and tied to the client's account (not their browser session). Whether the
+// client's tab stays open (active polling below) or is closed/lost mid-payment
+// (lazy reconciliation on GET /api/formations/purchases/user/:userId above),
+// the purchase is finalized exactly once, the moment Plop Plop confirms it —
+// never dependent on the client still being present.
+
+async function verifyAndFinalizePlopPlopPayment(paymentDocId: string): Promise<{ status: 'pending' | 'completed' | 'failed' }> {
+  const payRef = adminDb.collection('formation_plopplop_payments').doc(paymentDocId);
+  const paySnap = await payRef.get();
+  if (!paySnap.exists) return { status: 'failed' };
+  const pay = paySnap.data()!;
+  if (pay.status === 'completed' || pay.status === 'failed') return { status: pay.status };
+
+  let verifyData: any;
+  try {
+    verifyData = await verifyPlopPlopPayment(pay.referenceId);
+  } catch (e: any) {
+    console.error('[plopplop verify] network error:', e.message);
+    return { status: 'pending' };
+  }
+  if (verifyData?.trans_status !== 'ok') return { status: 'pending' };
+
+  // Confirmed by Plop Plop — finalize idempotently (a concurrent poll + the
+  // lazy reconciliation hook could both land here at nearly the same time).
+  const result = await adminDb.runTransaction(async (tx) => {
+    const freshSnap = await tx.get(payRef);
+    const fresh = freshSnap.data()!;
+    if (fresh.status === 'completed') return 'already';
+    tx.update(payRef, { status: 'completed', updatedAt: FieldValue.serverTimestamp(), completedAt: FieldValue.serverTimestamp() });
+    const purchaseRef = adminDb.collection('formation_purchases').doc();
+    tx.set(purchaseRef, {
+      userId: fresh.clientId, userEmail: fresh.clientEmail || '', userName: fresh.clientName || '',
+      formationId: fresh.formationId, formationTitle: fresh.formationTitle || '',
+      amount: fresh.amountHTG || 0, method: `PlopPlop (${fresh.method})`,
+      status: 'active', purchasedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (fresh.formationId) {
+      tx.update(adminDb.collection('formations').doc(fresh.formationId), { studentsCount: FieldValue.increment(1) });
+    }
+    return 'finalized';
+  });
+
+  if (result === 'finalized') {
+    try {
+      const [settingsSnap, clientSnap] = await Promise.all([
+        adminDb.collection('settings').doc('main').get(),
+        adminDb.collection('clients').doc(pay.clientId).get(),
+      ]);
+      const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
+      const amountUSD = (pay.amountHTG || 0) / exchangeRate;
+      const clientData = clientSnap.exists ? clientSnap.data()! : {};
+
+      await creditTeacherForFormationSale({
+        formationId: pay.formationId, formationTitle: pay.formationTitle, clientName: pay.clientName, amountUSD,
+      });
+
+      await adminDb.collection('admin_notifications').add({
+        type: 'formation_purchase', clientId: pay.clientId, clientName: pay.clientName || '',
+        formationId: pay.formationId, formationTitle: pay.formationTitle || '',
+        amount: amountUSD, method: `PlopPlop (${pay.method})`, read: false, createdAt: FieldValue.serverTimestamp(),
+      });
+
+      if (clientData.directSponsorId) {
+        const formCommissionRate = pay.formationId
+          ? await adminDb.collection('formations').doc(pay.formationId).get()
+              .then(s => (s.exists ? (s.data()!.commissionRate as number | undefined) : undefined))
+              .catch(() => undefined)
+          : undefined;
+        triggerAffiliateCommissions(clientData.directSponsorId, 'subscription', pay.formationTitle || 'Formation', amountUSD, formCommissionRate).catch(() => {});
+      }
+
+      const recipientEmail = pay.clientEmail || clientData.email || '';
+      fireEmail(
+        () => emailFormationPurchase({ clientName: pay.clientName || '', clientEmail: recipientEmail, formationTitle: pay.formationTitle || '', amount: amountUSD }),
+        { type: 'formation_purchase', to: [ADMIN_EMAIL, ...(recipientEmail ? [recipientEmail] : [])], clientId: pay.clientId, amount: amountUSD }
+      );
+    } catch (e: any) {
+      console.error('[plopplop finalize] post-processing error:', e.message);
+    }
+  }
+
+  return { status: 'completed' };
+}
+
+router.post('/api/formations/purchases/plopplop/create', requireClientSession, async (req, res) => {
+  try {
+    const clientId = res.locals.clientSession.clientId;
+    const { formationId, method, phoneNumber } = req.body;
+    if (!formationId || !method) return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (!PLOPPLOP_METHODS.includes(method)) return res.status(400).json({ error: 'Méthode de paiement invalide.' });
+    if (method === 'moncash_ussd' && !String(phoneNumber || '').trim()) {
+      return res.status(400).json({ error: 'Numéro de téléphone requis pour MonCash USSD.' });
+    }
+
+    const existingSnap = await adminDb.collection('formation_purchases')
+      .where('userId', '==', clientId).where('formationId', '==', formationId).where('status', '==', 'active').get();
+    if (!existingSnap.empty) return res.json({ success: true, alreadyOwned: true });
+
+    const [clientSnap, formSnap] = await Promise.all([
+      adminDb.collection('clients').doc(clientId).get(),
+      adminDb.collection('formations').doc(formationId).get(),
+    ]);
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
+    const clientData = clientSnap.data()!;
+    const formation = formSnap.data()!;
+
+    // Price is always the formation's real price, looked up server-side —
+    // never trust a client-supplied amount for a real money charge.
+    const priceHTG = Number(formation.price) || 0;
+    if (priceHTG < 20) return res.status(400).json({ error: 'Le montant minimum accepté par Paym Plop Plop est de 20 HTG.' });
+
+    const referenceId = `FORM-${String(formationId).slice(0, 10)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    let ppResponse;
+    try {
+      ppResponse = await createPlopPlopPayment({
+        referenceId, amountHTG: priceHTG, method: method as PlopPlopMethod,
+        phoneNumber: phoneNumber ? String(phoneNumber).trim() : undefined,
+      });
+    } catch (ppErr: any) {
+      console.error('[plopplop create]', ppErr.message);
+      return res.status(502).json({ error: ppErr.message || 'Paym Plop Plop est momentanément indisponible.' });
+    }
+
+    const payRef = adminDb.collection('formation_plopplop_payments').doc();
+    await payRef.set({
+      clientId, clientName: clientData.name || '', clientEmail: clientData.email || '',
+      formationId, formationTitle: formation.title || '',
+      amountHTG: priceHTG, method, phoneNumber: phoneNumber ? String(phoneNumber).trim() : null,
+      referenceId, ppTransactionId: ppResponse.transaction_id || null,
+      redirectUrl: ppResponse.url || null,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, referenceId, url: ppResponse.url || null, transactionId: ppResponse.transaction_id || null });
+  } catch (e: any) {
+    console.error('[formations/purchases/plopplop/create]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+router.get('/api/formations/purchases/plopplop/status/:referenceId', requireClientSession, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('formation_plopplop_payments')
+      .where('referenceId', '==', req.params.referenceId).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Paiement introuvable.' });
+    const doc = snap.docs[0];
+    if (doc.data().clientId !== res.locals.clientSession.clientId) return res.status(403).json({ error: 'Accès refusé.' });
+    const result = await verifyAndFinalizePlopPlopPayment(doc.id);
+    res.json(result);
+  } catch (e: any) {
+    console.error('[formations/purchases/plopplop/status]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
   }
 });
