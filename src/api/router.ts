@@ -338,6 +338,41 @@ function setClientSession(res: express.Response, clientId: string): void {
   });
 }
 
+type TeacherSession = { role: 'teacher'; teacherId: string; exp: number };
+
+function readTeacherSession(req: express.Request): TeacherSession | null {
+  const secret = sessionSecret();
+  const token = parseCookies(req.headers.cookie).rena_teacher_session;
+  if (!secret || !token) return null;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = signSession(payload, secret);
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as TeacherSession;
+    if (session.role !== 'teacher' || !session.teacherId || !Number.isFinite(session.exp) || session.exp <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function setTeacherSession(res: express.Response, teacherId: string): void {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir une session professeur.');
+  const session: TeacherSession = { role: 'teacher', teacherId, exp: Date.now() + 8 * 60 * 60 * 1000 };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
+  res.cookie('rena_teacher_session', `${payload}.${signSession(payload, secret)}`, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 8 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
 async function issueAdminFirebaseToken(adminRef: any, data: any): Promise<string> {
   const auth = getAuth();
   let uid = data.uid as string | undefined;
@@ -497,6 +532,23 @@ async function requireClientSession(req: express.Request, res: express.Response,
     }
     res.locals.clientSession = session;
     res.locals.clientRecord = client;
+    next();
+  } catch {
+    return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
+  }
+}
+
+async function requireTeacherSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const session = readTeacherSession(req);
+  if (!session) return res.status(401).json({ error: 'Session professeur requise. Veuillez vous reconnecter.' });
+  try {
+    const teacher = await adminDb.collection('teachers').doc(session.teacherId).get();
+    if (!teacher.exists || teacher.data()?.status === 'inactive') {
+      res.clearCookie('rena_teacher_session', { path: '/' });
+      return res.status(403).json({ error: 'Compte professeur indisponible.' });
+    }
+    res.locals.teacherSession = session;
+    res.locals.teacherRecord = teacher;
     next();
   } catch {
     return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
@@ -4959,19 +5011,66 @@ router.delete('/api/admin/online-sub-services/:id', requireDb, async (req, res) 
 // ── Formations — Public & User ─────────────────────────────────────────────────
 router.use('/api/formations', requireDb);
 
-router.get('/api/formations', async (_req, res) => {
+// Strips paid content (video/PDF URLs, resources, quiz answer keys) from a
+// formation document before it reaches a browser that hasn't purchased it.
+// Quiz correctIndex is always stripped — scoring happens server-side via
+// /api/formations/quiz/submit, the browser never needs the answer key.
+function redactFormationForViewer(f: any, owns: boolean): any {
+  const stripQuiz = (chapter: any) => {
+    if (!chapter?.quiz?.questions) return chapter;
+    return {
+      ...chapter,
+      quiz: {
+        ...chapter.quiz,
+        questions: chapter.quiz.questions.map((q: any) => ({ id: q.id, question: q.question, options: q.options })),
+      },
+    };
+  };
+  if (owns) {
+    return {
+      ...f,
+      chapters: Array.isArray(f.chapters) ? f.chapters.map(stripQuiz) : f.chapters,
+    };
+  }
+  return {
+    ...f,
+    modules: Array.isArray(f.modules)
+      ? f.modules.map((m: any) => ({ id: m.id, title: m.title, duration: m.duration, order: m.order, description: m.description, chapterId: m.chapterId }))
+      : f.modules,
+    chapters: Array.isArray(f.chapters)
+      ? f.chapters.map((c: any) => ({ id: c.id, title: c.title, order: c.order, description: c.description, hasQuiz: !!c.quiz?.questions?.length }))
+      : f.chapters,
+    pdfUrl: undefined,
+    resources: undefined,
+  };
+}
+
+router.get('/api/formations', async (req, res) => {
   try {
     const snap = await adminDb.collection('formations').orderBy('createdAt', 'desc').get();
     const formations = snap.docs.map(serializeDoc).filter((f: any) => f.published || f.comingSoon);
-    res.json({ formations });
+
+    // Optional session: logged-in clients see full content only for formations
+    // they actually own (active purchase). Anonymous/other visitors see the
+    // catalog with protected content stripped.
+    const session = readClientSession(req);
+    let ownedIds = new Set<string>();
+    if (session) {
+      const purchasesSnap = await adminDb.collection('formation_purchases')
+        .where('userId', '==', session.clientId).where('status', '==', 'active').get();
+      ownedIds = new Set(purchasesSnap.docs.map(d => d.data().formationId));
+    }
+    const redacted = formations.map((f: any) => redactFormationForViewer(f, !!f.id && ownedIds.has(f.id)));
+    res.json({ formations: redacted });
   } catch (e: any) {
     console.error('[formations public GET]', e);
     res.status(500).json({ error: e.message || 'Erreur.' });
   }
 });
 
-router.get('/api/formations/purchases/user/:userId', async (req, res) => {
+router.get('/api/formations/purchases/user/:userId', requireClientSession, async (req, res) => {
   try {
+    if (res.locals.clientSession.clientId !== req.params.userId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('formation_purchases')
       .where('userId', '==', req.params.userId).get();
     res.json({ purchases: snap.docs.map(serializeDoc) });
@@ -4981,10 +5080,11 @@ router.get('/api/formations/purchases/user/:userId', async (req, res) => {
   }
 });
 
-router.post('/api/formations/purchases', async (req, res) => {
+router.post('/api/formations/purchases', requireClientSession, async (req, res) => {
   try {
-    const { userId, userEmail, userName, formationId, formationTitle, amount, method } = req.body;
-    if (!userId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const userId = res.locals.clientSession.clientId;
+    const { userEmail, userName, formationId, formationTitle, amount, method } = req.body;
+    if (!formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
     const existing = await adminDb.collection('formation_purchases')
       .where('userId', '==', userId).where('formationId', '==', formationId).where('status', '==', 'pending').get();
     if (!existing.empty) return res.json({ success: true, id: existing.docs[0].id, alreadyExists: true });
@@ -5002,10 +5102,11 @@ router.post('/api/formations/purchases', async (req, res) => {
   }
 });
 
-router.post('/api/formations/purchases/wallet', async (req, res) => {
+router.post('/api/formations/purchases/wallet', requireClientSession, async (req, res) => {
   try {
-    const { clientId, clientName, formationId, formationTitle, amount } = req.body;
-    if (!clientId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const clientId = res.locals.clientSession.clientId;
+    const { clientName, formationId, formationTitle, amount } = req.body;
+    if (!formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
 
     const existingSnap = await adminDb.collection('formation_purchases')
       .where('userId', '==', clientId).where('formationId', '==', formationId).where('status', '==', 'active').get();
@@ -5126,10 +5227,11 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
   }
 });
 
-router.post('/api/formations/free-access', async (req, res) => {
+router.post('/api/formations/free-access', requireClientSession, async (req, res) => {
   try {
-    const { userId, userEmail, userName, formationId, formationTitle } = req.body;
-    if (!userId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const userId = res.locals.clientSession.clientId;
+    const { userEmail, userName, formationId, formationTitle } = req.body;
+    if (!formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
     const existing = await adminDb.collection('formation_purchases')
       .where('userId', '==', userId).where('formationId', '==', formationId).get();
     if (!existing.empty) {
@@ -5171,10 +5273,11 @@ router.post('/api/formations/user', async (req, res) => {
   }
 });
 
-router.post('/api/formations/payment-request', async (req, res) => {
+router.post('/api/formations/payment-request', requireClientSession, async (req, res) => {
   try {
-    const { userId, userEmail, userName, formationId, formationTitle, amount, method, transactionCode } = req.body;
-    if (!userId || !formationId || !method || !transactionCode)
+    const userId = res.locals.clientSession.clientId;
+    const { userEmail, userName, formationId, formationTitle, amount, method, transactionCode } = req.body;
+    if (!formationId || !method || !transactionCode)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const existing = await adminDb.collection('formation_purchases')
       .where('userId', '==', userId).where('formationId', '==', formationId).where('status', '==', 'active').get();
@@ -5207,8 +5310,9 @@ router.post('/api/formations/payment-request', async (req, res) => {
 });
 
 // ── Formation Progress ─────────────────────────────────────────────────────────
-router.get('/api/formations/progress/:userId', async (req, res) => {
+router.get('/api/formations/progress/:userId', requireClientSession, async (req, res) => {
   try {
+    if (res.locals.clientSession.clientId !== req.params.userId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('formation_progress')
       .where('userId', '==', req.params.userId).get();
     res.json({ progress: snap.docs.map(serializeDoc) });
@@ -5218,9 +5322,10 @@ router.get('/api/formations/progress/:userId', async (req, res) => {
   }
 });
 
-router.get('/api/formations/progress/:userId/:formationId', async (req, res) => {
+router.get('/api/formations/progress/:userId/:formationId', requireClientSession, async (req, res) => {
   try {
     const { userId, formationId } = req.params;
+    if (res.locals.clientSession.clientId !== userId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('formation_progress').doc(`${userId}_${formationId}`).get();
     if (!snap.exists) return res.json({ progress: null });
     res.json({ progress: { id: snap.id, ...snap.data() } });
@@ -5229,10 +5334,11 @@ router.get('/api/formations/progress/:userId/:formationId', async (req, res) => 
   }
 });
 
-router.post('/api/formations/progress', async (req, res) => {
+router.post('/api/formations/progress', requireClientSession, async (req, res) => {
   try {
-    const { userId, userEmail, formationId, moduleId, totalModules } = req.body;
-    if (!userId || !formationId || !moduleId || !totalModules)
+    const userId = res.locals.clientSession.clientId;
+    const { userEmail, formationId, moduleId, totalModules } = req.body;
+    if (!formationId || !moduleId || !totalModules)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const snap = await adminDb.collection('formation_progress')
       .where('userId', '==', userId).where('formationId', '==', formationId).get();
@@ -5262,10 +5368,11 @@ router.post('/api/formations/progress', async (req, res) => {
   }
 });
 
-router.post('/api/formations/progress/complete', async (req, res) => {
+router.post('/api/formations/progress/complete', requireClientSession, async (req, res) => {
   try {
-    const { userId, formationId, moduleId } = req.body;
-    if (!userId || !formationId || !moduleId)
+    const userId = res.locals.clientSession.clientId;
+    const { formationId, moduleId } = req.body;
+    if (!formationId || !moduleId)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const docId = `${userId}_${formationId}`;
     const ref = adminDb.collection('formation_progress').doc(docId);
@@ -5294,10 +5401,11 @@ router.post('/api/formations/progress/complete', async (req, res) => {
   }
 });
 
-router.post('/api/formations/progress/position', async (req, res) => {
+router.post('/api/formations/progress/position', requireClientSession, async (req, res) => {
   try {
-    const { userId, formationId, moduleId, positionSeconds } = req.body;
-    if (!userId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const userId = res.locals.clientSession.clientId;
+    const { formationId, moduleId, positionSeconds } = req.body;
+    if (!formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
     const docId = `${userId}_${formationId}`;
     const ref = adminDb.collection('formation_progress').doc(docId);
     const snap = await ref.get();
@@ -6756,10 +6864,11 @@ async function sendPushToAdmins(title: string, body: string, url = '/'): Promise
 }
 
 // ── Quiz: submit answers ───────────────────────────────────────────────────────
-router.post('/api/formations/quiz/submit', requireDb, async (req, res) => {
+router.post('/api/formations/quiz/submit', requireDb, requireClientSession, async (req, res) => {
   try {
-    const { userId, formationId, chapterId, answers } = req.body;
-    if (!userId || !formationId || !chapterId || !Array.isArray(answers))
+    const userId = res.locals.clientSession.clientId;
+    const { formationId, chapterId, answers } = req.body;
+    if (!formationId || !chapterId || !Array.isArray(answers))
       return res.status(400).json({ error: 'Données manquantes.' });
 
     const formationSnap = await adminDb.collection('formations').doc(formationId).get();
@@ -6795,9 +6904,10 @@ router.post('/api/formations/quiz/submit', requireDb, async (req, res) => {
 });
 
 // ── Quiz: get results for user + formation ────────────────────────────────────
-router.get('/api/formations/quiz/results/:userId/:formationId', requireDb, async (req, res) => {
+router.get('/api/formations/quiz/results/:userId/:formationId', requireDb, requireClientSession, async (req, res) => {
   try {
     const { userId, formationId } = req.params;
+    if (res.locals.clientSession.clientId !== userId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('formation_quiz_results')
       .where('userId', '==', userId).where('formationId', '==', formationId).get();
     const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -6806,9 +6916,10 @@ router.get('/api/formations/quiz/results/:userId/:formationId', requireDb, async
 });
 
 // ── Certificates: get for user + formation ────────────────────────────────────
-router.get('/api/formations/certificate/:userId/:formationId', requireDb, async (req, res) => {
+router.get('/api/formations/certificate/:userId/:formationId', requireDb, requireClientSession, async (req, res) => {
   try {
     const { userId, formationId } = req.params;
+    if (res.locals.clientSession.clientId !== userId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('formation_certificates')
       .where('userId', '==', userId).where('formationId', '==', formationId).limit(1).get();
     if (snap.empty) return res.json({ certificate: null });
@@ -7219,11 +7330,17 @@ router.post('/api/teacher/login', requireDb, async (req, res) => {
     const data = doc.data();
     if (data.status === 'inactive') return res.status(403).json({ error: 'Compte désactivé. Contactez l\'administrateur.' });
     if (data.password !== password) return res.status(401).json({ error: 'Identifiants incorrects.' });
+    setTeacherSession(res, doc.id);
     res.json({ success: true, teacher: { id: doc.id, ...data, password: undefined } });
   } catch (e: any) {
     console.error('[teacher/login]', e);
     res.status(500).json({ error: 'Erreur lors de la connexion.' });
   }
+});
+
+router.post('/api/teacher/logout', (_req, res) => {
+  res.clearCookie('rena_teacher_session', { path: '/' });
+  res.json({ success: true });
 });
 
 router.post('/api/teacher/verify-google', requireDb, async (req, res) => {
@@ -7239,6 +7356,7 @@ router.post('/api/teacher/verify-google', requireDb, async (req, res) => {
     if (uid) updates.uid = uid;
     if (googlePhotoUrl) updates.photoUrl = googlePhotoUrl; // always sync Google photo
     await docSnap.ref.update(updates);
+    setTeacherSession(res, docSnap.id);
     res.json({ success: true, teacher: { id: docSnap.id, ...data, ...updates, password: undefined } });
   } catch (e: any) {
     console.error('[teacher/verify-google]', e);
@@ -7246,8 +7364,9 @@ router.post('/api/teacher/verify-google', requireDb, async (req, res) => {
   }
 });
 
-router.get('/api/teacher/me/:id', requireDb, async (req, res) => {
+router.get('/api/teacher/me/:id', requireDb, requireTeacherSession, async (req, res) => {
   try {
+    if (res.locals.teacherSession.teacherId !== req.params.id) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('teachers').doc(req.params.id).get();
     if (!snap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
     const data = snap.data()!;
@@ -7257,8 +7376,9 @@ router.get('/api/teacher/me/:id', requireDb, async (req, res) => {
   }
 });
 
-router.get('/api/teacher/formations/:teacherId', requireDb, async (req, res) => {
+router.get('/api/teacher/formations/:teacherId', requireDb, requireTeacherSession, async (req, res) => {
   try {
+    if (res.locals.teacherSession.teacherId !== req.params.teacherId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('formations').where('teacherId', '==', req.params.teacherId).get();
     res.json({ formations: snap.docs.map(serializeDoc) });
   } catch (e: any) {
@@ -7266,16 +7386,17 @@ router.get('/api/teacher/formations/:teacherId', requireDb, async (req, res) => 
   }
 });
 
-router.post('/api/teacher/formations', requireDb, async (req, res) => {
+router.post('/api/teacher/formations', requireDb, requireTeacherSession, async (req, res) => {
   try {
-    const { teacherId, teacherName, ...rest } = req.body;
-    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const teacherId = res.locals.teacherSession.teacherId;
+    const { teacherName, ...rest } = req.body;
     const data = sanitizeFormation(rest);
+    delete data.teacherId;
     if (!data.title) return res.status(400).json({ error: 'Le titre est requis.' });
     const ref = await adminDb.collection('formations').add({
       ...data,
       teacherId,
-      teacherName: teacherName || '',
+      teacherName: teacherName || res.locals.teacherRecord.data()?.name || '',
       studentsCount: data.studentsCount ?? 0,
       rating: data.rating ?? 0,
       createdAt: FieldValue.serverTimestamp(),
@@ -7288,14 +7409,15 @@ router.post('/api/teacher/formations', requireDb, async (req, res) => {
   }
 });
 
-router.put('/api/teacher/formations/:id', requireDb, async (req, res) => {
+router.put('/api/teacher/formations/:id', requireDb, requireTeacherSession, async (req, res) => {
   try {
-    const { teacherId, ...rest } = req.body;
-    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const teacherId = res.locals.teacherSession.teacherId;
+    const { teacherId: _ignored, ...rest } = req.body;
     const formSnap = await adminDb.collection('formations').doc(req.params.id).get();
     if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
     if (formSnap.data()!.teacherId !== teacherId) return res.status(403).json({ error: 'Accès refusé.' });
     const data = sanitizeFormation(rest);
+    delete data.teacherId;
     await adminDb.collection('formations').doc(req.params.id).update({
       ...data, updatedAt: FieldValue.serverTimestamp(),
     });
@@ -7306,10 +7428,9 @@ router.put('/api/teacher/formations/:id', requireDb, async (req, res) => {
   }
 });
 
-router.delete('/api/teacher/formations/:id', requireDb, async (req, res) => {
+router.delete('/api/teacher/formations/:id', requireDb, requireTeacherSession, async (req, res) => {
   try {
-    const { teacherId } = req.query;
-    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    const teacherId = res.locals.teacherSession.teacherId;
     const formSnap = await adminDb.collection('formations').doc(req.params.id).get();
     if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
     if (formSnap.data()!.teacherId !== teacherId) return res.status(403).json({ error: 'Accès refusé.' });
@@ -7321,10 +7442,11 @@ router.delete('/api/teacher/formations/:id', requireDb, async (req, res) => {
   }
 });
 
-router.post('/api/teacher/withdrawal', requireDb, async (req, res) => {
+router.post('/api/teacher/withdrawal', requireDb, requireTeacherSession, async (req, res) => {
   try {
-    const { teacherId, amount, method, accountNumber } = req.body;
-    if (!teacherId || !amount || !method || !accountNumber)
+    const teacherId = res.locals.teacherSession.teacherId;
+    const { amount, method, accountNumber } = req.body;
+    if (!amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
 
     const teacherRef = adminDb.collection('teachers').doc(teacherId);
@@ -7396,8 +7518,9 @@ router.post('/api/teacher/withdrawal', requireDb, async (req, res) => {
   }
 });
 
-router.get('/api/teacher/transactions/:teacherId', requireDb, async (req, res) => {
+router.get('/api/teacher/transactions/:teacherId', requireDb, requireTeacherSession, async (req, res) => {
   try {
+    if (res.locals.teacherSession.teacherId !== req.params.teacherId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('teacher_transactions')
       .where('teacherId', '==', req.params.teacherId)
       .orderBy('createdAt', 'desc')
@@ -7769,10 +7892,10 @@ router.delete('/api/agent/notifications/clear-all/:agentId', requireDb, async (r
 });
 
 // ── Notifications: teacher ────────────────────────────────────────────────────
-router.get('/api/teacher/notifications/:teacherId', requireDb, async (req, res) => {
+router.get('/api/teacher/notifications/:teacherId', requireDb, requireTeacherSession, async (req, res) => {
   try {
     const { teacherId } = req.params;
-    if (!teacherId) return res.status(400).json({ error: 'teacherId requis.' });
+    if (res.locals.teacherSession.teacherId !== teacherId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('teacher_notifications')
       .where('teacherId', '==', teacherId)
       .orderBy('createdAt', 'desc').limit(50).get();
@@ -7780,15 +7903,20 @@ router.get('/api/teacher/notifications/:teacherId', requireDb, async (req, res) 
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.patch('/api/teacher/notifications/:id/read', requireDb, async (req, res) => {
+router.patch('/api/teacher/notifications/:id/read', requireDb, requireTeacherSession, async (req, res) => {
   try {
-    await adminDb.collection('teacher_notifications').doc(req.params.id).update({ read: true });
+    const ref = adminDb.collection('teacher_notifications').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Notification introuvable.' });
+    if (snap.data()!.teacherId !== res.locals.teacherSession.teacherId) return res.status(403).json({ error: 'Accès refusé.' });
+    await ref.update({ read: true });
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.patch('/api/teacher/notifications/read-all/:teacherId', requireDb, async (req, res) => {
+router.patch('/api/teacher/notifications/read-all/:teacherId', requireDb, requireTeacherSession, async (req, res) => {
   try {
+    if (res.locals.teacherSession.teacherId !== req.params.teacherId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('teacher_notifications')
       .where('teacherId', '==', req.params.teacherId).where('read', '==', false).get();
     const batch = adminDb.batch();
@@ -7798,8 +7926,9 @@ router.patch('/api/teacher/notifications/read-all/:teacherId', requireDb, async 
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.delete('/api/teacher/notifications/clear-all/:teacherId', requireDb, async (req, res) => {
+router.delete('/api/teacher/notifications/clear-all/:teacherId', requireDb, requireTeacherSession, async (req, res) => {
   try {
+    if (res.locals.teacherSession.teacherId !== req.params.teacherId) return res.status(403).json({ error: 'Accès refusé.' });
     const snap = await adminDb.collection('teacher_notifications')
       .where('teacherId', '==', req.params.teacherId).limit(200).get();
     const batch = adminDb.batch();

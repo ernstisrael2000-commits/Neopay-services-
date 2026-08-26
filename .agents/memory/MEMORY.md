@@ -10,3 +10,5 @@
 - [Connexion Google et CSP](google-auth-csp.md) — Firebase Google Auth requiert des origines script/frame Google explicitement autorisées par la CSP
 - [Brand migration compatibility](brand-migration-compatibility.md) — public Solutionpam branding must not rename historical storage, cookie, payment, or idempotency identifiers
 - [FazerCards gift-card contract](fazercards-giftcards-contract.md) — gift cards use cards/card_id, not the legacy offers endpoint
+- [Formations content security model](formations-content-security.md) — public catalog redacts paid content by ownership; all client/teacher formations routes now require session, not body-supplied ids
+- [Duplicate firestore.rules files](duplicate-firestore-rules.md) — root firestore.rules and database/firestore.rules must be edited together; no auto-deploy exists

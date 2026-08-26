@@ -280,6 +280,7 @@ function AppInner() {
   const handleTeacherLogout = () => {
     setLoggedTeacher(null);
     localStorage.removeItem('rena_teacher');
+    fetch('/api/teacher/logout', { method: 'POST' }).catch(() => {});
     setView('home');
   };
 

@@ -241,8 +241,13 @@ service cloud.firestore {
     }
 
     // ─── Formations ──────────────────────────────────────────────────────────
+    // Formation documents embed paid content (lesson video/PDF URLs, quiz answer
+    // keys). The public catalog and course player only ever read through the
+    // server API (/api/formations), which strips that content for viewers who
+    // haven't purchased the course. Direct client reads must stay closed —
+    // otherwise anyone with the Firebase config could bypass that redaction.
     match /formations/{formationId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();

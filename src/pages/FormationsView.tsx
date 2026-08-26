@@ -165,24 +165,28 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
   // ── Load formations ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const load = async () => {
+  // Protected content (video/PDF URLs, quiz answers) is stripped server-side for
+  // formations the logged-in client hasn't purchased — see redactFormationForViewer
+  // in the API. Re-run this after a purchase completes so the unlocked content
+  // (e.g. video URLs) shows up without requiring a full page reload.
+  const loadFormations = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const res = await fetch('/api/formations');
+      if (!res.ok) throw new Error('api_fail');
+      const data = await res.json();
+      if (!Array.isArray(data.formations)) throw new Error('api_fail');
+      setFormations(data.formations);
+    } catch {
       try {
-        const res = await fetch('/api/formations');
-        if (!res.ok) throw new Error('api_fail');
-        const data = await res.json();
-        if (!Array.isArray(data.formations)) throw new Error('api_fail');
-        setFormations(data.formations);
-      } catch {
-        try {
-          const q = query(collection(db, 'formations'), where('published', '==', true), orderBy('createdAt', 'desc'));
-          const snap = await getDocs(q);
-          setFormations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Formation)));
-        } catch { toast.error('Impossible de charger les formations.'); }
-      } finally { setLoading(false); }
-    };
-    load();
+        const q = query(collection(db, 'formations'), where('published', '==', true), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        setFormations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Formation)));
+      } catch { toast.error('Impossible de charger les formations.'); }
+    } finally { setLoading(false); }
   }, []);
+
+  useEffect(() => { loadFormations(true); }, [loadFormations]);
 
   // ── Load purchases ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -300,6 +304,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       setPurchasedIds(prev => [...prev, formation.id!]);
       toast.success(`✅ Accès à "${formation.title}" activé !`);
       setSelected(null);
+      void loadFormations(); // refresh so unlocked video/PDF content is now included
     } catch (err: any) { toast.error(err.message); } finally { setPurchasing(false); }
   };
 
@@ -320,7 +325,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur lors de la soumission.');
-      if (json.alreadyOwned) { setPurchasedIds(prev => [...prev, selected.id!]); toast.success('Vous avez déjà accès à cette formation !'); closeDetail(); return; }
+      if (json.alreadyOwned) { setPurchasedIds(prev => [...prev, selected.id!]); toast.success('Vous avez déjà accès à cette formation !'); closeDetail(); void loadFormations(); return; }
       setPaymentStep('done');
       const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50944813185';
       const methodLabel = selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash';
