@@ -851,33 +851,34 @@ function EditorialCourseCard({ formation, i = 0, owned, fav, disc, onOpen, onFav
       </div>
 
       {/* Body */}
-      <div className="p-3.5 sm:p-4 flex flex-col flex-1">
-        <span className="text-[9.5px] font-bold uppercase tracking-widest mb-1.5 text-orange-600">{bucket}</span>
-        <h3 className="font-editorial font-semibold text-gray-900 text-[14.5px] sm:text-[15px] mb-1.5 line-clamp-2 leading-snug">{formation.title}</h3>
-        {formation.instructor && (
-          <p className="text-[11.5px] text-gray-400 mb-2 truncate">{formation.instructor}</p>
-        )}
-        {!isComingSoon && formation.rating > 0 && (
-          <div className="mb-2">
-            <StarRating rating={formation.rating || 0} size="xs" />
+      <div className="p-2.5 sm:p-3 flex flex-col flex-1">
+        <span className="text-[9px] font-bold uppercase tracking-widest mb-1 text-orange-600">{bucket}</span>
+        <h3 className="font-editorial font-semibold text-gray-900 text-[13.5px] sm:text-[14.5px] mb-1 line-clamp-1 leading-snug">{formation.title}</h3>
+        {!isComingSoon && (formation.instructor || formation.rating > 0) && (
+          <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+            {formation.instructor && (
+              <span className="text-[11px] text-gray-400 truncate">{formation.instructor}</span>
+            )}
+            {formation.instructor && formation.rating > 0 && <span className="text-gray-200 text-[10px]">·</span>}
+            {formation.rating > 0 && <StarRating rating={formation.rating || 0} size="xs" />}
           </div>
         )}
         {isComingSoon && formation.shortDescription && (
-          <p className="text-xs text-gray-400 mb-2 line-clamp-2">{formation.shortDescription}</p>
+          <p className="text-xs text-gray-400 mb-1.5 line-clamp-1">{formation.shortDescription}</p>
         )}
-        <div className="mt-auto flex items-center justify-between pt-2.5 border-t border-stone-100">
+        <div className="mt-auto flex items-center justify-between pt-1.5 border-t border-stone-100">
           <div>
             {isComingSoon ? (
-              <span className="text-[13px] font-bold text-orange-500">
+              <span className="text-[12.5px] font-bold text-orange-500">
                 {formation.price > 0 ? `${(formation.price || 0).toLocaleString()} HTG` : 'Prix à venir'}
               </span>
             ) : (
               <>
-                <span className="text-[14px] font-bold text-violet-700">
+                <span className="text-[13.5px] font-bold text-violet-700">
                   {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
                 </span>
                 {formation.originalPrice && formation.originalPrice > formation.price && (
-                  <span className="text-[10.5px] text-gray-400 line-through ml-1.5">{formation.originalPrice.toLocaleString()}</span>
+                  <span className="text-[10px] text-gray-400 line-through ml-1.5">{formation.originalPrice.toLocaleString()}</span>
                 )}
               </>
             )}
