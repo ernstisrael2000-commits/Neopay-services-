@@ -18,6 +18,7 @@ import {
   sendTextEmail,
   ADMIN_EMAIL,
 } from '../lib/email.ts';
+import { getEventBus } from './realtime.ts';
 
 const _require = createRequire(import.meta.url);
 let webpush: typeof import('web-push') | null = null;
@@ -592,69 +593,88 @@ router.use('/api/admin', requireDb, (req, res, next) => {
   return requireAdminSession(req, res, next);
 });
 
-// ── SSE: active client connections ────────────────────────────────────────────
-const clientSseConnections = new Map<string, Set<express.Response>>();
+// ── SSE: realtime event bus ────────────────────────────────────────────────────
+// Broadcasts go through the shared event bus (Redis pub/sub when REDIS_URL is
+// set, in-memory otherwise) so notifications reach connected clients even when
+// the publishing request and the open SSE connection land on different
+// serverless instances (e.g. on Vercel). See src/api/realtime.ts.
+const eventBus = getEventBus();
+
+function sseChannelForClient(clientId: string): string {
+  return `sse:client:${clientId}`;
+}
 
 function pushClientEvent(clientId: string, event: string, data: object): void {
-  const connections = clientSseConnections.get(clientId);
-  if (!connections || connections.size === 0) return;
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of [...connections]) {
-    try { res.write(payload); } catch { connections.delete(res); }
-  }
+  eventBus.publish(sseChannelForClient(clientId), JSON.stringify({ event, data }));
 }
 
 // ── SSE: Multi-role real-time connections (affiliate, agent, teacher, admin) ──
 type SseRole = 'affiliate' | 'agent' | 'teacher' | 'admin';
-const roleSseConnections: Record<SseRole, Map<string, Set<express.Response>>> = {
-  affiliate: new Map(),
-  agent:     new Map(),
-  teacher:   new Map(),
-  admin:     new Map(),
-};
+const ADMIN_BROADCAST_CHANNEL = 'sse:role:admin:__all__';
+
+function sseChannelForRole(role: SseRole, userId: string): string {
+  return `sse:role:${role}:${userId}`;
+}
 
 function pushRoleEvent(role: SseRole, userId: string, event: string, data: object): void {
-  const map = roleSseConnections[role];
-  const connections = map.get(userId);
-  if (!connections || connections.size === 0) return;
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of [...connections]) {
-    try { res.write(payload); } catch { connections.delete(res); }
-  }
+  eventBus.publish(sseChannelForRole(role, userId), JSON.stringify({ event, data }));
 }
 
 function pushAllAdminsEvent(event: string, data: object): void {
-  const map = roleSseConnections['admin'];
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const conns of map.values()) {
-    for (const res of [...conns]) {
-      try { res.write(payload); } catch { conns.delete(res); }
-    }
-  }
+  eventBus.publish(ADMIN_BROADCAST_CHANNEL, JSON.stringify({ event, data }));
+}
+
+// Writes SSE headers, subscribes `res` to one or more bus channels for the
+// lifetime of the HTTP connection, and forwards published events to the client.
+function attachSseStream(res: express.Response, req: express.Request, channels: string[]): void {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write(': connected\n\n');
+
+  const unsubscribers = channels.map((channel) =>
+    eventBus.subscribe(channel, (message) => {
+      try {
+        const { event, data } = JSON.parse(message);
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      } catch (e) {
+        console.error('[SSE] Failed to forward event:', e);
+      }
+    })
+  );
+
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    for (const unsubscribe of unsubscribers) unsubscribe();
+  });
 }
 
 function makeSseHandler(role: SseRole, paramName: string) {
   return (req: express.Request, res: express.Response) => {
     const userId = req.params[paramName];
     if (!userId) { res.status(400).end(); return; }
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-    const map = roleSseConnections[role];
-    if (!map.has(userId)) map.set(userId, new Set());
-    const conns = map.get(userId)!;
-    conns.add(res);
-    res.write(': connected\n\n');
-    const heartbeat = setInterval(() => {
-      try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
-    }, 25000);
-    req.on('close', () => {
-      clearInterval(heartbeat);
-      conns.delete(res);
-      if (conns.size === 0) map.delete(userId);
-    });
+    const channels = [sseChannelForRole(role, userId)];
+    if (role === 'admin') channels.push(ADMIN_BROADCAST_CHANNEL);
+    attachSseStream(res, req, channels);
+  };
+}
+
+// Ensures the requested `:paramName` in the URL matches the id carried by the
+// caller's own session, so an authenticated user cannot open another user's
+// event stream by guessing/passing a different id.
+function requireOwnSseId(paramName: string, getSessionId: (res: express.Response) => string | undefined) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const expected = getSessionId(res);
+    if (!expected || req.params[paramName] !== expected) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    next();
   };
 }
 
@@ -714,40 +734,39 @@ router.get('/api/client/fees', requireDb, async (_req, res) => {
 });
 
 // ── Role SSE endpoints ────────────────────────────────────────────────────────
+// NOTE: affiliate/agent routes have no session-cookie mechanism anywhere in this
+// API yet (every /api/affiliate/* and /api/agent/* route takes its id from the
+// URL/body, unauthenticated) — this predates the SSE work and is a larger,
+// separate gap than these event streams. These two routes intentionally match
+// that existing (unauthenticated) pattern rather than inventing new auth here.
 router.get('/api/affiliate/events/:affiliateId', makeSseHandler('affiliate', 'affiliateId'));
 router.get('/api/agent/events/:agentId',         makeSseHandler('agent',     'agentId'));
-router.get('/api/teacher/events/:teacherId',     makeSseHandler('teacher',   'teacherId'));
-router.get('/api/admin/events/:adminId',         makeSseHandler('admin',     'adminId'));
+
+router.get(
+  '/api/teacher/events/:teacherId',
+  requireTeacherSession,
+  requireOwnSseId('teacherId', (res) => res.locals.teacherSession?.teacherId),
+  makeSseHandler('teacher', 'teacherId')
+);
+
+// requireAdminSession already runs for every /api/admin/* path via the
+// router.use('/api/admin', ...) guard registered above; this only adds the
+// per-admin ownership check so one admin can't read another admin's channel.
+router.get(
+  '/api/admin/events/:adminId',
+  requireOwnSseId('adminId', (res) => res.locals.adminSession?.adminId),
+  makeSseHandler('admin', 'adminId')
+);
 
 // ── Client: SSE event stream (withdrawal confirmations, etc.) ─────────────────
-router.get('/api/client/events/:clientId', (req, res) => {
-  const { clientId } = req.params;
-  if (!clientId) { res.status(400).end(); return; }
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  if (!clientSseConnections.has(clientId)) clientSseConnections.set(clientId, new Set());
-  const conns = clientSseConnections.get(clientId)!;
-  conns.add(res);
-
-  // Initial heartbeat
-  res.write(': connected\n\n');
-
-  // Keep-alive ping every 25 s
-  const heartbeat = setInterval(() => {
-    try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
-  }, 25000);
-
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    conns.delete(res);
-    if (conns.size === 0) clientSseConnections.delete(clientId);
-  });
-});
+router.get(
+  '/api/client/events/:clientId',
+  requireClientSession,
+  requireOwnSseId('clientId', (res) => res.locals.clientSession?.clientId),
+  (req, res) => {
+    attachSseStream(res, req, [sseChannelForClient(req.params.clientId)]);
+  }
+);
 
 // ── Health ───────────────────────────────────────────────────────────────────
 router.get('/api/health', (_req, res) => res.json({ ok: true }));

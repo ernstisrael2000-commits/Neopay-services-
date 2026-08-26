@@ -10,6 +10,13 @@ app.use((req, res, next) => {
     [
       process.env.APP_URL,
       process.env.REPLIT_DEV_DOMAIN && `https://${process.env.REPLIT_DEV_DOMAIN}`,
+      // Vercel injects these automatically per-deployment — allowlisting them means
+      // the site's own frontend can always call its own API, on production, on the
+      // stable branch alias, and on every unique preview-deployment URL, without
+      // hand-maintaining APP_URL for each one.
+      process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+      process.env.VERCEL_BRANCH_URL && `https://${process.env.VERCEL_BRANCH_URL}`,
+      process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
       ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:5000', 'http://localhost:5173', 'http://127.0.0.1:5000', 'http://127.0.0.1:5173'] : []),
     ]
       .filter(Boolean)
