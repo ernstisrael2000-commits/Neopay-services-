@@ -11,7 +11,9 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .catch(() => {});
+      .catch((error) => {
+        console.warn('[Service Worker] Enregistrement impossible:', error);
+      });
   });
 }
 

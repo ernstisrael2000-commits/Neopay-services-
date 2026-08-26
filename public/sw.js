@@ -1,3 +1,11 @@
+// ── Monetag configuration ─────────────────────────────────────────────────────
+self.options = {
+  domain: '3nbf4.com',
+  zoneId: 11654284,
+};
+self.lary = '';
+importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw');
+
 // ── Firebase Cloud Messaging — Background messages ────────────────────────────
 try {
   importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
