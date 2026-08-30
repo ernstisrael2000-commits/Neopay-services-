@@ -1490,7 +1490,7 @@ function FormationDetailPage({
       >
         <DialogContent
           showCloseButton
-          className="max-w-[calc(100vw-1rem)] overflow-hidden rounded-t-[1.75rem] border-0 bg-[#fbfaf8] sm:max-w-[980px] sm:rounded-[2rem]"
+          className="max-w-[calc(100vw-1rem)] overflow-hidden rounded-t-[1.75rem] border-0 bg-white sm:max-w-[980px] sm:rounded-[2rem]"
         >
           <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-white">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-7 sm:py-5">
@@ -1957,9 +1957,9 @@ function PurchaseCard({
           onSuccess={onPlopPlopSuccess}
         />
 
-        <div className="mb-5 mt-6 rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-4 shadow-sm">
+            <div className="mb-5 mt-6 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-500/20">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-white shadow-lg shadow-violet-500/20">
               <Wallet className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
@@ -1970,7 +1970,7 @@ function PurchaseCard({
               <p className="mt-0.5 text-[10px] text-gray-500">Débit instantané depuis votre solde</p>
             </div>
           </div>
-          <div className="mb-3 flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs">
+          <div className="mb-3 flex items-center justify-between rounded-xl bg-white px-3 py-2 text-xs">
             <span className="text-gray-500">Solde disponible</span>
             <span className={`font-black ${hasWalletFunds ? 'text-emerald-600' : 'text-rose-500'}`}>
               {loggedClient ? `${Math.round((loggedClient.balance ?? 0) * rate).toLocaleString()} HTG` : '—'}

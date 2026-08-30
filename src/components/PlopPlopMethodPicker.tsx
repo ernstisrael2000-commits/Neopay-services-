@@ -228,12 +228,12 @@ export default function PlopPlopMethodPicker({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="relative rounded-2xl border-2 border-violet-300 bg-violet-50/80 p-3 shadow-[0_8px_22px_-16px_rgba(124,58,237,0.75)]">
+        <div className="relative rounded-2xl border-2 border-violet-300 bg-violet-50 p-3 shadow-[0_8px_22px_-16px_rgba(124,58,237,0.75)]">
           <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-white">
             <CheckCircle2 className="h-3.5 w-3.5" />
           </span>
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-[11px] font-black text-white shadow-sm">PP</span>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-[11px] font-black text-white shadow-sm">PP</span>
             <div className="min-w-0 pr-4">
               <p className="truncate text-xs font-black text-violet-950">Paym Plop Plop</p>
               <p className="mt-0.5 text-[10px] text-violet-700">Paiement en ligne</p>
@@ -302,12 +302,12 @@ export default function PlopPlopMethodPicker({
               {error}
             </div>
           )}
-          <div className="sticky bottom-0 z-10 -mx-1 bg-white/95 py-1 backdrop-blur-sm">
+          <div className="sticky bottom-0 z-10 -mx-1 bg-white py-1">
             <button
               type="button"
               onClick={startPayment}
               disabled={state === 'creating'}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-700 via-violet-600 to-fuchsia-600 text-sm font-black text-white shadow-[0_10px_24px_-10px_rgba(124,58,237,0.8)] transition hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-violet-700 text-sm font-black text-white shadow-[0_10px_24px_-10px_rgba(124,58,237,0.8)] transition hover:bg-violet-800 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {state === 'creating' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
               {loggedClient?.id ? `Payer ${(formation.price || 0).toLocaleString()} HTG` : 'Se connecter pour payer'}

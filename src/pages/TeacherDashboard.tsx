@@ -681,13 +681,16 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
                     />
                   </div>
                   <div>
-                    <Label className="text-xs font-bold text-gray-500 mb-1.5 block">Vidéo aperçu (URL)</Label>
+                    <Label className="text-xs font-bold text-gray-500 mb-1.5 block">Vidéo de présentation (URL)</Label>
                     <Input
                       value={formData.previewVideoUrl || ''}
                       onChange={e => setFormData(p => ({ ...p, previewVideoUrl: e.target.value }))}
-                      placeholder="YouTube / Vimeo"
+                      placeholder="https://youtube.com/watch?v=..."
                       className="rounded-xl h-11"
                     />
+                    <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
+                      Ce lien sera affiché dans le popup de paiement. YouTube, Vimeo ou une vidéo publique.
+                    </p>
                   </div>
                 </div>
               </div>
