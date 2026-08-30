@@ -114,7 +114,7 @@ function setFavorites(ids: string[]) {
   try { localStorage.setItem('rena_favorites', JSON.stringify(ids)); } catch {}
 }
 
-type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
+type PaymentStep = 'detail' | 'external-method';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -166,9 +166,6 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   const [purchasing, setPurchasing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('detail');
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [selectedPayMethod, setSelectedPayMethod] = useState<'moncash' | 'natcash' | null>(null);
-  const [payFormData, setPayFormData] = useState({ name: '', email: '', transactionCode: '' });
-  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   // ── Load formations ─────────────────────────────────────────────────────────
   // Protected content (video/PDF URLs, quiz answers) is stripped server-side for
@@ -242,9 +239,6 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   const freeCourses = formations.filter(f => f.price === 0);
   const popularCourses = [...formations].sort((a, b) => (b.studentsCount || 0) - (a.studentsCount || 0)).slice(0, 6);
   const newCourses = formations.slice(0, 6);
-  const moncashNumber = settings?.moncashNumber || '—';
-  const natcashNumber = settings?.natcashNumber || '—';
-
   // ── Favorites toggle ────────────────────────────────────────────────────────
   const toggleFavorite = (f: Formation, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -291,8 +285,6 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
     const skipToPayment = viaSharedLink && (f.price ?? 0) > 0 && !isOwned(f);
     setPaymentStep(skipToPayment ? 'external-method' : 'detail');
     setPaymentDialogOpen(viaSharedLink && skipToPayment);
-    setSelectedPayMethod(null);
-    setPayFormData({ name: loggedClient?.name || '', email: loggedClient?.email || '', transactionCode: '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -310,7 +302,6 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
     setSelected(null);
     setPaymentStep('detail');
     setPaymentDialogOpen(false);
-    setSelectedPayMethod(null);
   };
 
   // ── Open shared course link (?course=<id>) once formations are loaded ────────
@@ -389,38 +380,6 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
     }
   };
 
-  const handleExternalPaymentSubmit = async () => {
-    if (!loggedClient || !selected || !selectedPayMethod) return;
-    if (!payFormData.transactionCode.trim()) { toast.error('Veuillez saisir le code de transaction.'); return; }
-    if (!payFormData.name.trim() || !payFormData.email.trim()) { toast.error('Veuillez renseigner votre nom et email.'); return; }
-    setSubmittingPayment(true);
-    try {
-      const res = await fetch('/api/formations/payment-request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: loggedClient.id, userEmail: payFormData.email, userName: payFormData.name,
-          formationId: selected.id, formationTitle: selected.title, amount: selected.price,
-          method: selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash',
-          transactionCode: payFormData.transactionCode,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Erreur lors de la soumission.');
-      if (json.alreadyOwned) { setPurchasedIds(prev => [...prev, selected.id!]); toast.success('Vous avez déjà accès à cette formation !'); closeDetail(); void loadFormations(); return; }
-      setPaymentStep('done');
-      const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50944813185';
-      const methodLabel = selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash';
-      const msg = encodeURIComponent(
-        `Bonjour Solutionpam 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +
-        `👤 Nom: *${payFormData.name}*\n📧 Email: *${payFormData.email}*\n` +
-        `🎓 Cours: *${selected.title}*\n💳 Méthode: *${methodLabel}*\n` +
-        `💰 Montant: *${(selected.price || 0).toLocaleString()} HTG*\n` +
-        `🔖 Code transaction: *${payFormData.transactionCode}*\n\nMerci de valider mon accès.`
-      );
-      setTimeout(() => { window.open(`https://wa.me/${whatsappNum}?text=${msg}`, '_blank'); }, 800);
-    } catch (err: any) { toast.error(err.message); } finally { setSubmittingPayment(false); }
-  };
-
   // ── Player helpers ──────────────────────────────────────────────────────────
   const enterPlayer = (f: Formation) => {
     setPlayerFormation(f);
@@ -454,17 +413,9 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         setPaymentStep={setPaymentStep}
          paymentDialogOpen={paymentDialogOpen}
          setPaymentDialogOpen={setPaymentDialogOpen}
-        selectedPayMethod={selectedPayMethod}
-        setSelectedPayMethod={setSelectedPayMethod}
-        payFormData={payFormData}
-        setPayFormData={setPayFormData}
         purchasing={purchasing}
-        submittingPayment={submittingPayment}
         onWalletPurchase={() => handleWalletPurchase(selected)}
-        onExternalSubmit={handleExternalPaymentSubmit}
         onPlopPlopSuccess={() => handlePlopPlopSuccess(selected)}
-        moncashNumber={moncashNumber}
-        natcashNumber={natcashNumber}
         discount={discount(selected)}
         settings={settings}
         progressPct={progressMap[selected.id!] ?? 0}
@@ -1492,17 +1443,9 @@ interface DetailPageProps {
   setPaymentStep: (s: PaymentStep) => void;
   paymentDialogOpen: boolean;
   setPaymentDialogOpen: (open: boolean) => void;
-  selectedPayMethod: 'moncash' | 'natcash' | null;
-  setSelectedPayMethod: (m: 'moncash' | 'natcash' | null) => void;
-  payFormData: { name: string; email: string; transactionCode: string };
-  setPayFormData: (d: any) => void;
   purchasing: boolean;
-  submittingPayment: boolean;
   onWalletPurchase: () => void;
-  onExternalSubmit: () => void;
   onPlopPlopSuccess: () => void;
-  moncashNumber: string;
-  natcashNumber: string;
   discount: number;
   settings: any;
   progressPct: number;
@@ -1511,9 +1454,8 @@ interface DetailPageProps {
 function FormationDetailPage({
   formation, isOwned, isFav, loggedClient, onBack, onPlay, onFavorite, onOpenWallet,
   onRequestAuth, onShare,
-  paymentStep, setPaymentStep, paymentDialogOpen, setPaymentDialogOpen, selectedPayMethod, setSelectedPayMethod,
-  payFormData, setPayFormData, purchasing, submittingPayment,
-  onWalletPurchase, onExternalSubmit, onPlopPlopSuccess, moncashNumber, natcashNumber, discount, progressPct, settings
+  paymentStep, setPaymentStep, paymentDialogOpen, setPaymentDialogOpen, purchasing,
+  onWalletPurchase, onPlopPlopSuccess, discount, progressPct, settings
 }: DetailPageProps) {
 
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
@@ -1594,20 +1536,12 @@ function FormationDetailPage({
               loggedClient={loggedClient}
               paymentStep={paymentStep}
               setPaymentStep={setPaymentStep}
-              selectedPayMethod={selectedPayMethod}
-              setSelectedPayMethod={setSelectedPayMethod}
-              payFormData={payFormData}
-              setPayFormData={setPayFormData}
               purchasing={purchasing}
-              submittingPayment={submittingPayment}
               onPlay={onPlay}
               onWalletPurchase={onWalletPurchase}
-              onExternalSubmit={onExternalSubmit}
               onPlopPlopSuccess={onPlopPlopSuccess}
               onRequestAuth={onRequestAuth}
               onOpenWallet={onOpenWallet}
-              moncashNumber={moncashNumber}
-              natcashNumber={natcashNumber}
               discount={discount}
               progressPct={progressPct}
               settings={settings}
@@ -1876,20 +1810,12 @@ function FormationDetailPage({
                 loggedClient={loggedClient}
                 paymentStep={paymentStep}
                 setPaymentStep={setPaymentStep}
-                selectedPayMethod={selectedPayMethod}
-                setSelectedPayMethod={setSelectedPayMethod}
-                payFormData={payFormData}
-                setPayFormData={setPayFormData}
                 purchasing={purchasing}
-                submittingPayment={submittingPayment}
                 onPlay={onPlay}
                 onWalletPurchase={onWalletPurchase}
-                onExternalSubmit={onExternalSubmit}
                  onPlopPlopSuccess={onPlopPlopSuccess}
                  onRequestAuth={onRequestAuth}
                 onOpenWallet={onOpenWallet}
-                moncashNumber={moncashNumber}
-                natcashNumber={natcashNumber}
                 discount={discount}
                 progressPct={progressPct}
                 settings={settings}
@@ -1929,69 +1855,12 @@ function ModuleRow({ mod, idx, isOwned }: { mod: FormationModule; idx: number; i
 
 function PurchaseCard({
   formation, isOwned, loggedClient, paymentStep, setPaymentStep,
-  selectedPayMethod, setSelectedPayMethod, payFormData, setPayFormData,
-  purchasing, submittingPayment, onPlay, onWalletPurchase, onExternalSubmit, onPlopPlopSuccess,
-  onRequestAuth, onOpenWallet, moncashNumber, natcashNumber, discount, progressPct, settings
+  purchasing, onPlay, onWalletPurchase, onPlopPlopSuccess,
+  onRequestAuth, onOpenWallet, discount, progressPct, settings
 }: any) {
 
   const rate = settings?.exchangeRate || 146;
   const hasWalletFunds = loggedClient && Math.round((loggedClient.balance ?? 0) * rate) >= (formation.price ?? 0);
-
-  if (paymentStep === 'done') {
-    return (
-      <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 p-6 text-center">
-        <div className="h-16 w-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-        </div>
-        <h3 className="font-editorial font-semibold text-gray-900 text-lg mb-2">Paiement envoyé !</h3>
-        <p className="text-sm text-gray-500 mb-5">Votre demande est en cours de validation. Vous recevrez un accès dès confirmation.</p>
-        <div className="bg-emerald-50 rounded-xl p-4 text-left space-y-1 text-xs text-gray-600 mb-4">
-          <p>✅ Transaction soumise avec succès</p>
-          <p>⏳ Validation sous 24–48h ouvrables</p>
-          <p>📲 WhatsApp ouvert pour notifier l'admin</p>
-        </div>
-        <button onClick={() => setPaymentStep('detail')}
-          className="w-full h-11 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-          Retour
-        </button>
-      </div>
-    );
-  }
-
-  if (paymentStep === 'form' && selectedPayMethod) {
-    return (
-      <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 p-6">
-        <button onClick={() => setPaymentStep('external-method')} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-xs font-semibold mb-4 transition-colors">
-          <ChevronLeft className="h-4 w-4" /> Retour
-        </button>
-        <h3 className="font-editorial font-semibold text-gray-900 text-lg mb-1">Finaliser le paiement</h3>
-        <p className="text-xs text-gray-500 mb-5">via {selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash'}</p>
-
-        <div className="space-y-3 mb-5">
-          <input type="text" placeholder="Votre nom complet" value={payFormData.name}
-            onChange={e => setPayFormData((d: any) => ({ ...d, name: e.target.value }))}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all" />
-          <input type="email" placeholder="Votre email" value={payFormData.email}
-            onChange={e => setPayFormData((d: any) => ({ ...d, email: e.target.value }))}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all" />
-          <input type="text" placeholder="Code de transaction" value={payFormData.transactionCode}
-            onChange={e => setPayFormData((d: any) => ({ ...d, transactionCode: e.target.value }))}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all" />
-        </div>
-
-        <div className="bg-gray-50 rounded-xl p-3 mb-5 text-xs space-y-1">
-          <div className="flex justify-between"><span className="text-gray-500">Formation</span><span className="font-bold text-gray-800 truncate max-w-[140px]">{formation.title}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Montant</span><span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span></div>
-        </div>
-
-        <button onClick={onExternalSubmit} disabled={submittingPayment}
-          className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-          {submittingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          Confirmer le paiement
-        </button>
-      </div>
-    );
-  }
 
   if (paymentStep === 'external-method') {
     return (
@@ -2004,7 +1873,18 @@ function PurchaseCard({
           {formation.title} · <span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span>
         </p>
 
-        <div className="mb-5 rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-4 shadow-sm">
+        <p className="text-[11px] font-black uppercase tracking-widest text-emerald-600 mb-2 flex items-center gap-1.5">
+          <Zap className="h-3.5 w-3.5" /> Paym Plop Plop — accès immédiat
+        </p>
+        <PlopPlopMethodPicker
+          formation={formation}
+          loggedClient={loggedClient}
+          settings={settings}
+          onRequestAuth={onRequestAuth}
+          onSuccess={onPlopPlopSuccess}
+        />
+
+        <div className="mb-5 mt-6 rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-500/20">
               <Wallet className="h-5 w-5" />
@@ -2039,65 +1919,6 @@ function PurchaseCard({
           )}
         </div>
 
-        <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-          <Zap className="h-3.5 w-3.5" /> Automatique — accès immédiat
-        </p>
-        <PlopPlopMethodPicker
-          formation={formation}
-          loggedClient={loggedClient}
-          settings={settings}
-          onRequestAuth={onRequestAuth}
-          onSuccess={onPlopPlopSuccess}
-        />
-
-        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-6 mb-2 flex items-center gap-1.5">
-          <Clock className="h-3.5 w-3.5" /> Manuel — validation sous 24-48h
-        </p>
-        <div className="space-y-3 mb-5">
-          {/* MonCash */}
-          <div onClick={() => setSelectedPayMethod('moncash')}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPayMethod === 'moncash' ? 'border-rose-400 bg-rose-50' : 'border-gray-200 bg-white hover:border-rose-200'}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-9 w-9 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
-                <Smartphone className="h-4 w-4 text-rose-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 text-sm">MonCash</p>
-                <p className="text-[10px] text-gray-400">Paiement mobile sécurisé par Digicel</p>
-              </div>
-              {selectedPayMethod === 'moncash' && <CheckCircle2 className="h-5 w-5 text-rose-500 shrink-0" />}
-            </div>
-            <div className="bg-white rounded-lg p-2.5 space-y-1">
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Numéro</span><span className="font-black text-gray-800">{moncashNumber}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Montant exact</span><span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span></div>
-            </div>
-          </div>
-
-          {/* NatCash */}
-          <div onClick={() => setSelectedPayMethod('natcash')}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPayMethod === 'natcash' ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-amber-200'}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <CreditCard className="h-4 w-4 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 text-sm">NatCash</p>
-                <p className="text-[10px] text-gray-400">Sécurisé et rapide</p>
-              </div>
-              {selectedPayMethod === 'natcash' && <CheckCircle2 className="h-5 w-5 text-amber-500 shrink-0" />}
-            </div>
-            <div className="bg-white rounded-lg p-2.5 space-y-1">
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Numéro</span><span className="font-black text-gray-800">{natcashNumber}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Montant exact</span><span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span></div>
-            </div>
-          </div>
-        </div>
-
-        <button onClick={() => { if (selectedPayMethod) setPaymentStep('form'); else toast.error('Choisissez un mode de paiement.'); }}
-          disabled={!selectedPayMethod}
-          className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors">
-          Continuer <ArrowRight className="h-4 w-4" />
-        </button>
       </div>
     );
   }
@@ -2163,7 +1984,7 @@ function PurchaseCard({
                   <button onClick={onWalletPurchase} disabled={purchasing}
                     className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-500/20">
                     {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                    Acheter avec mon Wallet
+                    Payer avec Solution Pam
                   </button>
                 )}
                 {!hasWalletFunds && (
