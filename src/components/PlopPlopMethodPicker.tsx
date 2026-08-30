@@ -16,6 +16,7 @@ type PaymentState = 'idle' | 'creating' | 'waiting' | 'success' | 'error';
 interface PlopPlopMethodPickerProps {
   formation: Formation;
   loggedClient?: { id?: string } | null;
+  settings?: { moncashLogoUrl?: string; natcashLogoUrl?: string } | null;
   onRequestAuth?: () => void;
   onSuccess: () => void;
 }
@@ -67,6 +68,7 @@ const METHODS: Array<{
 export default function PlopPlopMethodPicker({
   formation,
   loggedClient,
+  settings,
   onRequestAuth,
   onSuccess,
 }: PlopPlopMethodPickerProps) {
@@ -176,6 +178,31 @@ export default function PlopPlopMethodPicker({
     setReferenceId(null);
   };
 
+  const PaymentProviderLogo = ({ methodId }: { methodId: PlopPlopMethod }) => {
+    const customLogo = methodId === 'moncash' ? settings?.moncashLogoUrl : methodId === 'natcash' ? settings?.natcashLogoUrl : undefined;
+    if (customLogo) {
+      return <img src={customLogo} alt="" className="h-8 w-8 rounded-lg object-contain bg-white p-1" referrerPolicy="no-referrer" />;
+    }
+
+    if (methodId === 'carte') {
+      return (
+        <span className="relative flex h-8 w-10 items-center justify-center overflow-hidden rounded-lg bg-slate-950 text-[8px] font-black tracking-tight text-white">
+          <span className="absolute -left-1 h-5 w-5 rounded-full bg-red-500/90" />
+          <span className="absolute -right-1 h-5 w-5 rounded-full bg-amber-400/90" />
+          <span className="relative z-10">VISA</span>
+        </span>
+      );
+    }
+
+    const logoClass = methodId === 'moncash'
+      ? 'bg-[#e92345] text-white'
+      : methodId === 'natcash'
+        ? 'bg-[#f6b51b] text-[#18223b]'
+        : 'bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white';
+    const letters = methodId === 'moncash' ? 'MC' : methodId === 'natcash' ? 'NC' : 'KP';
+    return <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black tracking-tight ${logoClass}`}>{letters}</span>;
+  };
+
   if (state === 'success') {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
@@ -188,8 +215,18 @@ export default function PlopPlopMethodPicker({
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between rounded-xl border border-violet-100 bg-violet-50/70 px-3 py-2">
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-[10px] font-black text-white shadow-sm">PP</span>
+          <div>
+            <p className="text-[11px] font-black text-violet-900">Paym Plop Plop</p>
+            <p className="text-[10px] text-violet-600">Paiement sécurisé en ligne</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold text-emerald-600 shadow-sm">Sécurisé</span>
+      </div>
       <div className="grid grid-cols-2 gap-2">
-        {METHODS.map(({ id, label, description, icon: Icon, className }) => {
+        {METHODS.map(({ id, label, description, className }) => {
           const selected = method === id;
           return (
             <button
@@ -203,7 +240,7 @@ export default function PlopPlopMethodPicker({
               aria-pressed={selected}
             >
               <div className="flex items-center gap-2">
-                <Icon className={`h-4 w-4 shrink-0 ${selected ? '' : 'text-gray-400'}`} />
+                <PaymentProviderLogo methodId={id} />
                 <span className={`text-xs font-black ${selected ? '' : 'text-gray-700'}`}>{label}</span>
               </div>
               <p className={`mt-1 text-[10px] ${selected ? 'opacity-80' : 'text-gray-400'}`}>{description}</p>

@@ -12,7 +12,7 @@ import {
   Cpu, ShoppingBag, Palette, Briefcase,
   Banknote, XCircle, Share2
 } from 'lucide-react';
-import { Dialog, DialogContent } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import CoursePlayer from './CoursePlayer';
 import { Button } from '../components/ui/button';
 import PlopPlopMethodPicker from '../components/PlopPlopMethodPicker';
@@ -165,6 +165,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   // Purchase flow
   const [purchasing, setPurchasing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('detail');
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedPayMethod, setSelectedPayMethod] = useState<'moncash' | 'natcash' | null>(null);
   const [payFormData, setPayFormData] = useState({ name: '', email: '', transactionCode: '' });
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -216,6 +217,15 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       }).catch(() => {});
   }, [loggedClient?.id, purchasedIds.length]);
 
+  // Purchases are loaded just after the formation catalog. If the shared link
+  // opened the payment dialog a moment before ownership arrived, close it
+  // rather than showing a payment option for a course the client already owns.
+  useEffect(() => {
+    if (!paymentDialogOpen || !selected || !isOwned(selected)) return;
+    setPaymentDialogOpen(false);
+    setPaymentStep('detail');
+  }, [paymentDialogOpen, selected, purchasedIds]);
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const isOwned = (f: Formation) => !!f.id && purchasedIds.includes(f.id);
   const isFav = (f: Formation) => !!f.id && favorites.includes(f.id);
@@ -264,9 +274,6 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       if ((result as any).client) {
         onClientLogin?.((result as any).client);
         toast.success('Connexion réussie !');
-        setTimeout(() => {
-          if (pendingFormation) { openDetail(pendingFormation, { viaSharedLink: pendingViaSharedLink }); setPendingFormation(null); setPendingViaSharedLink(false); }
-        }, 200);
       }
     } catch (err: any) {
       toast.error(err.message || 'Erreur de connexion Google.');
@@ -276,24 +283,35 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   };
 
   // ── Open detail ─────────────────────────────────────────────────────────────
-  // `viaSharedLink` marks entries coming from a shared course link (?course=<id>):
-  // instead of the plain description page, jump straight to the payment-method
-  // screen so the visitor immediately sees the course, its price and how to pay.
-  const openDetail = (f: Formation, opts?: { viaSharedLink?: boolean }) => {
-    if (!loggedClient && !opts?.viaSharedLink) {
-      setPendingFormation(f);
-      setPendingViaSharedLink(!!opts?.viaSharedLink);
-      setShowLoginPrompt(true);
-      return;
-    }
+  // Shared links always require a client session before showing the course
+  // purchase surface. This keeps the buyer identity attached to every payment
+  // and lets the server save the purchase to the correct account.
+  const openAuthenticatedDetail = (f: Formation, viaSharedLink = false) => {
     setSelected(f);
-    const skipToPayment = !!opts?.viaSharedLink && (f.price ?? 0) > 0 && !isOwned(f);
+    const skipToPayment = viaSharedLink && (f.price ?? 0) > 0 && !isOwned(f);
     setPaymentStep(skipToPayment ? 'external-method' : 'detail');
+    setPaymentDialogOpen(viaSharedLink && skipToPayment);
     setSelectedPayMethod(null);
     setPayFormData({ name: loggedClient?.name || '', email: loggedClient?.email || '', transactionCode: '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-  const closeDetail = () => { setSelected(null); setPaymentStep('detail'); setSelectedPayMethod(null); };
+
+  const openDetail = (f: Formation, opts?: { viaSharedLink?: boolean }) => {
+    if (!loggedClient) {
+      setPendingFormation(f);
+      setPendingViaSharedLink(!!opts?.viaSharedLink);
+      if (onRequestAuth) onRequestAuth();
+      else setShowLoginPrompt(true);
+      return;
+    }
+    openAuthenticatedDetail(f, !!opts?.viaSharedLink);
+  };
+  const closeDetail = () => {
+    setSelected(null);
+    setPaymentStep('detail');
+    setPaymentDialogOpen(false);
+    setSelectedPayMethod(null);
+  };
 
   // ── Open shared course link (?course=<id>) once formations are loaded ────────
   const openedInitialCourse = React.useRef(false);
@@ -305,6 +323,17 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       openDetail(target, { viaSharedLink: true });
     }
   }, [initialCourseId, formations]);
+
+  // The auth modal lives in App. Once it completes, resume the exact shared
+  // course that triggered it and open the payment modal automatically.
+  useEffect(() => {
+    if (!loggedClient?.id || !pendingFormation) return;
+    const target = pendingFormation;
+    const viaSharedLink = pendingViaSharedLink;
+    setPendingFormation(null);
+    setPendingViaSharedLink(false);
+    openAuthenticatedDetail(target, viaSharedLink);
+  }, [loggedClient?.id, pendingFormation, pendingViaSharedLink]);
 
   // ── Purchase ─────────────────────────────────────────────────────────────────
   const handleWalletPurchase = async (formation: Formation) => {
@@ -423,6 +452,8 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         onOpenWallet={onOpenWallet}
         paymentStep={paymentStep}
         setPaymentStep={setPaymentStep}
+         paymentDialogOpen={paymentDialogOpen}
+         setPaymentDialogOpen={setPaymentDialogOpen}
         selectedPayMethod={selectedPayMethod}
         setSelectedPayMethod={setSelectedPayMethod}
         payFormData={payFormData}
@@ -1459,6 +1490,8 @@ interface DetailPageProps {
   onOpenWallet: () => void;
   paymentStep: PaymentStep;
   setPaymentStep: (s: PaymentStep) => void;
+  paymentDialogOpen: boolean;
+  setPaymentDialogOpen: (open: boolean) => void;
   selectedPayMethod: 'moncash' | 'natcash' | null;
   setSelectedPayMethod: (m: 'moncash' | 'natcash' | null) => void;
   payFormData: { name: string; email: string; transactionCode: string };
@@ -1478,7 +1511,7 @@ interface DetailPageProps {
 function FormationDetailPage({
   formation, isOwned, isFav, loggedClient, onBack, onPlay, onFavorite, onOpenWallet,
   onRequestAuth, onShare,
-  paymentStep, setPaymentStep, selectedPayMethod, setSelectedPayMethod,
+  paymentStep, setPaymentStep, paymentDialogOpen, setPaymentDialogOpen, selectedPayMethod, setSelectedPayMethod,
   payFormData, setPayFormData, purchasing, submittingPayment,
   onWalletPurchase, onExternalSubmit, onPlopPlopSuccess, moncashNumber, natcashNumber, discount, progressPct, settings
 }: DetailPageProps) {
@@ -1506,6 +1539,83 @@ function FormationDetailPage({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Dialog
+        open={paymentDialogOpen}
+        onOpenChange={(open) => {
+          setPaymentDialogOpen(open);
+          if (!open) setPaymentStep('detail');
+        }}
+      >
+        <DialogContent
+          showCloseButton
+          className="max-w-lg overflow-hidden rounded-t-[2rem] border-0 bg-[#fbfaf8] sm:rounded-[2rem]"
+        >
+          <div className="relative overflow-hidden bg-[#17152b] px-5 pb-5 pt-7 text-white sm:px-7">
+            <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-fuchsia-500/25 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-orange-400/20 blur-3xl" />
+            <div className="relative">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[10px] font-black shadow-lg shadow-fuchsia-500/20">SP</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Solution Pam Academy</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-white/10 shadow-xl">
+                  {formation.coverImage ? (
+                    <img src={formation.coverImage} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-purple-700'}`}>
+                      <GraduationCap className="h-7 w-7 text-white/70" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-300">Inscription sécurisée</p>
+                  <DialogTitle className="truncate pr-8 font-editorial text-xl font-semibold text-white">{formation.title}</DialogTitle>
+                  <DialogDescription className="mt-1 text-xs text-white/60">
+                    Activez votre accès immédiatement
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="max-h-[calc(100dvh-13rem)] overflow-y-auto p-4 sm:p-6">
+            <div className="mb-4 flex items-center justify-between rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Montant à payer</p>
+                <p className="mt-0.5 font-editorial text-2xl font-semibold text-violet-700">{(formation.price || 0).toLocaleString()} HTG</p>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700">
+                <Shield className="h-3.5 w-3.5" /> Paiement sécurisé
+              </div>
+            </div>
+            <PurchaseCard
+              formation={formation}
+              isOwned={isOwned}
+              loggedClient={loggedClient}
+              paymentStep={paymentStep}
+              setPaymentStep={setPaymentStep}
+              selectedPayMethod={selectedPayMethod}
+              setSelectedPayMethod={setSelectedPayMethod}
+              payFormData={payFormData}
+              setPayFormData={setPayFormData}
+              purchasing={purchasing}
+              submittingPayment={submittingPayment}
+              onPlay={onPlay}
+              onWalletPurchase={onWalletPurchase}
+              onExternalSubmit={onExternalSubmit}
+              onPlopPlopSuccess={onPlopPlopSuccess}
+              onRequestAuth={onRequestAuth}
+              onOpenWallet={onOpenWallet}
+              moncashNumber={moncashNumber}
+              natcashNumber={natcashNumber}
+              discount={discount}
+              progressPct={progressPct}
+              settings={settings}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Hero */}
       <div className="relative h-64 sm:h-80 bg-gray-900 overflow-hidden">
         {formation.coverImage ? (
@@ -1894,12 +2004,48 @@ function PurchaseCard({
           {formation.title} · <span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span>
         </p>
 
+        <div className="mb-5 rounded-2xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 p-4 shadow-sm">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white shadow-lg shadow-violet-500/20">
+              <Wallet className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-black text-gray-900">Payer avec Solution Pam</p>
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-black text-violet-700">WALLET</span>
+              </div>
+              <p className="mt-0.5 text-[10px] text-gray-500">Débit instantané depuis votre solde</p>
+            </div>
+          </div>
+          <div className="mb-3 flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs">
+            <span className="text-gray-500">Solde disponible</span>
+            <span className={`font-black ${hasWalletFunds ? 'text-emerald-600' : 'text-rose-500'}`}>
+              {loggedClient ? `${Math.round((loggedClient.balance ?? 0) * rate).toLocaleString()} HTG` : '—'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onWalletPurchase}
+            disabled={purchasing || !hasWalletFunds}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-black text-white shadow-lg shadow-violet-500/20 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+          >
+            {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+            {hasWalletFunds ? 'Payer avec Solution Pam' : 'Solde insuffisant'}
+          </button>
+          {!hasWalletFunds && (
+            <button type="button" onClick={onOpenWallet} className="mt-2 flex w-full items-center justify-center gap-1 text-[11px] font-bold text-violet-700 hover:underline">
+              <TrendingUp className="h-3 w-3" /> Recharger mon wallet
+            </button>
+          )}
+        </div>
+
         <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5" /> Automatique — accès immédiat
         </p>
         <PlopPlopMethodPicker
           formation={formation}
           loggedClient={loggedClient}
+          settings={settings}
           onRequestAuth={onRequestAuth}
           onSuccess={onPlopPlopSuccess}
         />
