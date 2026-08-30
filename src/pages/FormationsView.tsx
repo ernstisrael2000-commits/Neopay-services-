@@ -10,11 +10,12 @@ import {
   Heart, Trophy, BarChart3, Sparkles, Filter, Grid,
   BookMarked, ArrowRight, Shield, LogIn,
   Cpu, ShoppingBag, Palette, Briefcase,
-  Banknote, XCircle
+  Banknote, XCircle, Share2
 } from 'lucide-react';
 import { Dialog, DialogContent } from '../components/ui/dialog';
 import CoursePlayer from './CoursePlayer';
 import { Button } from '../components/ui/button';
+import PlopPlopMethodPicker from '../components/PlopPlopMethodPicker';
 import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -27,6 +28,7 @@ import { db } from '../lib/firebase';
 
 interface FormationsViewProps {
   loggedClient: Client | null;
+  onRequestAuth?: () => void;
   onOpenWallet: () => void;
   onClientLogin?: (client: Client) => void;
   activeTab: 'all' | 'my' | 'profile';
@@ -116,7 +118,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange, resetSignal, initialCourseId }: FormationsViewProps) {
+export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, onRequestAuth, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange, onDetailChange, resetSignal, initialCourseId }: FormationsViewProps) {
   const { settings } = useSettingsCtx();
 
   // Data
@@ -278,7 +280,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   // instead of the plain description page, jump straight to the payment-method
   // screen so the visitor immediately sees the course, its price and how to pay.
   const openDetail = (f: Formation, opts?: { viaSharedLink?: boolean }) => {
-    if (!loggedClient) {
+    if (!loggedClient && !opts?.viaSharedLink) {
       setPendingFormation(f);
       setPendingViaSharedLink(!!opts?.viaSharedLink);
       setShowLoginPrompt(true);
@@ -337,6 +339,27 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
     void loadFormations();
   };
 
+  const shareFormation = async (formation: Formation) => {
+    if (!formation.id) return;
+    const link = `${window.location.origin}/formations?course=${encodeURIComponent(formation.id)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: formation.title,
+          text: `Découvrez cette formation sur Solutionpam : ${formation.title}`,
+          url: link,
+        });
+      } else {
+        await navigator.clipboard.writeText(link);
+        toast.success('Lien de la formation copié !');
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        toast.error(`Impossible de partager. Copiez ce lien : ${link}`);
+      }
+    }
+  };
+
   const handleExternalPaymentSubmit = async () => {
     if (!loggedClient || !selected || !selectedPayMethod) return;
     if (!payFormData.transactionCode.trim()) { toast.error('Veuillez saisir le code de transaction.'); return; }
@@ -392,9 +415,11 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         isOwned={isOwned(selected)}
         isFav={isFav(selected)}
         loggedClient={loggedClient}
+        onRequestAuth={onRequestAuth}
         onBack={closeDetail}
         onPlay={() => { closeDetail(); enterPlayer(selected); }}
         onFavorite={(e) => toggleFavorite(selected, e)}
+        onShare={() => shareFormation(selected)}
         onOpenWallet={onOpenWallet}
         paymentStep={paymentStep}
         setPaymentStep={setPaymentStep}
@@ -1426,9 +1451,11 @@ interface DetailPageProps {
   isOwned: boolean;
   isFav: boolean;
   loggedClient: Client | null;
+  onRequestAuth?: () => void;
   onBack: () => void;
   onPlay: () => void;
   onFavorite: (e: React.MouseEvent) => void;
+  onShare: () => void;
   onOpenWallet: () => void;
   paymentStep: PaymentStep;
   setPaymentStep: (s: PaymentStep) => void;
@@ -1450,6 +1477,7 @@ interface DetailPageProps {
 
 function FormationDetailPage({
   formation, isOwned, isFav, loggedClient, onBack, onPlay, onFavorite, onOpenWallet,
+  onRequestAuth, onShare,
   paymentStep, setPaymentStep, selectedPayMethod, setSelectedPayMethod,
   payFormData, setPayFormData, purchasing, submittingPayment,
   onWalletPurchase, onExternalSubmit, onPlopPlopSuccess, moncashNumber, natcashNumber, discount, progressPct, settings
@@ -1496,9 +1524,13 @@ function FormationDetailPage({
         </div>
 
         {/* Favorite */}
-        <div className="absolute top-4 right-4">
-          <button onClick={onFavorite}
-            className={`h-9 w-9 rounded-xl flex items-center justify-center backdrop-blur-sm transition-all ${isFav ? 'bg-rose-500 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'}`}>
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          <button onClick={onShare} aria-label="Partager cette formation"
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/30 text-white/70 backdrop-blur-sm transition-all hover:bg-black/50 hover:text-white">
+            <Share2 className="h-4 w-4" />
+          </button>
+          <button onClick={onFavorite} aria-label="Ajouter aux favoris"
+            className={`flex h-9 w-9 items-center justify-center rounded-xl backdrop-blur-sm transition-all ${isFav ? 'bg-rose-500 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'}`}>
             <Heart className={`h-4 w-4 ${isFav ? 'fill-white' : ''}`} />
           </button>
         </div>
@@ -1743,7 +1775,8 @@ function FormationDetailPage({
                 onPlay={onPlay}
                 onWalletPurchase={onWalletPurchase}
                 onExternalSubmit={onExternalSubmit}
-                onPlopPlopSuccess={onPlopPlopSuccess}
+                 onPlopPlopSuccess={onPlopPlopSuccess}
+                 onRequestAuth={onRequestAuth}
                 onOpenWallet={onOpenWallet}
                 moncashNumber={moncashNumber}
                 natcashNumber={natcashNumber}
@@ -1788,7 +1821,7 @@ function PurchaseCard({
   formation, isOwned, loggedClient, paymentStep, setPaymentStep,
   selectedPayMethod, setSelectedPayMethod, payFormData, setPayFormData,
   purchasing, submittingPayment, onPlay, onWalletPurchase, onExternalSubmit, onPlopPlopSuccess,
-  onOpenWallet, moncashNumber, natcashNumber, discount, progressPct, settings
+  onRequestAuth, onOpenWallet, moncashNumber, natcashNumber, discount, progressPct, settings
 }: any) {
 
   const rate = settings?.exchangeRate || 146;
@@ -1864,7 +1897,12 @@ function PurchaseCard({
         <p className="text-[11px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5" /> Automatique — accès immédiat
         </p>
-        <PlopPlopMethodPicker formation={formation} onSuccess={onPlopPlopSuccess} />
+        <PlopPlopMethodPicker
+          formation={formation}
+          loggedClient={loggedClient}
+          onRequestAuth={onRequestAuth}
+          onSuccess={onPlopPlopSuccess}
+        />
 
         <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-6 mb-2 flex items-center gap-1.5">
           <Clock className="h-3.5 w-3.5" /> Manuel — validation sous 24-48h
@@ -1991,7 +2029,7 @@ function PurchaseCard({
             )}
           </>
         ) : (
-          <button onClick={onOpenWallet}
+          <button onClick={onRequestAuth || onOpenWallet}
             className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors">
             <Lock className="h-4 w-4" /> Se connecter pour acheter
           </button>

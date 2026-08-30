@@ -564,6 +564,7 @@ function AppInner() {
                       loggedClient={loggedClient}
                       onOpenWallet={() => handleViewChange('wallet')}
                       onClientLogin={handleClientLogin}
+                      onRequestAuth={() => setShowAuthModal(true)}
                       activeTab={formationsTab}
                       onTabChange={setFormationsTab}
                       searchQuery={formationsSearch}

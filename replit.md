@@ -37,6 +37,7 @@ Le serveur expose le port **5000** (Express + Vite SSR proxy).
 | `NOWPAYMENTS_IPN_SECRET` | ✅ | Secret IPN NowPayments (webhooks) |
 | `FAZERCARDS_API_KEY` | ✅ | Clé API FazerCards |
 | `GROQ_API_KEY` | ✅ | Clé API Groq (IA) |
+| `PLOPPLOP_CLIENT_ID` | ✅ | Identifiant marchand Paym Plop Plop |
 | `VAPID_PUBLIC_KEY` | ✅ | Clé publique VAPID (push) |
 | `VAPID_PRIVATE_KEY` | ✅ | Clé privée VAPID (push) |
 
