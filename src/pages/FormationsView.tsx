@@ -1490,62 +1490,146 @@ function FormationDetailPage({
       >
         <DialogContent
           showCloseButton
-          className="max-w-lg overflow-hidden rounded-t-[2rem] border-0 bg-[#fbfaf8] sm:rounded-[2rem]"
+          className="max-w-[calc(100vw-1rem)] overflow-hidden rounded-t-[1.75rem] border-0 bg-[#fbfaf8] sm:max-w-[980px] sm:rounded-[2rem]"
         >
-          <div className="relative overflow-hidden bg-[#17152b] px-5 pb-5 pt-7 text-white sm:px-7">
-            <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-fuchsia-500/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -left-12 h-40 w-40 rounded-full bg-orange-400/20 blur-3xl" />
-            <div className="relative">
-              <div className="mb-5 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[10px] font-black shadow-lg shadow-fuchsia-500/20">SP</span>
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Solution Pam Academy</span>
-              </div>
+          <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-white">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-7 sm:py-5">
               <div className="flex items-center gap-3">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/15 bg-white/10 shadow-xl">
-                  {formation.coverImage ? (
-                    <img src={formation.coverImage} alt="" className="h-full w-full object-cover" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#102332] text-white shadow-[0_8px_20px_-8px_rgba(16,35,50,0.7)]">
+                  {settings?.logoUrl ? (
+                    <img src={settings.logoUrl} alt="" className="h-8 w-8 object-contain" referrerPolicy="no-referrer" />
                   ) : (
-                    <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-purple-700'}`}>
-                      <GraduationCap className="h-7 w-7 text-white/70" />
-                    </div>
+                    <span className="font-editorial text-xl font-semibold tracking-tight">SP</span>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-300">Inscription sécurisée</p>
-                  <DialogTitle className="truncate pr-8 font-editorial text-xl font-semibold text-white">{formation.title}</DialogTitle>
-                  <DialogDescription className="mt-1 text-xs text-white/60">
-                    Activez votre accès immédiatement
-                  </DialogDescription>
+                <div className="leading-none">
+                  <p className="font-heading text-[16px] font-black tracking-tight text-[#102332]">SOLUTION PAM</p>
+                  <p className="mt-1 text-[9px] font-black uppercase tracking-[0.24em] text-[#102332]">Academy</p>
                 </div>
               </div>
-            </div>
-          </div>
-          <div className="max-h-[calc(100dvh-13rem)] overflow-y-auto p-4 sm:p-6">
-            <div className="mb-4 flex items-center justify-between rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Montant à payer</p>
-                <p className="mt-0.5 font-editorial text-2xl font-semibold text-violet-700">{(formation.price || 0).toLocaleString()} HTG</p>
-              </div>
-              <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700">
-                <Shield className="h-3.5 w-3.5" /> Paiement sécurisé
+              <div className="mr-9 flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-[10px] font-black text-emerald-700 sm:mr-10">
+                <Shield className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Paiement sécurisé</span><span className="sm:hidden">Sécurisé</span>
               </div>
             </div>
-            <PurchaseCard
-              formation={formation}
-              isOwned={isOwned}
-              loggedClient={loggedClient}
-              paymentStep={paymentStep}
-              setPaymentStep={setPaymentStep}
-              purchasing={purchasing}
-              onPlay={onPlay}
-              onWalletPurchase={onWalletPurchase}
-              onPlopPlopSuccess={onPlopPlopSuccess}
-              onRequestAuth={onRequestAuth}
-              onOpenWallet={onOpenWallet}
-              discount={discount}
-              progressPct={progressPct}
-              settings={settings}
-            />
+
+            <div className="space-y-5 p-4 sm:space-y-6 sm:p-7">
+              <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_12px_35px_-24px_rgba(16,35,50,0.45)] sm:p-3">
+                <div className="grid gap-4 md:grid-cols-[1.08fr_0.92fr] md:gap-6">
+                  <div className="min-w-0">
+                    <div
+                      className="group relative aspect-video overflow-hidden rounded-xl bg-[#071925] shadow-inner"
+                      role={formation.previewVideoUrl ? 'button' : undefined}
+                      tabIndex={formation.previewVideoUrl ? 0 : undefined}
+                      onClick={() => formation.previewVideoUrl && window.open(formation.previewVideoUrl, '_blank', 'noopener,noreferrer')}
+                      onKeyDown={e => {
+                        if (formation.previewVideoUrl && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          window.open(formation.previewVideoUrl, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                    >
+                      {formation.coverImage ? (
+                        <img src={formation.coverImage} alt="" className="h-full w-full object-cover opacity-75 transition duration-500 group-hover:scale-105 group-hover:opacity-90" />
+                      ) : (
+                        <div className={`h-full w-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-slate-800 to-violet-900'}`} />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/5 to-black/10" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#102332] shadow-[0_8px_24px_rgba(0,0,0,0.25)] transition-transform group-hover:scale-105 sm:h-16 sm:w-16">
+                          <Play className="ml-1 h-6 w-6 fill-current sm:h-7 sm:w-7" />
+                        </span>
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-3 py-2.5 text-white sm:px-4">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/75">Aperçu du cours</span>
+                        {formation.previewVideoUrl && <span className="flex items-center gap-1 text-[10px] font-semibold text-white/80"><ExternalLink className="h-3 w-3" /> Voir la vidéo</span>}
+                      </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {[0, 1, 2].map((index) => (
+                        <div key={index} className={`relative aspect-[2.1/1] overflow-hidden rounded-lg border ${index === 0 ? 'border-violet-500 ring-1 ring-violet-200' : 'border-slate-100'}`}>
+                          {formation.coverImage ? (
+                            <img src={formation.coverImage} alt="" className={`h-full w-full object-cover ${index === 0 ? '' : 'opacity-60 saturate-50'}`} />
+                          ) : (
+                            <div className={`h-full w-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-slate-700 to-violet-800'}`} />
+                          )}
+                          {index > 0 && <div className="absolute inset-0 flex items-center justify-center bg-slate-900/25"><BookOpen className="h-4 w-4 text-white drop-shadow" /></div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex min-w-0 flex-col justify-between py-1 md:py-2">
+                    <div>
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-violet-700">{bucketCategory(formation.category)} professionnelle</p>
+                      <DialogTitle className="font-heading text-2xl font-black leading-[1.08] tracking-tight text-[#102332] sm:text-[28px]">{formation.title}</DialogTitle>
+                      <DialogDescription className="mt-3 line-clamp-3 text-xs leading-relaxed text-slate-500 sm:text-[13px]">
+                        {formation.shortDescription || formation.description || 'Une formation conçue pour progresser à votre rythme.'}
+                      </DialogDescription>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2.5 text-[11px] text-slate-600">
+                      <span className="flex items-center gap-2"><Clock className="h-3.5 w-3.5 text-slate-500" /> Durée : {formation.totalDuration || `${modules.length * 15} min`}</span>
+                      <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5 text-slate-500" /> {modules.length} leçon{modules.length > 1 ? 's' : ''}</span>
+                      <span className="flex items-center gap-2"><BadgeCheck className="h-3.5 w-3.5 text-slate-500" /> {formation.hasCertificate ? 'Certificat inclus' : 'Accès pratique'}</span>
+                      <span className="flex items-center gap-2"><BarChart3 className="h-3.5 w-3.5 text-slate-500" /> Niveau : {levelLabels[formation.level] || formation.level}</span>
+                    </div>
+                    <div className="mt-5 rounded-xl bg-violet-50 px-4 py-3">
+                      <p className="font-heading text-2xl font-black tracking-tight text-violet-700 sm:text-3xl">{(formation.price || 0).toLocaleString()} HTG</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-[10px] font-semibold text-violet-700"><Zap className="h-3.5 w-3.5" /> Accès immédiat après paiement</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {formation.previewVideoUrl && (
+                <div className="rounded-2xl bg-[#f4f1ff] p-3 sm:p-4">
+                  <div className="mb-3 flex items-center gap-2 text-violet-700">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-sm"><Video className="h-3.5 w-3.5" /></div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em]">Vidéo de présentation</p>
+                  </div>
+                  <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_0.9fr]">
+                    <button
+                      type="button"
+                      onClick={() => window.open(formation.previewVideoUrl, '_blank', 'noopener,noreferrer')}
+                      className="group relative aspect-video overflow-hidden rounded-xl bg-slate-900 text-left"
+                    >
+                      {formation.coverImage && <img src={formation.coverImage} alt="" className="h-full w-full object-cover opacity-65 transition group-hover:scale-105" />}
+                      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/75 to-transparent" />
+                      <span className="absolute inset-0 flex items-center justify-center"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-violet-700 shadow-lg transition group-hover:scale-105"><Play className="ml-0.5 h-5 w-5 fill-current" /></span></span>
+                    </button>
+                    <div className="text-xs leading-relaxed text-slate-600">
+                      <p>Regardez un aperçu pour découvrir ce que vous allez apprendre dans cette formation.</p>
+                      <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[10px] font-bold text-violet-700 shadow-sm"><Play className="h-3 w-3 fill-current" /> Aperçu gratuit</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-slate-100 pt-5 sm:pt-1">
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.08em] text-[#102332] sm:text-base">Choisissez votre moyen de paiement</p>
+                    <p className="mt-1 text-[11px] text-slate-400">Sélectionnez une option sécurisée pour continuer.</p>
+                  </div>
+                  <span className="hidden items-center gap-1 text-[10px] font-bold text-emerald-600 sm:flex"><Shield className="h-3.5 w-3.5" /> 100% sécurisé</span>
+                </div>
+                <PurchaseCard
+                  formation={formation}
+                  isOwned={isOwned}
+                  loggedClient={loggedClient}
+                  paymentStep={paymentStep}
+                  setPaymentStep={setPaymentStep}
+                  purchasing={purchasing}
+                  onPlay={onPlay}
+                  onWalletPurchase={onWalletPurchase}
+                  onPlopPlopSuccess={onPlopPlopSuccess}
+                  onRequestAuth={onRequestAuth}
+                  onOpenWallet={onOpenWallet}
+                  discount={discount}
+                  progressPct={progressPct}
+                  settings={settings}
+                />
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1864,18 +1948,7 @@ function PurchaseCard({
 
   if (paymentStep === 'external-method') {
     return (
-      <div className="bg-white rounded-2xl border border-stone-200/80 shadow-lg shadow-stone-200/50 p-6">
-        <button onClick={() => setPaymentStep('detail')} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-xs font-semibold mb-4 transition-colors">
-          <ChevronLeft className="h-4 w-4" /> Retour
-        </button>
-        <h3 className="font-editorial font-semibold text-gray-900 text-lg mb-1">Mode de paiement</h3>
-        <p className="text-xs text-gray-400 mb-4">
-          {formation.title} · <span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span>
-        </p>
-
-        <p className="text-[11px] font-black uppercase tracking-widest text-emerald-600 mb-2 flex items-center gap-1.5">
-          <Zap className="h-3.5 w-3.5" /> Paym Plop Plop — accès immédiat
-        </p>
+      <div className="space-y-5">
         <PlopPlopMethodPicker
           formation={formation}
           loggedClient={loggedClient}
