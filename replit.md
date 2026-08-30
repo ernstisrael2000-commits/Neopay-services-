@@ -26,6 +26,8 @@ npm run start      # Production
 
 Le serveur expose le port **5000** (Express + Vite SSR proxy).
 
+Le workflow Replit **Start application** utilise `npm run dev` et sert l’aperçu sur le port 5000. Le secret `FIREBASE_SERVICE_ACCOUNT` doit être configuré pour activer les routes Firebase Admin et les données Firestore côté serveur.
+
 ## Variables d'environnement (Secrets Replit)
 
 | Variable | Obligatoire | Description |
