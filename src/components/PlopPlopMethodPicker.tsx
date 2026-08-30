@@ -9,6 +9,9 @@ import {
   WalletCards,
 } from 'lucide-react';
 import { Formation } from '../types';
+import moncashLogo from '../../attached_assets/images_(3)_1788103864410.png';
+import natcashLogo from '../../attached_assets/images_(5)_1788103858659.jpeg';
+import kashpawLogo from '../../attached_assets/images_(6)_1788103853463.jpeg';
 
 type PlopPlopMethod = 'moncash' | 'moncash_ussd' | 'natcash' | 'carte' | 'kashpaw';
 type PaymentState = 'idle' | 'creating' | 'waiting' | 'success' | 'error';
@@ -179,9 +182,18 @@ export default function PlopPlopMethodPicker({
   };
 
   const PaymentProviderLogo = ({ methodId }: { methodId: PlopPlopMethod }) => {
-    const customLogo = methodId === 'moncash' ? settings?.moncashLogoUrl : methodId === 'natcash' ? settings?.natcashLogoUrl : undefined;
-    if (customLogo) {
-      return <img src={customLogo} alt="" className="h-8 w-8 rounded-lg object-contain bg-white p-1" referrerPolicy="no-referrer" />;
+    const visualMethod = methodId === 'moncash_ussd' ? 'moncash' : methodId;
+    const customLogo = visualMethod === 'moncash' ? settings?.moncashLogoUrl : visualMethod === 'natcash' ? settings?.natcashLogoUrl : undefined;
+    const suppliedLogo = visualMethod === 'moncash' ? moncashLogo : visualMethod === 'natcash' ? natcashLogo : visualMethod === 'kashpaw' ? kashpawLogo : undefined;
+    if (customLogo || suppliedLogo) {
+      return (
+        <img
+          src={customLogo || suppliedLogo}
+          alt=""
+          className={`rounded-lg object-cover shadow-sm ${visualMethod === 'kashpaw' ? 'h-8 w-12' : 'h-8 w-8'}`}
+          referrerPolicy="no-referrer"
+        />
+      );
     }
 
     if (methodId === 'carte') {
@@ -194,12 +206,12 @@ export default function PlopPlopMethodPicker({
       );
     }
 
-    const logoClass = methodId === 'moncash'
+    const logoClass = visualMethod === 'moncash'
       ? 'bg-[#e92345] text-white'
-      : methodId === 'natcash'
+      : visualMethod === 'natcash'
         ? 'bg-[#f6b51b] text-[#18223b]'
         : 'bg-gradient-to-br from-violet-600 to-fuchsia-500 text-white';
-    const letters = methodId === 'moncash' ? 'MC' : methodId === 'natcash' ? 'NC' : 'KP';
+    const letters = visualMethod === 'moncash' ? 'MC' : visualMethod === 'natcash' ? 'NC' : 'KP';
     return <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black tracking-tight ${logoClass}`}>{letters}</span>;
   };
 
