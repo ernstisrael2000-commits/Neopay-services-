@@ -1675,6 +1675,54 @@ function FormationDetailPage({
 
       {/* Body */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Presentation video first: visitors see the course preview before the details. */}
+        {formation.previewVideoUrl && (
+          <div className="bg-white rounded-2xl border border-stone-200/80 overflow-hidden mb-8">
+            <div className="p-4 border-b border-stone-100 flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-orange-50 flex items-center justify-center">
+                <Play className="h-3.5 w-3.5 text-orange-600 fill-orange-600" />
+              </div>
+              <div>
+                <h2 className="font-editorial font-semibold text-gray-900 text-[15px]">Aperçu gratuit du cours</h2>
+                <p className="text-[11px] text-gray-400">Regardez sans inscription</p>
+              </div>
+            </div>
+            {(() => {
+              const ytMatch = formation.previewVideoUrl?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+              const vimeoMatch = formation.previewVideoUrl?.match(/vimeo\.com\/(\d+)/);
+              if (ytMatch) {
+                return (
+                  <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`}
+                      className="absolute inset-0 w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen title="Aperçu du cours"
+                    />
+                  </div>
+                );
+              }
+              if (vimeoMatch) {
+                return (
+                  <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                    <iframe
+                      src={`https://player.vimeo.com/video/${vimeoMatch[1]}?color=7C3AED`}
+                      className="absolute inset-0 w-full h-full"
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen title="Aperçu du cours"
+                    />
+                  </div>
+                );
+              }
+              return (
+                <video controls playsInline className="w-full aspect-video">
+                  <source src={formation.previewVideoUrl} />
+                </video>
+              );
+            })()}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
           {/* ── LEFT COLUMN ─────────────────────────────────────────────────── */}
@@ -1714,54 +1762,6 @@ function FormationDetailPage({
                 )}
               </div>
             </div>
-
-            {/* Preview Video */}
-            {formation.previewVideoUrl && (
-              <div className="bg-white rounded-2xl border border-stone-200/80 overflow-hidden">
-                <div className="p-4 border-b border-stone-100 flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-orange-50 flex items-center justify-center">
-                    <Play className="h-3.5 w-3.5 text-orange-600 fill-orange-600" />
-                  </div>
-                  <div>
-                    <h2 className="font-editorial font-semibold text-gray-900 text-[15px]">Aperçu gratuit du cours</h2>
-                    <p className="text-[11px] text-gray-400">Regardez sans inscription</p>
-                  </div>
-                </div>
-                {(() => {
-                  const ytMatch = formation.previewVideoUrl?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-                  const vimeoMatch = formation.previewVideoUrl?.match(/vimeo\.com\/(\d+)/);
-                  if (ytMatch) {
-                    return (
-                      <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-                        <iframe
-                          src={`https://www.youtube.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`}
-                          className="absolute inset-0 w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen title="Aperçu du cours"
-                        />
-                      </div>
-                    );
-                  }
-                  if (vimeoMatch) {
-                    return (
-                      <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-                        <iframe
-                          src={`https://player.vimeo.com/video/${vimeoMatch[1]}?color=7C3AED`}
-                          className="absolute inset-0 w-full h-full"
-                          allow="autoplay; fullscreen; picture-in-picture"
-                          allowFullScreen title="Aperçu du cours"
-                        />
-                      </div>
-                    );
-                  }
-                  return (
-                    <video controls playsInline className="w-full aspect-video">
-                      <source src={formation.previewVideoUrl} />
-                    </video>
-                  );
-                })()}
-              </div>
-            )}
 
             {/* Description */}
             <div className="bg-white rounded-2xl border border-stone-200/80 p-6">
@@ -1886,7 +1886,7 @@ function FormationDetailPage({
           </div>
 
           {/* ── RIGHT COLUMN (Purchase Card) ────────────────────────────────── */}
-          <div className="lg:col-span-1">
+          <div className="order-first lg:order-none lg:col-span-1">
             <div className="sticky top-20">
               <PurchaseCard
                 formation={formation}
