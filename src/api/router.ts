@@ -20,6 +20,14 @@ import {
 } from '../lib/email.ts';
 import { getEventBus } from './realtime.ts';
 import { createPlopPlopPayment, verifyPlopPlopPayment, PLOPPLOP_METHODS, type PlopPlopMethod } from './plopplop.ts';
+import {
+  aiRateLimiter,
+  authRateLimiter,
+  financialRateLimiter,
+  idempotencyGuard,
+  sseRateLimiter,
+  twoFactorRateLimiter,
+} from './rateLimit.ts';
 
 const _require = createRequire(import.meta.url);
 let webpush: typeof import('web-push') | null = null;
@@ -697,6 +705,19 @@ function requireAdminPermission(permission: string) {
 
 const router = express.Router();
 
+async function transitionPending(
+  ref: FirebaseFirestore.DocumentReference,
+  updates: FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>,
+): Promise<void> {
+  await adminDb.runTransaction(async (txn) => {
+    const snapshot = await txn.get(ref);
+    if (!snapshot.exists || snapshot.data()!.status !== 'pending') {
+      throw new Error('Cette demande a déjà été traitée.');
+    }
+    txn.update(ref, updates);
+  });
+}
+
 // Every admin endpoint is protected consistently. Only the two login phases and
 // first-time Google account linking are public; all other routes fail closed.
 const publicAdminPaths = new Set([
@@ -771,6 +792,60 @@ router.use('/api/affiliate', requireDb, (req, res, next) => {
     next();
   });
 });
+
+// Route profiles run after the role guards above, so financial and AI limits
+// use both the source IP and the verified signed session identity.
+for (const path of [
+  '/api/client/login',
+  '/api/client/login-google',
+  '/api/client/register',
+  '/api/client/register-google',
+  '/api/agent/link-uid',
+  '/api/affiliate/login',
+  '/api/affiliate/google-login',
+  '/api/admin/login',
+  '/api/admin/verify-google',
+  '/api/admin/link-google',
+  '/api/teacher/login',
+  '/api/teacher/verify-google',
+]) router.use(path, authRateLimiter);
+for (const path of [
+  '/api/auth/resend-2fa',
+  '/api/agent/verify-2fa',
+  '/api/affiliate/verify-2fa',
+  '/api/admin/verify-2fa',
+]) router.use(path, twoFactorRateLimiter);
+for (const path of [
+  '/api/client/deposit', '/api/client/withdrawal', '/api/client/transfer',
+  '/api/client/purchase', '/api/client/agent-withdrawal', '/api/client/agent-deposit',
+  '/api/client/agent-deposit-request', '/api/client/generate-tx-code',
+  '/api/agent/client-transaction', '/api/agent/initiate-withdrawal',
+  '/api/agent/personal-deposit', '/api/agent/personal-withdrawal',
+  '/api/agent/self-deposit-request', '/api/affiliate/client-direct-tx',
+  '/api/affiliate/submit-client-deposit', '/api/affiliate/submit-deposit',
+  '/api/affiliate/submit-withdrawal',
+  '/api/client/confirm-withdrawal', '/api/client/reject-withdrawal',
+  '/api/agent/cancel-withdrawal', '/api/agent/withdrawal-request',
+  '/api/agent/client-deposit', '/api/affiliate/client-withdrawal',
+  '/api/affiliate/client-deposit',
+  '/api/admin/agent-personal-deposit', '/api/admin/agent-personal-withdrawal',
+  '/api/admin/purchase/approve', '/api/admin/withdrawal',
+  '/api/admin/fees/withdraw', '/api/admin/teacher-transactions',
+  '/api/admin/agent',
+  '/api/admin/affiliate', '/api/admin/profit',
+  '/api/admin/purchase/decline', '/api/admin/transaction/status',
+  '/api/admin/formations/purchases', '/api/admin/formations/payment-requests',
+  '/api/admin/teacher-withdrawals', '/api/admin/card-topup',
+  '/api/formations/purchases', '/api/formations/payment-request',
+  '/api/client/crypto-orders', '/api/client/crypto-market/requests',
+  '/api/teacher/withdrawal', '/api/crypto/create-payment',
+  '/api/fazer/topups/order', '/api/fazer/giftcards/order',
+  '/api/reseller/ff/order', '/api/reseller/ff/buy-pack',
+]) router.use(path, financialRateLimiter, idempotencyGuard());
+router.use('/api/agent/ai-chat', aiRateLimiter);
+router.use('/api/client/events', sseRateLimiter);
+router.use('/api/agent/events', sseRateLimiter);
+router.use('/api/affiliate/events', sseRateLimiter);
 
 // ── SSE: realtime event bus ────────────────────────────────────────────────────
 // Broadcasts go through the shared event bus (Redis pub/sub when REDIS_URL is
@@ -1499,6 +1574,18 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
     const agentId = agentSnap.docs[0].id;
 
     await adminDb.runTransaction(async (txn) => {
+      const [latestAgent, latestClient] = await Promise.all([
+        txn.get(agentRef),
+        txn.get(clientRef),
+      ]);
+      if (!latestAgent.exists || latestAgent.data()!.status === 'inactive') throw new Error('Agent indisponible.');
+      if (!latestClient.exists) throw new Error('Client introuvable.');
+      if (type === 'deposit' && Number(latestAgent.data()!.balance || 0) < usd) {
+        throw new Error('Solde agent insuffisant pour effectuer ce dépôt.');
+      }
+      if (type === 'withdrawal' && Number(latestClient.data()!.balance || 0) < usd) {
+        throw new Error('Solde client insuffisant pour ce retrait.');
+      }
       if (type === 'deposit') {
         // Client receives full deposit
         txn.update(clientRef, {
@@ -1980,7 +2067,7 @@ router.post('/api/agent/cancel-withdrawal/:confirmId', requireDb, async (req, re
     if (confirmSnap.data()!.agentCode !== agentCode) return res.status(403).json({ error: 'Non autorisé.' });
     if (confirmSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
     const affectedClientId = confirmSnap.data()!.clientId as string;
-    await confirmRef.update({ status: 'cancelled', updatedAt: FieldValue.serverTimestamp() });
+    await transitionPending(confirmRef, { status: 'cancelled', updatedAt: FieldValue.serverTimestamp() });
 
     // Notify the client via SSE that the request was cancelled
     pushClientEvent(affectedClientId, 'withdrawal_resolved', { id: confirmId, status: 'cancelled' });
@@ -2058,7 +2145,14 @@ router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, 
     const clientRef = adminDb.collection('clients').doc(clientId);
 
     await adminDb.runTransaction(async (txn) => {
-      const cSnap = await txn.get(clientRef);
+      const [latestConfirmSnap, cSnap] = await Promise.all([
+        txn.get(confirmRef),
+        txn.get(clientRef),
+      ]);
+      if (!latestConfirmSnap.exists || latestConfirmSnap.data()!.status !== 'pending') {
+        throw new Error('Cette demande a déjà été traitée.');
+      }
+      if (latestConfirmSnap.data()!.clientId !== clientId) throw new Error('Accès refusé.');
       if (!cSnap.exists) throw new Error('Client introuvable.');
       if ((cSnap.data()!.balance || 0) < amount) throw new Error('Solde client insuffisant.');
 
@@ -2138,7 +2232,7 @@ router.post('/api/client/reject-withdrawal/:confirmId', requireDb, async (req, r
     if (confirmData.clientId !== clientId) return res.status(403).json({ error: 'Non autorisé.' });
     if (confirmData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
 
-    await confirmRef.update({ status: 'rejected', rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    await transitionPending(confirmRef, { status: 'rejected', rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
 
     // Remove from client's SSE stream
     pushClientEvent(clientId, 'withdrawal_resolved', { id: confirmId, status: 'rejected' });
@@ -2262,15 +2356,23 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
     const adminShareFee = parseFloat((totalFee - agentShareFee).toFixed(4));
 
     await adminDb.runTransaction(async (txn) => {
-      // Re-fetch client balance inside transaction
       const clientRef = adminDb.collection('clients').doc(txData.clientId);
-      const clientSnap = await txn.get(clientRef);
+      const [latestTxSnap, clientSnap, agentSnapTxn] = await Promise.all([
+        txn.get(txRef),
+        txn.get(clientRef),
+        txn.get(agentRef),
+      ]);
+      if (!latestTxSnap.exists || latestTxSnap.data()!.status !== 'pending') {
+        throw new Error('Cette demande a déjà été traitée.');
+      }
+      if (latestTxSnap.data()!.agentCode !== agentCode || latestTxSnap.data()!.source !== 'agent_withdrawal_request') {
+        throw new Error('Accès refusé.');
+      }
       if (!clientSnap.exists) throw new Error('Client introuvable.');
       const clientBalance = clientSnap.data()!.balance || 0;
       if (clientBalance < amount) throw new Error('Solde client insuffisant pour ce retrait.');
 
       // Re-fetch agent balance inside transaction for consistency
-      const agentSnapTxn = await txn.get(agentRef);
       const agentBalanceTxn = agentSnapTxn.exists ? (agentSnapTxn.data()!.balance || 0) : 0;
       if (agentBalanceTxn < amount) throw new Error('Solde agent insuffisant pour traiter ce retrait.');
 
@@ -2376,23 +2478,23 @@ router.post('/api/agent/withdrawal-request/:txId/reject', requireDb, async (req,
     const agentData = agentSnap.docs[0].data();
     const amount = Number(txData.amount || txData.usdAmount || 0);
 
-    const batch = adminDb.batch();
-    // Reject tx (no balance changes since balance wasn't debited at request time)
-    batch.update(txRef, {
-      status: 'rejected',
-      ...(reason && { rejectionReason: reason }),
-      agentRejectedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (txn) => {
+      const latestTx = await txn.get(txRef);
+      if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Cette demande a déjà été traitée.');
+      if (latestTx.data()!.agentCode !== agentCode || latestTx.data()!.source !== 'agent_withdrawal_request') {
+        throw new Error('Accès refusé.');
+      }
+      txn.update(txRef, {
+        status: 'rejected', ...(reason && { rejectionReason: reason }),
+        agentRejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(adminDb.collection('client_notifications').doc(), {
+        clientId: txData.clientId, type: 'withdrawal_rejected',
+        title: '❌ Demande de retrait refusée',
+        message: `Votre demande de retrait de $${amount.toFixed(2)} via l'agent ${agentData.name} a été refusée.${reason ? ` Raison: ${reason}` : ''}`,
+        amount, read: false, createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    // Client notification
-    batch.set(adminDb.collection('client_notifications').doc(), {
-      clientId: txData.clientId,
-      type: 'withdrawal_rejected',
-      title: '❌ Demande de retrait refusée',
-      message: `Votre demande de retrait de $${amount.toFixed(2)} via l'agent ${agentData.name} a été refusée.${reason ? ` Raison: ${reason}` : ''}`,
-      amount, read: false, createdAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
 
     sendFcmToClient(
       txData.clientId,
@@ -2487,33 +2589,30 @@ router.post('/api/agent/personal-deposit', requireDb, async (req, res) => {
     if (!pin || !verifyPin(String(pin), agentData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
     const txRef = adminDb.collection('agent_personal_transactions').doc();
-    const batch = adminDb.batch();
-    batch.set(txRef, {
-      agentId: agentDoc.id,
-      agentCode,
-      agentName: agentData.name || '',
-      type: 'deposit',
-      amount: usd,
-      method,
-      ...(accountNumber && { accountNumber }),
-      ...(accountName && { accountName }),
-      ...(message && { message }),
-      status: 'pending',
-      description: `Dépôt personnel — ${method}`,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    const operationId = res.locals.financialOperationId as string | undefined;
+    const operationRef = operationId ? adminDb.collection('financial_operations').doc(operationId) : null;
+    await adminDb.runTransaction(async (txn) => {
+      if (operationRef) {
+        const existingOperation = await txn.get(operationRef);
+        if (existingOperation.exists) throw new Error('Cette demande a déjà été reçue.');
+      }
+      txn.set(txRef, {
+        agentId: agentDoc.id, agentCode, agentName: agentData.name || '',
+        type: 'deposit', amount: usd, method,
+        ...(accountNumber && { accountNumber }), ...(accountName && { accountName }), ...(message && { message }),
+        status: 'pending', description: `Dépôt personnel — ${method}`,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: 'agent_personal_deposit', agentId: agentDoc.id, agentCode,
+        agentName: agentData.name || '', amount: usd, method, read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      if (operationRef) txn.set(operationRef, {
+        type: 'agent_personal_deposit', targetId: txRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    batch.set(adminDb.collection('admin_notifications').doc(), {
-      type: 'agent_personal_deposit',
-      agentId: agentDoc.id,
-      agentCode,
-      agentName: agentData.name || '',
-      amount: usd,
-      method,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
 
     // Email to admin
     fireEmail(
@@ -2550,44 +2649,30 @@ router.post('/api/agent/personal-withdrawal', requireDb, async (req, res) => {
     if (!agentData.pinHash) return res.status(403).json({ error: 'Code PIN non configuré. Veuillez définir votre PIN.' });
     if (!pin || !verifyPin(String(pin), agentData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
 
-    const commissionBalance = Number(agentData.commissionBalance || 0);
-    if (commissionBalance < usd) return res.status(400).json({ error: `Solde commissions insuffisant. Disponible: $${commissionBalance.toFixed(2)}` });
-
     const txRef = adminDb.collection('agent_personal_transactions').doc();
-    const batch = adminDb.batch();
-
-    // Debit commission balance immediately
-    batch.update(agentDoc.ref, {
-      commissionBalance: FieldValue.increment(-usd),
-      updatedAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (txn) => {
+      const latestAgent = await txn.get(agentDoc.ref);
+      if (!latestAgent.exists) throw new Error('Agent introuvable.');
+      const latestData = latestAgent.data()!;
+      const commissionBalance = Number(latestData.commissionBalance || 0);
+      if (commissionBalance < usd) throw new Error(`Solde commissions insuffisant. Disponible: $${commissionBalance.toFixed(2)}`);
+      txn.update(agentDoc.ref, {
+        commissionBalance: FieldValue.increment(-usd),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(txRef, {
+        agentId: agentDoc.id, agentCode, agentName: latestData.name || '',
+        type: 'withdrawal', amount: usd, method, accountNumber,
+        ...(accountName && { accountName }), ...(message && { message }),
+        status: 'pending', description: `Retrait commissions — ${method} — ${accountNumber}`,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: 'agent_personal_withdrawal', agentId: agentDoc.id, agentCode,
+        agentName: latestData.name || '', amount: usd, method, accountNumber,
+        read: false, createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    batch.set(txRef, {
-      agentId: agentDoc.id,
-      agentCode,
-      agentName: agentData.name || '',
-      type: 'withdrawal',
-      amount: usd,
-      method,
-      accountNumber,
-      ...(accountName && { accountName }),
-      ...(message && { message }),
-      status: 'pending',
-      description: `Retrait commissions — ${method} — ${accountNumber}`,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    batch.set(adminDb.collection('admin_notifications').doc(), {
-      type: 'agent_personal_withdrawal',
-      agentId: agentDoc.id,
-      agentCode,
-      agentName: agentData.name || '',
-      amount: usd,
-      method,
-      accountNumber,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
 
     // Email to admin
     fireEmail(
@@ -2636,7 +2721,14 @@ router.post('/api/admin/agent-personal-deposit/:txId/approve', requireDb, async 
 
     const agentRef = adminDb.collection('agents').doc(txData.agentId);
     await adminDb.runTransaction(async (txn) => {
-      const agentSnap = await txn.get(agentRef);
+      const [latestTxSnap, agentSnap] = await Promise.all([
+        txn.get(txRef),
+        txn.get(agentRef),
+      ]);
+      if (!latestTxSnap.exists || latestTxSnap.data()!.status !== 'pending') {
+        throw new Error('Demande déjà traitée.');
+      }
+      if (latestTxSnap.data()!.agentId !== txData.agentId || latestTxSnap.data()!.type !== 'deposit') throw new Error('Accès refusé.');
       if (!agentSnap.exists) throw new Error('Agent introuvable.');
       txn.update(agentRef, {
         balance: FieldValue.increment(txData.amount),
@@ -2676,11 +2768,14 @@ router.post('/api/admin/agent-personal-deposit/:txId/reject', requireDb, async (
     if (txData.type === 'withdrawal') {
       const agentRef = adminDb.collection('agents').doc(txData.agentId);
       await adminDb.runTransaction(async (txn) => {
+        const latestTx = await txn.get(txRef);
+        if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Déjà traitée.');
+        if (latestTx.data()!.agentId !== txData.agentId || latestTx.data()!.type !== 'withdrawal') throw new Error('Accès refusé.');
         txn.update(agentRef, { commissionBalance: FieldValue.increment(txData.amount), updatedAt: FieldValue.serverTimestamp() });
         txn.update(txRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
       });
     } else {
-      await txRef.update({ status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      await transitionPending(txRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     }
     res.json({ success: true });
   } catch (e: any) {
@@ -2698,7 +2793,7 @@ router.post('/api/admin/agent-personal-withdrawal/:txId/approve', requireDb, asy
     const txData = txSnap.data()!;
     if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
     if (txData.type !== 'withdrawal') return res.status(400).json({ error: 'Type invalide.' });
-    await txRef.update({ status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    await transitionPending(txRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -3187,12 +3282,17 @@ router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
     const clientData = clientSnap.data()!;
 
     const now = FieldValue.serverTimestamp();
-    const batch = adminDb.batch();
-
+    let newClientBalance = Number(clientData.balance || 0);
+    await adminDb.runTransaction(async (batch) => {
+    const [latestAff, latestClient] = await Promise.all([batch.get(affRef), batch.get(clientRef)]);
+    if (!latestAff.exists) throw new Error('Affilié introuvable.');
+    if (!latestClient.exists) throw new Error('Client introuvable.');
+    const affiliateBalance = Number(latestAff.data()!.balance || 0);
+    const clientBalance = Number(latestClient.data()!.balance || 0);
+    newClientBalance = clientBalance + (type === 'deposit' ? usd : -usd);
     if (type === 'deposit') {
       // Affiliate gives digital credit → affiliate.balance decreases, client.balance increases
-      if ((affData.balance || 0) < usd)
-        return res.status(400).json({ error: 'Solde affilié insuffisant pour ce dépôt.' });
+      if (affiliateBalance < usd) throw new Error('Solde affilié insuffisant pour ce dépôt.');
       batch.update(affRef, { balance: FieldValue.increment(-usd), updatedAt: now });
       batch.update(clientRef, { balance: FieldValue.increment(usd), updatedAt: now });
 
@@ -3215,10 +3315,8 @@ router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
       });
     } else {
       // Affiliate pays cash to client → both client.balance and affiliate.balance decrease
-      if ((clientData.balance || 0) < usd)
-        return res.status(400).json({ error: 'Solde client insuffisant.' });
-      if ((affData.balance || 0) < usd)
-        return res.status(400).json({ error: 'Solde affilié insuffisant pour effectuer ce retrait.' });
+      if (clientBalance < usd) throw new Error('Solde client insuffisant.');
+      if (affiliateBalance < usd) throw new Error('Solde affilié insuffisant pour effectuer ce retrait.');
       batch.update(clientRef, { balance: FieldValue.increment(-usd), updatedAt: now });
       batch.update(affRef, { balance: FieldValue.increment(-usd), updatedAt: now });
 
@@ -3240,9 +3338,8 @@ router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
         createdAt: now,
       });
     }
-
-    await batch.commit();
-    res.json({ success: true, clientName: clientData.name || '', newClientBalance: (clientData.balance || 0) + (type === 'deposit' ? usd : -usd) });
+    });
+    res.json({ success: true, clientName: clientData.name || '', newClientBalance });
   } catch (e: any) {
     console.error('[affiliate/client-direct-tx]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -3308,29 +3405,28 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
     const affiliateShare = feeAmount > 0 ? parseFloat((feeAmount * affiliateSharePct / 100).toFixed(4)) : 0;
     const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
 
-    const batch = adminDb.batch();
-    // Client debited full amount (loses digital)
-    batch.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: now });
-    // Affiliate also debited (they pay cash out of their float); they keep their fee commission share
-    batch.update(affRef, { balance: FieldValue.increment(-amount + affiliateShare), updatedAt: now });
-    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now, confirmedBy: affiliateId,
-      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }),
-    });
-    if (adminShare > 0) {
-      batch.update(adminDb.collection('settings').doc('global'), {
-        feesBalance: FieldValue.increment(adminShare),
-        updatedAt: now,
+    await adminDb.runTransaction(async (txn) => {
+      const [latestTx, latestClient, latestAffiliate] = await Promise.all([
+        txn.get(txRef), txn.get(clientRef), txn.get(affRef),
+      ]);
+      if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Déjà traitée.');
+      if (latestTx.data()!.affiliateId !== affiliateId) throw new Error('Accès refusé.');
+      if (!latestClient.exists || (latestClient.data()!.balance || 0) < amount) throw new Error('Solde client insuffisant.');
+      if (!latestAffiliate.exists || (latestAffiliate.data()!.balance || 0) < amount) throw new Error('Solde affilié insuffisant.');
+      txn.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: now });
+      txn.update(affRef, { balance: FieldValue.increment(-amount + affiliateShare), updatedAt: now });
+      txn.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now, confirmedBy: affiliateId,
+        ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }) });
+      if (adminShare > 0) txn.update(adminDb.collection('settings').doc('global'), {
+        feesBalance: FieldValue.increment(adminShare), updatedAt: now,
       });
-    }
-    batch.set(adminDb.collection('affiliate_transactions').doc(), {
-      affiliateId, type: 'client_withdrawal_given', amount,
-      clientId: txData.clientId, clientName: txData.clientName || '',
-      description: `Retrait cash remis à ${txData.clientName}`, status: 'completed',
-      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }),
-      createdAt: now,
+      txn.set(adminDb.collection('affiliate_transactions').doc(), {
+        affiliateId, type: 'client_withdrawal_given', amount,
+        clientId: txData.clientId, clientName: txData.clientName || '',
+        description: `Retrait cash remis à ${txData.clientName}`, status: 'completed',
+        ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }), createdAt: now,
+      });
     });
-
-    await batch.commit();
 
     // Email to client + admin: affiliate confirmed withdrawal
     adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
@@ -3365,7 +3461,7 @@ router.post('/api/affiliate/client-withdrawal/:txId/reject', requireDb, async (r
     const affSnapWdRej = await adminDb.collection('affiliates').doc(affiliateId).get();
     const affNameWdRej = affSnapWdRej.exists ? (affSnapWdRej.data()?.name || '') : '';
     const now = FieldValue.serverTimestamp();
-    await txRef.update({ status: 'rejected', updatedAt: now, rejectedAt: now, rejectionReason: reason || '' });
+    await transitionPending(txRef, { status: 'rejected', updatedAt: now, rejectedAt: now, rejectionReason: reason || '' });
 
     // Email to client + admin: affiliate rejected withdrawal
     adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
@@ -3436,29 +3532,27 @@ router.post('/api/affiliate/client-deposit/:txId/confirm', requireDb, async (req
     const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
     const netToClient = parseFloat((amount - feeAmount).toFixed(4));
 
-    const batch = adminDb.batch();
-    // Affiliate spends (amount - affiliateShare) from their float
-    batch.update(affRef, { balance: FieldValue.increment(-(amount - affiliateShare)), updatedAt: now });
-    // Client receives net amount (after fee)
-    batch.update(clientRef, { balance: FieldValue.increment(netToClient), updatedAt: now });
-    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now,
-      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }),
-    });
-    if (adminShare > 0) {
-      batch.update(adminDb.collection('settings').doc('global'), {
-        feesBalance: FieldValue.increment(adminShare),
-        updatedAt: now,
+    await adminDb.runTransaction(async (txn) => {
+      const [latestTx, latestAffiliate] = await Promise.all([txn.get(txRef), txn.get(affRef)]);
+      if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Déjà traitée.');
+      if (latestTx.data()!.affiliateId !== affiliateId) throw new Error('Accès refusé.');
+      if (!latestAffiliate.exists || (latestAffiliate.data()!.balance || 0) < amount) {
+        throw new Error('Solde affilié insuffisant pour confirmer ce dépôt.');
+      }
+      txn.update(affRef, { balance: FieldValue.increment(-(amount - affiliateShare)), updatedAt: now });
+      txn.update(clientRef, { balance: FieldValue.increment(netToClient), updatedAt: now });
+      txn.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now,
+        ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }) });
+      if (adminShare > 0) txn.update(adminDb.collection('settings').doc('global'), {
+        feesBalance: FieldValue.increment(adminShare), updatedAt: now,
       });
-    }
-    batch.set(adminDb.collection('affiliate_transactions').doc(), {
-      affiliateId, type: 'client_deposit_given', amount,
-      clientId: txData.clientId, clientName: txData.clientName || '',
-      description: `Dépôt confirmé pour ${txData.clientName}`, status: 'completed',
-      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }),
-      createdAt: now,
+      txn.set(adminDb.collection('affiliate_transactions').doc(), {
+        affiliateId, type: 'client_deposit_given', amount,
+        clientId: txData.clientId, clientName: txData.clientName || '',
+        description: `Dépôt confirmé pour ${txData.clientName}`, status: 'completed',
+        ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }), createdAt: now,
+      });
     });
-
-    await batch.commit();
 
     // Email to client + admin: affiliate confirmed deposit
     adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
@@ -3493,7 +3587,7 @@ router.post('/api/affiliate/client-deposit/:txId/reject', requireDb, async (req,
     const affSnapDepRej = await adminDb.collection('affiliates').doc(affiliateId).get();
     const affNameDepRej = affSnapDepRej.exists ? (affSnapDepRej.data()?.name || '') : '';
     const now = FieldValue.serverTimestamp();
-    await txRef.update({ status: 'rejected', updatedAt: now, rejectionReason: reason || '' });
+    await transitionPending(txRef, { status: 'rejected', updatedAt: now, rejectionReason: reason || '' });
 
     // Email to client + admin: affiliate rejected deposit
     adminDb.collection('clients').doc(txData.clientId).get().then(cSnap => {
@@ -3608,45 +3702,30 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
     if (!pin || !verifyPin(String(pin), affData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
     const isCommissions = walletType === 'commissions';
     const walletField = isCommissions ? 'totalEarnings' : 'balance';
-    const walletBalance = Number(affData[walletField] || 0);
-    if (walletBalance < usd)
-      return res.status(400).json({ error: `Solde insuffisant. Disponible: $${walletBalance.toFixed(2)}` });
-
-    const batch = adminDb.batch();
     const withdrawRef = adminDb.collection('withdrawals').doc();
     const walletLabel = isCommissions ? 'Wallet Commissions' : 'Wallet Principal';
-    batch.set(withdrawRef, {
-      affiliateId,
-      affiliateName: affData.name || '',
-      affiliateCode: affData.code || '',
-      amount: usd,
-      method,
-      accountNumber,
-      walletType: walletType || 'principal',
-      walletLabel,
-      status: 'pending',
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
     const txRef = adminDb.collection('wallet_transactions').doc();
-    batch.set(txRef, {
-      affiliateId,
-      type: 'withdrawal',
-      amount: usd,
-      status: 'pending',
-      method,
-      accountNumber,
-      walletType: walletType || 'principal',
-      description: `Retrait ${walletLabel} via ${method}`,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (txn) => {
+      const latestAffiliate = await txn.get(affSnap.ref);
+      if (!latestAffiliate.exists) throw new Error('Affilié introuvable.');
+      const latestData = latestAffiliate.data()!;
+      const walletBalance = Number(latestData[walletField] || 0);
+      if (walletBalance < usd) throw new Error(`Solde insuffisant. Disponible: $${walletBalance.toFixed(2)}`);
+      txn.set(withdrawRef, {
+        affiliateId, affiliateName: latestData.name || '', affiliateCode: latestData.code || '',
+        amount: usd, method, accountNumber, walletType: walletType || 'principal', walletLabel,
+        status: 'pending', createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(txRef, {
+        affiliateId, type: 'withdrawal', amount: usd, status: 'pending', method, accountNumber,
+        walletType: walletType || 'principal', description: `Retrait ${walletLabel} via ${method}`,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.update(affSnap.ref, {
+        [walletField]: FieldValue.increment(-usd),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
-    // Deduct balance immediately on submission
-    batch.update(adminDb.collection('affiliates').doc(affiliateId), {
-      [walletField]: FieldValue.increment(-usd),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
 
     pushAllAdminsEvent('new_notification', {
       type: 'affiliate_withdrawal_submitted',
@@ -3976,21 +4055,29 @@ router.post('/api/admin/affiliate/manual-commission', requireDb, async (req, res
     const amountUSD = Number(amountHTG) / exchangeRate;
 
     const affRef  = adminDb.collection('affiliates').doc(affiliateId);
-    const affSnap = await affRef.get();
-    if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
-
-    const batch = adminDb.batch();
-    batch.update(affRef, {
-      balance: FieldValue.increment(amountUSD), totalEarnings: FieldValue.increment(amountUSD),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
     const notifRef = adminDb.collection('notifications').doc();
-    batch.set(notifRef, {
-      affiliateId, title: 'Commission Manuelle',
-      message: `Vous avez reçu une commission manuelle de ${amountHTG} Goud (~${amountUSD.toFixed(2)} $)${reason ? ` — ${reason}` : ''}.`,
-      type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
+    const operationId = res.locals.financialOperationId as string | undefined;
+    const operationRef = operationId ? adminDb.collection('financial_operations').doc(operationId) : null;
+    await adminDb.runTransaction(async (txn) => {
+      const reads = [txn.get(affRef)];
+      if (operationRef) reads.push(txn.get(operationRef));
+      const [affSnap, existingOperation] = await Promise.all(reads);
+      if (!affSnap.exists) throw new Error('Affilié introuvable.');
+      if (existingOperation?.exists) throw new Error('Cette demande a déjà été reçue.');
+      txn.update(affRef, {
+        balance: FieldValue.increment(amountUSD), totalEarnings: FieldValue.increment(amountUSD),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(notifRef, {
+        affiliateId, title: 'Commission Manuelle',
+        message: `Vous avez reçu une commission manuelle de ${amountHTG} Goud (~${amountUSD.toFixed(2)} $)${reason ? ` — ${reason}` : ''}.`,
+        type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
+      });
+      if (operationRef) txn.set(operationRef, {
+        type: 'affiliate_manual_commission', targetId: affiliateId,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    await batch.commit();
 
     res.json({ success: true, amountUSD: amountUSD.toFixed(4) });
   } catch (e: any) {
@@ -4008,37 +4095,35 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
 
     const clientRef = adminDb.collection('clients').doc(clientId);
-    const clientSnap = await clientRef.get();
-    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
-    const clientData = clientSnap.data()!;
-    if ((clientData.balance || 0) < amount)
-      return res.status(400).json({ error: 'Solde insuffisant pour cet achat.' });
-
-    const batch = adminDb.batch();
-    batch.update(clientRef, {
-      balance: Math.max(0, (clientData.balance || 0) - amount),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
     const txRef = adminDb.collection('client_transactions').doc();
-    batch.set(txRef, {
-      clientId, clientName, type: 'purchase', amount, status: 'completed',
-      productName, productPrice, directSponsorId: directSponsorId || null,
-      affiliateCredited: !!directSponsorId,
-      description: `Achat: ${productName} - ${productPrice}`,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
     const notifRef = adminDb.collection('admin_notifications').doc();
-    batch.set(notifRef, {
-      type: 'client_purchase', clientId, clientName,
-      clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
-      transactionId: txRef.id, amount, productName, productPrice,
-      directSponsorId: directSponsorId || null,
-      commissionAutoSent: !!directSponsorId,
-      status: 'completed',
-      read: false, createdAt: FieldValue.serverTimestamp(),
+    let clientEmail = '';
+    await adminDb.runTransaction(async (txn) => {
+      const clientSnap = await txn.get(clientRef);
+      if (!clientSnap.exists) throw new Error('Client introuvable.');
+      const clientData = clientSnap.data()!;
+      const currentBalance = Number(clientData.balance || 0);
+      if (currentBalance < amount) throw new Error('Solde insuffisant pour cet achat.');
+      clientEmail = clientData.email || '';
+      txn.update(clientRef, {
+        balance: FieldValue.increment(-Number(amount)),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(txRef, {
+        clientId, clientName, type: 'purchase', amount, status: 'completed',
+        productName, productPrice, directSponsorId: directSponsorId || null,
+        affiliateCredited: !!directSponsorId,
+        description: `Achat: ${productName} - ${productPrice}`,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(notifRef, {
+        type: 'client_purchase', clientId, clientName,
+        clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
+        transactionId: txRef.id, amount, productName, productPrice,
+        directSponsorId: directSponsorId || null, commissionAutoSent: !!directSponsorId,
+        status: 'completed', read: false, createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    await batch.commit();
 
     // Auto-trigger commissions for the affiliate chain (fire-and-forget)
     if (directSponsorId) {
@@ -4054,8 +4139,8 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
 
     // Email admin + client
     fireEmail(
-      () => emailPurchase({ clientName, clientEmail: clientData.email, productName, amount }),
-      { type: 'purchase', to: [ADMIN_EMAIL, ...(clientData.email ? [clientData.email] : [])], clientId, amount }
+      () => emailPurchase({ clientName, clientEmail, productName, amount }),
+      { type: 'purchase', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId, amount }
     );
 
     res.json({ success: true, transactionId: txRef.id });
@@ -4338,10 +4423,6 @@ router.post('/api/admin/withdrawal/:id/approve', requireDb, requireAdminSecret, 
     const requestData = requestSnap.data()!;
     if (requestData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
 
-    const batch = adminDb.batch();
-
-    batch.update(requestRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
-
     // Sync the linked wallet_transaction if one exists
     const snapTx = await adminDb.collection('wallet_transactions')
       .where('affiliateId', '==', requestData.affiliateId)
@@ -4350,27 +4431,7 @@ router.post('/api/admin/withdrawal/:id/approve', requireDb, requireAdminSecret, 
       .where('status', '==', 'pending')
       .limit(1)
       .get();
-    if (!snapTx.empty) {
-      batch.update(snapTx.docs[0].ref, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
-    }
-
-    // Track total withdrawn (balance already deducted on submission)
     const affiliateRef = adminDb.collection('affiliates').doc(requestData.affiliateId);
-    batch.update(affiliateRef, {
-      totalWithdrawn: FieldValue.increment(requestData.amount),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    // Affiliate notification
-    batch.set(adminDb.collection('affiliate_notifications').doc(), {
-      affiliateId: requestData.affiliateId,
-      title: '✅ Retrait approuvé',
-      message: `Votre demande de retrait de $${requestData.amount} a été approuvée. Vous serez payé sur ${requestData.method} dans les plus brefs délais.`,
-      type: 'system',
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-
     const notifData = {
       affiliateId: requestData.affiliateId,
       title: '✅ Retrait approuvé',
@@ -4380,9 +4441,18 @@ router.post('/api/admin/withdrawal/:id/approve', requireDb, requireAdminSecret, 
       createdAt: FieldValue.serverTimestamp(),
     };
     const notifRef = adminDb.collection('affiliate_notifications').doc();
-    batch.set(notifRef, notifData);
-
-    await batch.commit();
+    await adminDb.runTransaction(async (txn) => {
+      const latestRequest = await txn.get(requestRef);
+      if (!latestRequest.exists || latestRequest.data()!.status !== 'pending') throw new Error('Demande déjà traitée.');
+      if (latestRequest.data()!.affiliateId !== requestData.affiliateId) throw new Error('Accès refusé.');
+      txn.update(requestRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+      if (!snapTx.empty) txn.update(snapTx.docs[0].ref, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+      txn.update(affiliateRef, {
+        totalWithdrawn: FieldValue.increment(requestData.amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(notifRef, notifData);
+    });
 
     // Real-time: SSE + FCM (fire-and-forget)
     const ssePayload = { id: notifRef.id, ...notifData, createdAt: { _seconds: Date.now() / 1000 } };
@@ -4406,14 +4476,6 @@ router.post('/api/admin/withdrawal/:id/reject', requireDb, async (req, res) => {
     const requestData = requestSnap.data()!;
     if (requestData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
 
-    const batch = adminDb.batch();
-
-    batch.update(requestRef, {
-      status: 'rejected',
-      rejectionReason: reason || '',
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
     // Sync the linked wallet_transaction if one exists
     const snapTx = await adminDb.collection('wallet_transactions')
       .where('affiliateId', '==', requestData.affiliateId)
@@ -4422,18 +4484,9 @@ router.post('/api/admin/withdrawal/:id/reject', requireDb, async (req, res) => {
       .where('status', '==', 'pending')
       .limit(1)
       .get();
-    if (!snapTx.empty) {
-      batch.update(snapTx.docs[0].ref, { status: 'rejected', updatedAt: FieldValue.serverTimestamp() });
-    }
-
     // Refund affiliate balance (was deducted on submission)
     const walletRefField = requestData.walletType === 'commissions' ? 'totalEarnings' : 'balance';
     const affiliateRefReject = adminDb.collection('affiliates').doc(requestData.affiliateId);
-    batch.update(affiliateRefReject, {
-      [walletRefField]: FieldValue.increment(requestData.amount),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
     const rejectNotifData = {
       affiliateId: requestData.affiliateId,
       title: '❌ Retrait refusé',
@@ -4443,9 +4496,22 @@ router.post('/api/admin/withdrawal/:id/reject', requireDb, async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
     };
     const rejectNotifRef = adminDb.collection('affiliate_notifications').doc();
-    batch.set(rejectNotifRef, rejectNotifData);
-
-    await batch.commit();
+    await adminDb.runTransaction(async (txn) => {
+      const latestRequest = await txn.get(requestRef);
+      if (!latestRequest.exists || latestRequest.data()!.status !== 'pending') throw new Error('Demande déjà traitée.');
+      if (latestRequest.data()!.affiliateId !== requestData.affiliateId) throw new Error('Accès refusé.');
+      txn.update(requestRef, {
+        status: 'rejected',
+        rejectionReason: reason || '',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (!snapTx.empty) txn.update(snapTx.docs[0].ref, { status: 'rejected', updatedAt: FieldValue.serverTimestamp() });
+      txn.update(affiliateRefReject, {
+        [walletRefField]: FieldValue.increment(requestData.amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(rejectNotifRef, rejectNotifData);
+    });
 
     // Real-time: SSE + FCM (fire-and-forget)
     const rejectSsePayload = { id: rejectNotifRef.id, ...rejectNotifData, createdAt: { _seconds: Date.now() / 1000 } };
@@ -4471,15 +4537,15 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
     const txData = txSnap.data()!;
     if (txData.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
 
-    const batch = adminDb.batch();
+    const clientRef = adminDb.collection('clients').doc(txData.clientId);
+    await adminDb.runTransaction(async (batch) => {
+    const [latestTx, clientSnap] = await Promise.all([batch.get(txRef), batch.get(clientRef)]);
+    if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Transaction déjà traitée.');
     batch.update(txRef, {
       status,
       ...(reason && { rejectionReason: reason }),
       updatedAt: FieldValue.serverTimestamp(),
     });
-
-    const clientRef = adminDb.collection('clients').doc(txData.clientId);
-    const clientSnap = await clientRef.get();
     if (clientSnap.exists) {
       if (status === 'approved' && txData.type === 'deposit') {
         // Apply deposit fee and split between admin + referring affiliate
@@ -4557,7 +4623,7 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
         });
       }
     }
-    await batch.commit();
+    });
 
     // Create client notification
     try {
@@ -4646,22 +4712,25 @@ router.delete('/api/admin/transactions/all', requireDb, async (req, res) => {
 // ── Admin: withdraw accumulated fees ────────────────────────────────────────
 router.post('/api/admin/fees/withdraw', requireDb, async (req, res) => {
   try {
-    const { amount } = req.body;
     const settingsRef = adminDb.collection('settings').doc('global');
-    const snap = await settingsRef.get();
-    const current = snap.exists ? (snap.data()!.feesBalance || 0) : 0;
-    if (current <= 0) return res.status(400).json({ error: 'Aucun frais à retirer.' });
-    await settingsRef.update({
-      feesBalance: 0,
-      updatedAt: FieldValue.serverTimestamp(),
+    let withdrawn = 0;
+    await adminDb.runTransaction(async (txn) => {
+      const snap = await txn.get(settingsRef);
+      const current = snap.exists ? Number(snap.data()!.feesBalance || 0) : 0;
+      if (current <= 0) throw new Error('Aucun frais à retirer.');
+      withdrawn = current;
+      txn.update(settingsRef, {
+        feesBalance: 0,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: 'fees_withdrawal',
+        amount: current,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    await adminDb.collection('admin_notifications').add({
-      type: 'fees_withdrawal',
-      amount: amount || current,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    res.json({ success: true, withdrawn: current });
+    res.json({ success: true, withdrawn });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -4706,38 +4775,35 @@ router.post('/api/admin/agent/:agentId/wallet/adjust', requireDb, async (req, re
     if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
 
     const agentRef = adminDb.collection('agents').doc(agentId);
-    const agentSnap = await agentRef.get();
-    if (!agentSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
-    const agentData = agentSnap.data()!;
-
     const field = wallet === 'commission' ? 'commissionBalance' : 'balance';
     const delta = type === 'credit' ? usd : -usd;
-    const currentVal = Number(agentData[field] || 0);
-
-    if (type === 'debit' && currentVal < usd) {
-      return res.status(400).json({ error: `Solde insuffisant (${currentVal.toFixed(2)} $).` });
-    }
-
     const logRef = adminDb.collection('agent_wallet_adjustments').doc();
-    const batch = adminDb.batch();
-    batch.update(agentRef, {
-      [field]: FieldValue.increment(delta),
-      updatedAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (txn) => {
+      const agentSnap = await txn.get(agentRef);
+      if (!agentSnap.exists) throw new Error('Agent introuvable.');
+      const agentData = agentSnap.data()!;
+      const currentVal = Number(agentData[field] || 0);
+      if (type === 'debit' && currentVal < usd) {
+        throw new Error(`Solde insuffisant (${currentVal.toFixed(2)} $).`);
+      }
+      txn.update(agentRef, {
+        [field]: FieldValue.increment(delta),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(logRef, {
+        agentId,
+        agentCode: agentData.agentCode || '',
+        agentName: agentData.name || '',
+        type,
+        wallet,
+        amount: usd,
+        delta,
+        balanceBefore: currentVal,
+        balanceAfter: parseFloat((currentVal + delta).toFixed(6)),
+        note: note || '',
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    batch.set(logRef, {
-      agentId,
-      agentCode: agentData.agentCode || '',
-      agentName: agentData.name || '',
-      type,
-      wallet,
-      amount: usd,
-      delta,
-      balanceBefore: currentVal,
-      balanceAfter: parseFloat((currentVal + delta).toFixed(6)),
-      note: note || '',
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
 
     res.json({ success: true });
   } catch (e: any) {
@@ -5395,57 +5461,61 @@ router.post('/api/formations/purchases/wallet', requireClientSession, async (req
       .where('userId', '==', clientId).where('formationId', '==', formationId).where('status', '==', 'active').get();
     if (!existingSnap.empty) return res.json({ success: true, alreadyOwned: true });
 
-    const [clientSnap, formSnap, settingsSnap] = await Promise.all([
-      adminDb.collection('clients').doc(clientId).get(),
-      adminDb.collection('formations').doc(formationId).get(),
-      adminDb.collection('settings').doc('main').get(),
-    ]);
-    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
-    if (!formSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
     const clientRef = adminDb.collection('clients').doc(clientId);
-    const clientData = clientSnap.data()!;
-
-    // Price is always computed server-side from the formation's real price —
-    // never trust a client-supplied amount for a real money debit.
-    const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
-    const priceHTG = Number(formSnap.data()!.price) || 0;
-    const price = priceHTG / exchangeRate;
-    if (price > 0 && (clientData.balance || 0) < price)
-      return res.status(400).json({ error: 'Solde insuffisant.' });
-
-    const batch = adminDb.batch();
-    if (price > 0) {
-      batch.update(clientRef, {
-        balance: Math.max(0, (clientData.balance || 0) - price),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    }
+    const formationRef = adminDb.collection('formations').doc(formationId);
+    const settingsRef = adminDb.collection('settings').doc('main');
+    const ownershipRef = adminDb.collection('formation_ownership').doc(
+      createHash('sha256').update(`${clientId}|${formationId}`).digest('hex')
+    );
     const purchaseRef = adminDb.collection('formation_purchases').doc();
-    batch.set(purchaseRef, {
-      userId: clientId, userEmail: clientData.email || '',
-      userName: clientName || clientData.name || '',
-      formationId, formationTitle: formationTitle || '',
-      amount: price, method: price === 0 ? 'Gratuit' : 'Wallet',
-      status: 'active',
-      purchasedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    if (formationId) {
-      batch.update(adminDb.collection('formations').doc(formationId), {
-        studentsCount: FieldValue.increment(1),
-      });
-    }
-    if (price > 0) {
-      const notifRef = adminDb.collection('admin_notifications').doc();
-      batch.set(notifRef, {
-        type: 'formation_purchase', clientId,
-        clientName: clientName || clientData.name || '',
+    let price = 0;
+    let clientData: any = {};
+    let alreadyOwned = false;
+    await adminDb.runTransaction(async (batch) => {
+      const [clientSnap, formSnap, settingsSnap, ownershipSnap] = await Promise.all([
+        batch.get(clientRef), batch.get(formationRef), batch.get(settingsRef), batch.get(ownershipRef),
+      ]);
+      if (!clientSnap.exists) throw new Error('Client introuvable.');
+      if (!formSnap.exists) throw new Error('Formation introuvable.');
+      if (ownershipSnap.exists) {
+        alreadyOwned = true;
+        return;
+      }
+      clientData = clientSnap.data()!;
+      const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate ?? 146) : 146;
+      price = (Number(formSnap.data()!.price) || 0) / exchangeRate;
+      if (price > 0 && Number(clientData.balance || 0) < price) throw new Error('Solde insuffisant.');
+      if (price > 0) {
+        batch.update(clientRef, {
+          balance: FieldValue.increment(-price),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      batch.set(purchaseRef, {
+        userId: clientId, userEmail: clientData.email || '',
+        userName: clientName || clientData.name || '',
         formationId, formationTitle: formationTitle || '',
-        amount: price, method: 'Wallet',
-        read: false, createdAt: FieldValue.serverTimestamp(),
+        amount: price, method: price === 0 ? 'Gratuit' : 'Wallet', status: 'active',
+        purchasedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
+      batch.set(ownershipRef, {
+        userId: clientId, formationId, purchaseId: purchaseRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      batch.update(formationRef, { studentsCount: FieldValue.increment(1) });
+      if (price > 0) {
+        batch.set(adminDb.collection('admin_notifications').doc(), {
+          type: 'formation_purchase', clientId,
+          clientName: clientName || clientData.name || '',
+          formationId, formationTitle: formationTitle || '',
+          amount: price, method: 'Wallet', read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    });
+    if (alreadyOwned) {
+      return res.json({ success: true, alreadyOwned: true });
     }
-    await batch.commit();
 
     // Credit teacher if formation belongs to one (minus platform commission)
     if (price > 0 && formationId) {
@@ -8020,7 +8090,7 @@ router.post('/api/admin/teacher-transactions/:id/approve', requireDb, async (req
     const teacherData = teacherSnap.data()!;
 
     // Balance already deducted on submission — just mark approved
-    await txRef.update({ status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+    await transitionPending(txRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
 
     res.json({ success: true });
   } catch (e: any) {
@@ -8039,6 +8109,9 @@ router.post('/api/admin/teacher-transactions/:id/reject', requireDb, async (req,
     // Refund teacher balance (was deducted on submission)
     const teacherRefReject = adminDb.collection('teachers').doc(txData.teacherId);
     await adminDb.runTransaction(async (t) => {
+      const latestTx = await t.get(txRef);
+      if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Transaction déjà traitée.');
+      if (latestTx.data()!.teacherId !== txData.teacherId) throw new Error('Accès refusé.');
       t.update(txRef, { status: 'rejected', rejectionReason: reason || '', updatedAt: FieldValue.serverTimestamp() });
       t.update(teacherRefReject, { balance: FieldValue.increment(txData.amount || 0), updatedAt: FieldValue.serverTimestamp() });
     });
@@ -8099,23 +8172,24 @@ router.patch('/api/admin/teacher-withdrawals/:id', requireDb, async (req, res) =
 
     if (action === 'approve') {
       const teacherRef = adminDb.collection('teachers').doc(tx.teacherId);
-      const teacherSnap = await teacherRef.get();
-      if (!teacherSnap.exists) return res.status(404).json({ error: 'Professeur introuvable.' });
-      const teacherData = teacherSnap.data()!;
-      const newBalance = Math.max(0, (teacherData.balance || 0) - (tx.amount || 0));
       const feeAmount = parseFloat(((tx.amount || 0) - (tx.netAmount || 0)).toFixed(4));
-      const batch = adminDb.batch();
-      batch.update(txRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
-      batch.update(teacherRef, { balance: newBalance, updatedAt: FieldValue.serverTimestamp() });
-      if (feeAmount > 0) {
-        batch.update(adminDb.collection('settings').doc('global'), {
+      await adminDb.runTransaction(async (txn) => {
+        const [latestTx, teacherSnap] = await Promise.all([txn.get(txRef), txn.get(teacherRef)]);
+        if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Transaction déjà traitée.');
+        if (latestTx.data()!.teacherId !== tx.teacherId) throw new Error('Accès refusé.');
+        if (!teacherSnap.exists) throw new Error('Professeur introuvable.');
+        const teacherBalance = Number(teacherSnap.data()!.balance || 0);
+        const amount = Number(latestTx.data()!.amount || 0);
+        if (teacherBalance < amount) throw new Error('Solde professeur insuffisant.');
+        txn.update(txRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+        txn.update(teacherRef, { balance: FieldValue.increment(-amount), updatedAt: FieldValue.serverTimestamp() });
+        if (feeAmount > 0) txn.update(adminDb.collection('settings').doc('global'), {
           feesBalance: FieldValue.increment(feeAmount),
           teacherWithdrawalFeesTotal: FieldValue.increment(feeAmount),
         });
-      }
-      await batch.commit();
+      });
     } else {
-      await txRef.update({
+      await transitionPending(txRef, {
         status: 'rejected',
         rejectionReason: reason || '',
         updatedAt: FieldValue.serverTimestamp(),
@@ -8178,21 +8252,26 @@ router.get('/api/admin/profit-stats', requireDb, async (_req, res) => {
 router.post('/api/admin/profit/reset', requireDb, async (req, res) => {
   try {
     const settingsRef = adminDb.collection('settings').doc('global');
-    const snap = await settingsRef.get();
-    const current = snap.exists ? (snap.data()!.feesBalance || 0) : 0;
-    await settingsRef.set({
-      feesBalance: 0,
-      lastProfitReset: FieldValue.serverTimestamp(),
-      teacherWithdrawalFeesTotal: 0,
-      affiliateWithdrawalFeesTotal: 0,
-    }, { merge: true });
-    await adminDb.collection('admin_notifications').add({
-      type: 'profit_reset',
-      previousBalance: current,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
+    let previousBalance = 0;
+    await adminDb.runTransaction(async (txn) => {
+      const snap = await txn.get(settingsRef);
+      const current = snap.exists ? Number(snap.data()!.feesBalance || 0) : 0;
+      if (current <= 0) throw new Error('Aucun profit à réinitialiser.');
+      previousBalance = current;
+      txn.set(settingsRef, {
+        feesBalance: 0,
+        lastProfitReset: FieldValue.serverTimestamp(),
+        teacherWithdrawalFeesTotal: 0,
+        affiliateWithdrawalFeesTotal: 0,
+      }, { merge: true });
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: 'profit_reset',
+        previousBalance: current,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    res.json({ success: true, previousBalance: current });
+    res.json({ success: true, previousBalance });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -8769,7 +8848,14 @@ router.post('/api/agent/client-deposit/:reqId/approve', requireDb, async (req, r
     }
 
     await adminDb.runTransaction(async (txn) => {
-      const agentSnap = await txn.get(agentRef);
+      const [latestReqSnap, agentSnap] = await Promise.all([
+        txn.get(reqRef),
+        txn.get(agentRef),
+      ]);
+      if (!latestReqSnap.exists || latestReqSnap.data()!.status !== 'pending') {
+        throw new Error('Demande déjà traitée.');
+      }
+      if (latestReqSnap.data()!.agentId !== reqData.agentId) throw new Error('Accès refusé.');
       if (!agentSnap.exists) throw new Error('Agent introuvable.');
       const agentData = agentSnap.data()!;
       if ((agentData.balance || 0) < reqData.amount) throw new Error('Solde agent insuffisant pour ce dépôt.');
@@ -8869,20 +8955,23 @@ router.post('/api/agent/client-deposit/:reqId/reject', requireDb, async (req, re
       if (!pin || !verifyPin(String(pin), agentRejectData.pinHash)) return res.status(403).json({ error: 'Code PIN incorrect.' });
     }
 
-    const batch = adminDb.batch();
-    batch.update(reqRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-
-    // Client notification
-    batch.set(adminDb.collection('client_notifications').doc(), {
-      clientId: reqData.clientId,
-      type: 'deposit_rejected',
-      title: '❌ Demande de dépôt refusée',
-      message: `Votre demande de dépôt de ${(reqData.amount || 0).toFixed(2)} a été refusée par l'agent ${reqData.agentName}.${reason ? ` Raison: ${reason}` : ''}`,
-      amount: reqData.amount,
-      read: false,
-      createdAt: FieldValue.serverTimestamp(),
+    await adminDb.runTransaction(async (txn) => {
+      const latestReqSnap = await txn.get(reqRef);
+      if (!latestReqSnap.exists || latestReqSnap.data()!.status !== 'pending') {
+        throw new Error('Demande déjà traitée.');
+      }
+      if (latestReqSnap.data()!.agentId !== reqData.agentId) throw new Error('Accès refusé.');
+      txn.update(reqRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      txn.set(adminDb.collection('client_notifications').doc(), {
+        clientId: reqData.clientId,
+        type: 'deposit_rejected',
+        title: '❌ Demande de dépôt refusée',
+        message: `Votre demande de dépôt de ${(reqData.amount || 0).toFixed(2)} a été refusée par l'agent ${reqData.agentName}.${reason ? ` Raison: ${reason}` : ''}`,
+        amount: reqData.amount,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
     });
-    await batch.commit();
 
     // Push + email to client
     sendFcmToClient(
@@ -9629,24 +9718,27 @@ router.post('/api/reseller/ff/order', requireDb, async (req, res) => {
 
     // 1. Verify reseller account
     const accountRef = adminDb.collection('agent_reseller_accounts').doc(agentId);
-    const accountSnap = await accountRef.get();
-    if (!accountSnap.exists)
-      return res.status(403).json({ error: "Compte revendeur non configuré. Contactez l'administrateur." });
-    const account = accountSnap.data()!;
-    if (!account.enabled)
-      return res.status(403).json({ error: "Compte revendeur désactivé. Contactez l'administrateur." });
-    if ((account.diamondBalance || 0) < diamonds)
-      return res.status(400).json({ error: `Crédit insuffisant. Disponible : ${account.diamondBalance || 0} 💎` });
-
-    // 2. Create pending transaction
     const txRef = adminDb.collection('free_fire_transactions').doc();
-    await txRef.set({
-      agentId, agentName: account.agentName || '',
-      playerId, region, packageLabel,
-      diamonds: Number(diamonds), priceUSD: Number(priceUSD) || 0,
-      offerId, categoryId,
-      status: 'pending', apiResponse: null, errorMessage: null, fazerOrderId: null,
-      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    // Reserve reseller credit before external fulfillment so concurrent orders
+    // cannot spend the same diamonds.
+    await adminDb.runTransaction(async (txn) => {
+      const accountSnap = await txn.get(accountRef);
+      if (!accountSnap.exists) throw new Error("Compte revendeur non configuré. Contactez l'administrateur.");
+      const account = accountSnap.data()!;
+      if (!account.enabled) throw new Error("Compte revendeur désactivé. Contactez l'administrateur.");
+      if ((account.diamondBalance || 0) < diamonds) {
+        throw new Error(`Crédit insuffisant. Disponible : ${account.diamondBalance || 0} 💎`);
+      }
+      txn.update(accountRef, {
+        diamondBalance: FieldValue.increment(-Number(diamonds)),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(txRef, {
+        agentId, agentName: account.agentName || '', playerId, region, packageLabel,
+        diamonds: Number(diamonds), priceUSD: Number(priceUSD) || 0, offerId, categoryId,
+        status: 'pending', apiResponse: null, errorMessage: null, fazerOrderId: null,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
     });
 
     // 3. Call FazerCards
@@ -9666,22 +9758,24 @@ router.post('/api/reseller/ff/order', requireDb, async (req, res) => {
       } else { success = true; }
     } catch (apiErr: any) { errorMessage = apiErr.message || 'Erreur réseau FazerCards.'; }
 
-    // 4. Update transaction & deduct credit if success
-    const batch = adminDb.batch();
-    batch.update(txRef, {
-      status: success ? 'success' : 'failed',
-      apiResponse: fazerData, fazerOrderId: fazerData?.order_id || null,
-      errorMessage, updatedAt: FieldValue.serverTimestamp(),
-    });
-    if (success) {
-      batch.update(accountRef, {
-        diamondBalance: FieldValue.increment(-Number(diamonds)),
+    // Finalize the reservation, or compensate it if fulfillment failed.
+    await adminDb.runTransaction(async (txn) => {
+      const latestTx = await txn.get(txRef);
+      if (!latestTx.exists || latestTx.data()!.status !== 'pending') throw new Error('Commande déjà finalisée.');
+      txn.update(txRef, {
+        status: success ? 'success' : 'failed',
+        apiResponse: fazerData, fazerOrderId: fazerData?.order_id || null,
+        errorMessage, updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.update(accountRef, success ? {
         totalSold: FieldValue.increment(Number(diamonds)),
         totalOrders: FieldValue.increment(1),
         updatedAt: FieldValue.serverTimestamp(),
+      } : {
+        diamondBalance: FieldValue.increment(Number(diamonds)),
+        updatedAt: FieldValue.serverTimestamp(),
       });
-    }
-    await batch.commit();
+    });
 
     if (!success) return res.status(400).json({ error: errorMessage, transactionId: txRef.id });
     res.json({ success: true, transactionId: txRef.id, order: fazerData });
@@ -9822,51 +9916,35 @@ router.post('/api/reseller/ff/buy-pack', requireDb, async (req, res) => {
     const pack = packs.find((p: any) => p.id === packId);
     if (!pack) return res.status(404).json({ error: 'Pack introuvable.' });
 
-    // Check agent wallet balance
     const agentRef = adminDb.collection('agents').doc(agentId);
-    const agentSnap = await agentRef.get();
-    if (!agentSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
-    const agentData = agentSnap.data()!;
-    const currentBalance = Number(agentData.balance || 0);
-    if (currentBalance < pack.priceUSD) {
-      return res.status(400).json({
-        error: `Solde insuffisant. Disponible : ${currentBalance.toFixed(2)} — Requis : ${pack.priceUSD}`,
-        code: 'INSUFFICIENT_BALANCE',
-      });
-    }
-
-    // Atomic: deduct wallet balance + add diamond balance
     const resellerRef = adminDb.collection('agent_reseller_accounts').doc(agentId);
-    const resellerSnap = await resellerRef.get();
-    const batch = adminDb.batch();
-    batch.update(agentRef, {
-      balance: FieldValue.increment(-pack.priceUSD),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    if (!resellerSnap.exists) {
-      batch.set(resellerRef, {
-        agentId, agentName: agentData.name || '', enabled: true,
-        diamondBalance: pack.diamonds, totalSold: 0, totalOrders: 0,
-        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    let newWalletBalance = 0;
+    await adminDb.runTransaction(async (txn) => {
+      const [agentSnap, resellerSnap] = await Promise.all([txn.get(agentRef), txn.get(resellerRef)]);
+      if (!agentSnap.exists) throw new Error('Agent introuvable.');
+      const agentData = agentSnap.data()!;
+      const currentBalance = Number(agentData.balance || 0);
+      if (currentBalance < pack.priceUSD) {
+        throw new Error(`Solde insuffisant. Disponible : ${currentBalance.toFixed(2)} — Requis : ${pack.priceUSD}`);
+      }
+      newWalletBalance = parseFloat((currentBalance - pack.priceUSD).toFixed(6));
+      txn.update(agentRef, { balance: FieldValue.increment(-pack.priceUSD), updatedAt: FieldValue.serverTimestamp() });
+      if (!resellerSnap.exists) {
+        txn.set(resellerRef, {
+          agentId, agentName: agentData.name || '', enabled: true,
+          diamondBalance: pack.diamonds, totalSold: 0, totalOrders: 0,
+          createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        txn.update(resellerRef, { diamondBalance: FieldValue.increment(pack.diamonds), updatedAt: FieldValue.serverTimestamp() });
+      }
+      txn.set(adminDb.collection('ff_credit_history').doc(), {
+        agentId, agentName: agentData.name || '', amount: pack.diamonds, operation: 'add',
+        note: `Achat pack ${pack.label} — ${pack.priceUSD}`,
+        type: 'agent_purchase', packId, packLabel: pack.label, priceUSD: pack.priceUSD,
+        createdAt: FieldValue.serverTimestamp(),
       });
-    } else {
-      batch.update(resellerRef, {
-        diamondBalance: FieldValue.increment(pack.diamonds),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
-
-    // Record in history
-    await adminDb.collection('ff_credit_history').add({
-      agentId, agentName: agentData.name || '',
-      amount: pack.diamonds, operation: 'add',
-      note: `Achat pack ${pack.label} — ${pack.priceUSD}`,
-      type: 'agent_purchase', packId, packLabel: pack.label, priceUSD: pack.priceUSD,
-      createdAt: FieldValue.serverTimestamp(),
     });
-
-    const newWalletBalance = parseFloat((currentBalance - pack.priceUSD).toFixed(6));
     res.json({ success: true, diamonds: pack.diamonds, newWalletBalance });
   } catch (e: any) {
     console.error('[reseller/ff/buy-pack]', e.message);

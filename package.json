@@ -39,7 +39,8 @@
     "start": "NODE_ENV=production TSX_TSCONFIG_PATH=tsconfig.server.json node_modules/.bin/tsx --tsconfig tsconfig.server.json server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:rate-limit": "node --import tsx --test tests/rateLimit.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -5,6 +5,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'node:fs';
+import { apiRateLimiter } from './src/api/rateLimit.ts';
 
 dotenv.config();
 
@@ -63,6 +64,9 @@ function renderSeoDocument(template: string, pathname: string): string {
 
 async function startServer() {
   const app = express();
+  // Replit and the production edge each add one trusted proxy hop. This lets
+  // Express expose the real client IP without trusting an arbitrary full chain.
+  app.set('trust proxy', 1);
   const PORT = parseInt(process.env.PORT || '5000', 10);
   if (process.env.NODE_ENV === 'production' && !process.env.APP_URL) {
     throw new Error('APP_URL doit être configuré en production pour appliquer la politique CORS.');
@@ -114,7 +118,7 @@ async function startServer() {
       res.header('Access-Control-Allow-Credentials', 'true');
     }
     res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
@@ -123,6 +127,10 @@ async function startServer() {
     console.log(`[API] ${req.method} ${req.path}`);
     next();
   });
+
+  // Global protection against request floods. More sensitive route groups add
+  // tighter identity-aware limits inside the API router.
+  app.use('/api', apiRateLimiter);
 
   app.use(apiRouter);
 
