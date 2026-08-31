@@ -4,12 +4,13 @@ import * as LucideIcons from 'lucide-react';
 import {
   Globe, Package, Truck, ArrowRight, ExternalLink, ArrowLeft,
   Zap, ShieldCheck, Clock, Phone, MessageCircle,
-  Coins,
+  Coins, CreditCard,
 } from 'lucide-react';
 import { useOnlineServices } from '../services/parcelService';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { Client } from '../types';
 import cryptoServiceImage from '../../attached_assets/96ede975caf4ec2657e6906958f42af6_1787453007148.jpg';
+import { toast } from 'sonner';
 
 interface ServicesViewProps {
   onTrackingClick: () => void;
@@ -41,6 +42,17 @@ const DEFAULT_SERVICES = [
     color: 'from-emerald-500 to-teal-700',
     badge: 'International',
   },
+  {
+    id: '_cards',
+    label: 'Cartes',
+    description: 'Créez et gérez vos cartes de débit virtuelles en toute sécurité.',
+    icon: 'CreditCard',
+    target: 'cards' as const,
+    active: true,
+    order: 3,
+    color: 'from-indigo-500 to-blue-700',
+    badge: 'Bientôt disponible',
+  },
 ];
 
 const SERVICE_COLORS = [
@@ -56,11 +68,21 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
   const { services: rawServices } = useOnlineServices();
   const { settings } = useSettingsCtx();
   const activeServices = rawServices.filter(s => s.active);
-  const displayServices = activeServices.length > 0 ? activeServices : DEFAULT_SERVICES;
+  // Keep the platform services visible even when custom services are configured.
+  // The cards entry is intentionally a preview until its dedicated UX is provided.
+  const displayServices = [
+    ...activeServices,
+    ...DEFAULT_SERVICES.filter(def => !activeServices.some(svc => svc.target === def.target)),
+  ];
 
   const handleServiceClick = (svc: any) => {
     if (svc.target === 'tracking') { onTrackingClick(); }
     else if (svc.target === 'shipping') { onViewChange('shipping'); }
+    else if (svc.target === 'cards') {
+      toast.info('Le service Cartes arrive bientôt.', {
+        description: 'La création et la gestion de vos cartes seront disponibles prochainement.',
+      });
+    }
     else if (svc.target === 'url' && svc.url) { window.open(svc.url, '_blank'); }
   };
 

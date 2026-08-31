@@ -36,7 +36,7 @@ export const SEO_PAGES: Record<SeoPath, SeoPage> = {
   '/services': {
     path: '/services',
     title: 'Services numériques et logistiques en Haïti | Solutionpam',
-    description: 'Accédez aux services Solutionpam : suivi de colis, expédition internationale, achat en ligne et demandes crypto traitées avec accompagnement.',
+    description: 'Accédez aux services Solutionpam : cartes virtuelles, suivi de colis, expédition internationale, achat en ligne et demandes crypto traitées avec accompagnement.',
     h1: 'Services numériques et logistiques Solutionpam',
   },
   '/suivi-colis': {

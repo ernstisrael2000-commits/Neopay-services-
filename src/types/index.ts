@@ -3,7 +3,7 @@ export interface OnlineSubService {
   label: string;
   description: string;
   icon: string;
-  target: 'tracking' | 'shipping' | 'url';
+  target: 'tracking' | 'shipping' | 'cards' | 'url';
   url?: string;
   order: number;
   active: boolean;

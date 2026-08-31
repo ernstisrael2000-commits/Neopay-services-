@@ -14,3 +14,4 @@
 - [Duplicate firestore.rules files](duplicate-firestore-rules.md) — root firestore.rules and database/firestore.rules must be edited together; no auto-deploy exists
 - [Wallet API trust boundary](wallet-api-trust-boundary.md) — Firestore rules do not protect Admin SDK routes; every balance route must bind identity to a verified server session
 - [Financial concurrency boundary](financial-concurrency-boundary.md) — rate limits and idempotency never replace an atomic state-and-balance transaction
+- [HeyQO virtual cards](heyqo-cards-integration.md) — server-side card issuance, KYC-first customers, secure-view iframe, and signed webhooks are required
