@@ -12,3 +12,4 @@
 - [FazerCards gift-card contract](fazercards-giftcards-contract.md) — gift cards use cards/card_id, not the legacy offers endpoint
 - [Formations content security model](formations-content-security.md) — public catalog redacts paid content by ownership; all client/teacher formations routes now require session, not body-supplied ids
 - [Duplicate firestore.rules files](duplicate-firestore-rules.md) — root firestore.rules and database/firestore.rules must be edited together; no auto-deploy exists
+- [Wallet API trust boundary](wallet-api-trust-boundary.md) — Firestore rules do not protect Admin SDK routes; every balance route must bind identity to a verified server session
