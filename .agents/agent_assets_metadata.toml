@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "df3Om-9MrO7JXeCQOO94J"
+uri = "file://public/documents/solution-pam-politique-aml-kyc.docx"
+type = "word_document"
+title = "Politique AML/KYC — Solution PAM (Word)"
+description = "Version Word nettoyée, prête à télécharger et à faire valider avant utilisation officielle."
+logical_id = "5d62f2c2-47be-450d-995a-b0bfec18ad48"
+content_hash = "sha256:645052b93aab6e02a7a1ef3f936f092bc7838fc59871cad6487484daa2242fda"
+size = 41576
+mtime_ms = 1788146599118
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:2dadbfff-6031-408c-89b3-200140bd7caf/5d62f2c2-47be-450d-995a-b0bfec18ad48/6da02a0c-19e7-4346-a8d1-89bbf9712054"
+storage_version_token = "1788146655078763"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "6Hji0-_kclZpCtraThgYP"
+uri = "file://public/documents/solution-pam-politique-aml-kyc.html"
+type = "text"
+title = "Politique AML/KYC — Solution PAM (page web)"
+description = "Version web publique de la politique AML/KYC, adaptée au partage avec un partenaire."
+logical_id = "c81c084f-071f-4b20-aa91-2d5cfd2abeca"
+content_hash = "sha256:601fffa898041439e7f1d31bc7207b5ac9b226781e565de312ee2822e3bd910a"
+size = 19658
+mtime_ms = 1788146612691
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:2dadbfff-6031-408c-89b3-200140bd7caf/c81c084f-071f-4b20-aa91-2d5cfd2abeca/f81d62b1-9e12-4ae1-b94d-2560eeaab588"
+storage_version_token = "1788146655767980"
+content_type = "text/html"
