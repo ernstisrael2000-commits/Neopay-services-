@@ -35,10 +35,12 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
 
     if (targetType === 'affiliate') {
       // Server-side: verify affiliate exists + trigger 2FA
+      const idToken = await user.getIdToken();
       const linkRes = await fetch('/api/affiliate/google-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: user.uid, email, name: user.displayName || '' }),
+        credentials: 'include',
+        body: JSON.stringify({ idToken }),
       });
       const data = await linkRes.json();
 
@@ -61,10 +63,12 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
 
     } else {
       // Agent: call link-uid which now returns pending2fa
+      const idToken = await user.getIdToken();
       const linkRes = await fetch('/api/agent/link-uid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: user.uid, email }),
+        credentials: 'include',
+        body: JSON.stringify({ idToken }),
       });
       const data = await linkRes.json();
 

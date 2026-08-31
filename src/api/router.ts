@@ -252,6 +252,8 @@ function verifyPassword(password: string, stored: unknown): boolean {
 
 type AdminSession = { role: 'admin'; adminId: string; exp: number };
 type ClientSession = { role: 'client'; clientId: string; exp: number };
+type AgentSession = { role: 'agent'; agentId: string; exp: number };
+type AffiliateSession = { role: 'affiliate'; affiliateId: string; exp: number };
 
 function sessionSecret(): Buffer | null {
   const secret = process.env.SESSION_SECRET;
@@ -332,6 +334,72 @@ function setClientSession(res: express.Response, clientId: string): void {
   const session: ClientSession = { role: 'client', clientId, exp: Date.now() + 8 * 60 * 60 * 1000 };
   const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
   res.cookie('rena_client_session', `${payload}.${signSession(payload, secret)}`, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 8 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
+function readAgentSession(req: express.Request): AgentSession | null {
+  const secret = sessionSecret();
+  const token = parseCookies(req.headers.cookie).rena_agent_session;
+  if (!secret || !token) return null;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = signSession(payload, secret);
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as AgentSession;
+    if (session.role !== 'agent' || !session.agentId || !Number.isFinite(session.exp) || session.exp <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function setAgentSession(res: express.Response, agentId: string): void {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir une session agent.');
+  const session: AgentSession = { role: 'agent', agentId, exp: Date.now() + 8 * 60 * 60 * 1000 };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
+  res.cookie('rena_agent_session', `${payload}.${signSession(payload, secret)}`, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 8 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
+function readAffiliateSession(req: express.Request): AffiliateSession | null {
+  const secret = sessionSecret();
+  const token = parseCookies(req.headers.cookie).rena_affiliate_session;
+  if (!secret || !token) return null;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = signSession(payload, secret);
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as AffiliateSession;
+    if (session.role !== 'affiliate' || !session.affiliateId || !Number.isFinite(session.exp) || session.exp <= Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function setAffiliateSession(res: express.Response, affiliateId: string): void {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir une session affilié.');
+  const session: AffiliateSession = { role: 'affiliate', affiliateId, exp: Date.now() + 8 * 60 * 60 * 1000 };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
+  res.cookie('rena_affiliate_session', `${payload}.${signSession(payload, secret)}`, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
@@ -524,6 +592,7 @@ const requireDb = (req: express.Request, res: express.Response, next: express.Ne
 };
 
 async function requireClientSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (res.locals.clientSession && res.locals.clientRecord) return next();
   const session = readClientSession(req);
   if (!session) return res.status(401).json({ error: 'Session client requise. Veuillez vous reconnecter.' });
   try {
@@ -534,6 +603,53 @@ async function requireClientSession(req: express.Request, res: express.Response,
     }
     res.locals.clientSession = session;
     res.locals.clientRecord = client;
+    next();
+  } catch {
+    return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
+  }
+}
+
+async function requireAgentSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (res.locals.agentSession && res.locals.agentRecord) return next();
+  const session = readAgentSession(req);
+  if (!session) return res.status(401).json({ error: 'Session agent requise. Veuillez vous reconnecter.' });
+  try {
+    const agent = await adminDb.collection('agents').doc(session.agentId).get();
+    if (!agent.exists || agent.data()?.status === 'inactive') {
+      res.clearCookie('rena_agent_session', { path: '/' });
+      return res.status(403).json({ error: 'Compte agent indisponible.' });
+    }
+    const data = agent.data()!;
+    const suppliedAgentId = req.body?.agentId || req.query?.agentId;
+    const suppliedAgentCode = req.body?.agentCode || req.query?.agentCode;
+    if ((suppliedAgentId && suppliedAgentId !== session.agentId) ||
+        (suppliedAgentCode && suppliedAgentCode !== data.agentCode)) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    res.locals.agentSession = session;
+    res.locals.agentRecord = agent;
+    next();
+  } catch {
+    return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
+  }
+}
+
+async function requireAffiliateSession(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (res.locals.affiliateSession && res.locals.affiliateRecord) return next();
+  const session = readAffiliateSession(req);
+  if (!session) return res.status(401).json({ error: 'Session affilié requise. Veuillez vous reconnecter.' });
+  try {
+    const affiliate = await adminDb.collection('affiliates').doc(session.affiliateId).get();
+    if (!affiliate.exists || affiliate.data()?.disabled === true || affiliate.data()?.status === 'inactive') {
+      res.clearCookie('rena_affiliate_session', { path: '/' });
+      return res.status(403).json({ error: 'Compte affilié indisponible.' });
+    }
+    const suppliedAffiliateId = req.body?.affiliateId || req.query?.affiliateId;
+    if (suppliedAffiliateId && suppliedAffiliateId !== session.affiliateId) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    res.locals.affiliateSession = session;
+    res.locals.affiliateRecord = affiliate;
     next();
   } catch {
     return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
@@ -592,6 +708,68 @@ const publicAdminPaths = new Set([
 router.use('/api/admin', requireDb, (req, res, next) => {
   if (publicAdminPaths.has(req.path)) return next();
   return requireAdminSession(req, res, next);
+});
+
+const publicClientPaths = new Set([
+  '/fees',
+  '/register',
+  '/login',
+  '/login-google',
+  '/register-google',
+  '/logout',
+]);
+router.use('/api/client', requireDb, (req, res, next) => {
+  if (publicClientPaths.has(req.path)) return next();
+  return requireClientSession(req, res, () => {
+    const sessionId = res.locals.clientSession.clientId as string;
+    const suppliedIds = [req.body?.clientId, req.body?.senderClientId, req.query?.clientId];
+    if (suppliedIds.some((id) => id && id !== sessionId)) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    const clientPathMatch = req.path.match(/^\/(?:transactions|pending-confirmations|notifications\/read-all|notifications\/clear-all)\/([^/]+)$/);
+    if (clientPathMatch && clientPathMatch[1] !== sessionId) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    if (req.body && typeof req.body === 'object') {
+      const client = res.locals.clientRecord.data() || {};
+      if ('clientId' in req.body) req.body.clientId = sessionId;
+      if ('senderClientId' in req.body) req.body.senderClientId = sessionId;
+      if ('clientName' in req.body) req.body.clientName = client.name || '';
+      if ('clientPhone' in req.body) req.body.clientPhone = client.phone || '';
+      if ('clientWalletId' in req.body) req.body.clientWalletId = client.walletId || '';
+    }
+    next();
+  });
+});
+
+const publicAgentPaths = new Set(['/lookup', '/link-uid', '/verify-2fa', '/logout']);
+router.use('/api/agent', requireDb, (req, res, next) => {
+  if (publicAgentPaths.has(req.path)) return next();
+  return requireAgentSession(req, res, () => {
+    const agentId = res.locals.agentSession.agentId as string;
+    const agentCode = res.locals.agentRecord.data()?.agentCode as string;
+    const idMatch = req.path.match(/^\/(?:events|personal-transactions|fee-records|client-deposit-requests)\/([^/]+)$/)
+      || req.path.match(/^\/([^/]+)\/photo$/);
+    const codeMatch = req.path.match(/^\/(?:has-pin|pending-withdrawals|withdrawal-requests|transactions|stats)\/([^/]+)$/);
+    if ((idMatch && idMatch[1] !== agentId) || (codeMatch && codeMatch[1] !== agentCode)) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    next();
+  });
+});
+
+const publicAffiliatePaths = new Set(['/login', '/google-login', '/verify-2fa', '/logout']);
+router.use('/api/affiliate', requireDb, (req, res, next) => {
+  if (publicAffiliatePaths.has(req.path)) return next();
+  return requireAffiliateSession(req, res, () => {
+    const affiliateId = res.locals.affiliateSession.affiliateId as string;
+    const idMatch = req.path.match(/^\/(?:events|has-pin|client-withdrawal-requests|client-deposit-requests|notifications|notifications\/read-all|notifications\/clear-all)\/([^/]+)$/)
+      || req.path.match(/^\/([^/]+)\/photo$/);
+    if (idMatch && idMatch[1] !== affiliateId) {
+      return res.status(403).json({ error: 'Accès refusé.' });
+    }
+    next();
+  });
 });
 
 // ── SSE: realtime event bus ────────────────────────────────────────────────────
@@ -735,11 +913,6 @@ router.get('/api/client/fees', requireDb, async (_req, res) => {
 });
 
 // ── Role SSE endpoints ────────────────────────────────────────────────────────
-// NOTE: affiliate/agent routes have no session-cookie mechanism anywhere in this
-// API yet (every /api/affiliate/* and /api/agent/* route takes its id from the
-// URL/body, unauthenticated) — this predates the SSE work and is a larger,
-// separate gap than these event streams. These two routes intentionally match
-// that existing (unauthenticated) pattern rather than inventing new auth here.
 router.get('/api/affiliate/events/:affiliateId', makeSseHandler('affiliate', 'affiliateId'));
 router.get('/api/agent/events/:agentId',         makeSseHandler('agent',     'agentId'));
 
@@ -937,7 +1110,11 @@ router.get('/api/client/notifications/:clientId', requireDb, async (req, res) =>
 
 router.patch('/api/client/notifications/:id/read', requireDb, async (req, res) => {
   try {
-    await adminDb.collection('client_notifications').doc(req.params.id).update({ read: true });
+    const ref = adminDb.collection('client_notifications').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Notification introuvable.' });
+    if (snap.data()?.clientId !== res.locals.clientSession.clientId) return res.status(403).json({ error: 'Accès refusé.' });
+    await ref.update({ read: true });
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -1481,9 +1658,13 @@ router.get('/api/agent/lookup', requireDb, async (req, res) => {
 // claimed by the caller before writing the uid field.
 router.post('/api/agent/link-uid', requireDb, async (req, res) => {
   try {
-    const { uid, email } = req.body as { uid?: string; email?: string };
-    if (!uid || !email) {
-      return res.status(400).json({ error: 'uid et email sont requis.' });
+    const { idToken } = req.body as { idToken?: string };
+    if (!idToken) return res.status(400).json({ error: 'Jeton Google requis.' });
+    const token = await getAuth().verifyIdToken(idToken);
+    const uid = token.uid;
+    const email = token.email?.toLowerCase();
+    if (!uid || !email || !token.email_verified) {
+      return res.status(401).json({ error: 'Compte Google non vérifié.' });
     }
 
     // Lookup agent by email (server-side, no agentId needed from client)
@@ -1534,13 +1715,20 @@ router.post('/api/agent/verify-2fa', requireDb, async (req, res) => {
 
     const agentSnap = await adminDb.collection('agents').doc(result.accountId!).get();
     if (!agentSnap.exists) return res.status(404).json({ error: 'Compte agent introuvable.' });
+    if (agentSnap.data()?.status === 'inactive') return res.status(403).json({ error: 'Ce compte agent est inactif.' });
 
     const agent = { id: agentSnap.id, ...agentSnap.data() };
+    setAgentSession(res, agentSnap.id);
     res.json({ success: true, agent });
   } catch (e: any) {
     console.error('[agent/verify-2fa]', e);
     res.status(500).json({ error: 'Erreur de vérification.' });
   }
+});
+
+router.post('/api/agent/logout', (_req, res) => {
+  res.clearCookie('rena_agent_session', { path: '/' });
+  res.json({ success: true });
 });
 
 // ── Client: submit agent/affiliate withdrawal request (pending, no immediate debit) ──
@@ -2612,13 +2800,7 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
     if (isNaN(usd) || usd <= 0)
       return res.status(400).json({ error: 'Montant invalide.' });
 
-    // Load sender
     const senderRef = adminDb.collection('clients').doc(senderClientId);
-    const senderSnap = await senderRef.get();
-    if (!senderSnap.exists) return res.status(404).json({ error: 'Expéditeur introuvable.' });
-    const senderData = senderSnap.data()!;
-    if ((senderData.balance || 0) < usd)
-      return res.status(400).json({ error: 'Solde insuffisant.' });
 
     // Find recipient by walletId
     const recipSnap = await adminDb.collection('clients')
@@ -2628,7 +2810,6 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
     const recipDoc = recipSnap.docs[0];
     if (recipDoc.id === senderClientId)
       return res.status(400).json({ error: 'Vous ne pouvez pas vous transférer à vous-même.' });
-    const recipData = recipDoc.data()!;
 
     // Load transfer fee
     const settSnap = await adminDb.collection('settings').doc('global').get();
@@ -2638,57 +2819,43 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
       : 0;
     const netToRecipient = usd - feeAmount;
 
-    if ((senderData.balance || 0) < usd)
-      return res.status(400).json({ error: 'Solde insuffisant.' });
+    let recipientName = '';
+    await adminDb.runTransaction(async (tx) => {
+      const [senderSnap, recipientSnap] = await Promise.all([tx.get(senderRef), tx.get(recipDoc.ref)]);
+      if (!senderSnap.exists || !recipientSnap.exists) throw Object.assign(new Error('Compte introuvable.'), { status: 404 });
+      const senderData = senderSnap.data()!;
+      const recipData = recipientSnap.data()!;
+      recipientName = recipData.name || '';
+      if (Number(senderData.balance || 0) < usd) throw Object.assign(new Error('Solde insuffisant.'), { status: 400 });
 
-    const batch = adminDb.batch();
-    // Debit sender (full amount)
-    batch.update(senderRef, {
-      balance: Math.max(0, (senderData.balance || 0) - usd),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    // Credit recipient (net after fee)
-    batch.update(recipDoc.ref, {
-      balance: (recipData.balance || 0) + netToRecipient,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    // Accumulate fee in settings
-    if (feeAmount > 0) {
-      batch.update(adminDb.collection('settings').doc('global'), {
-        feesBalance: FieldValue.increment(feeAmount),
-        updatedAt: FieldValue.serverTimestamp(),
+      tx.update(senderRef, { balance: FieldValue.increment(-usd), updatedAt: FieldValue.serverTimestamp() });
+      tx.update(recipDoc.ref, { balance: FieldValue.increment(netToRecipient), updatedAt: FieldValue.serverTimestamp() });
+      if (feeAmount > 0) {
+        tx.update(adminDb.collection('settings').doc('global'), {
+          feesBalance: FieldValue.increment(feeAmount),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      tx.set(adminDb.collection('client_transactions').doc(), {
+        clientId: senderClientId, clientName: senderData.name || '', type: 'withdrawal',
+        amount: usd, usdAmount: usd, status: 'completed', method: 'Transfert Wallet',
+        description: `Transfert vers ${recipData.name || recipientWalletId}${feeAmount > 0 ? ` (frais: $${feeAmount.toFixed(2)})` : ''}${message ? ` — ${message}` : ''}`,
+        recipientWalletId: recipientWalletId.trim(), recipientName: recipData.name || '',
+        ...(message && { message }), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
-    }
-    // Sender tx
-    const senderTxRef = adminDb.collection('client_transactions').doc();
-    batch.set(senderTxRef, {
-      clientId: senderClientId, clientName: senderData.name || '',
-      type: 'withdrawal', amount: usd, usdAmount: usd,
-      status: 'completed', method: 'Transfert Wallet',
-      description: `Transfert vers ${recipData.name || recipientWalletId}${feeAmount > 0 ? ` (frais: $${feeAmount.toFixed(2)})` : ''}${message ? ` — ${message}` : ''}`,
-      recipientWalletId: recipientWalletId.trim(),
-      recipientName: recipData.name || '',
-      ...(message && { message }),
-      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      tx.set(adminDb.collection('client_transactions').doc(), {
+        clientId: recipDoc.id, clientName: recipData.name || '', type: 'transfer_received',
+        amount: netToRecipient, usdAmount: netToRecipient, status: 'completed', method: 'Transfert Wallet',
+        description: `Reçu de ${senderData.name || senderClientId}${message ? ` — ${message}` : ''}`,
+        senderWalletId: senderData.walletId || '', senderName: senderData.name || '',
+        ...(message && { message }), createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
     });
-    // Recipient tx
-    const recipTxRef = adminDb.collection('client_transactions').doc();
-    batch.set(recipTxRef, {
-      clientId: recipDoc.id, clientName: recipData.name || '',
-      type: 'transfer_received', amount: netToRecipient, usdAmount: netToRecipient,
-      status: 'completed', method: 'Transfert Wallet',
-      description: `Reçu de ${senderData.name || senderClientId}${message ? ` — ${message}` : ''}`,
-      senderWalletId: senderData.walletId || '',
-      senderName: senderData.name || '',
-      ...(message && { message }),
-      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
 
-    res.json({ success: true, recipientName: recipData.name || '', amount: netToRecipient, fee: feeAmount });
+    res.json({ success: true, recipientName, amount: netToRecipient, fee: feeAmount });
   } catch (e: any) {
     console.error('[transfer]', e);
-    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+    res.status(e.status || 500).json({ error: e.message || 'Erreur serveur.' });
   }
 });
 
@@ -2798,13 +2965,23 @@ router.post('/api/affiliate/login', requireDb, async (req, res) => {
 
     const snap = await adminDb.collection('affiliates')
       .where('username', '==', username.trim())
-      .where('password', '==', password.trim())
       .limit(1).get();
 
     if (snap.empty) return res.status(401).json({ error: 'Identifiants incorrects.' });
 
     const affDoc = snap.docs[0];
     const affData = affDoc.data();
+    const storedPassword = affData.passwordHash || affData.password;
+    if (!verifyPassword(password, storedPassword)) {
+      return res.status(401).json({ error: 'Identifiants incorrects.' });
+    }
+    if (!affData.passwordHash) {
+      await affDoc.ref.update({
+        passwordHash: hashPassword(password),
+        password: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
     const email: string | undefined = affData.email || affData.info?.email;
 
     if (!email) {
@@ -2829,8 +3006,13 @@ router.post('/api/affiliate/login', requireDb, async (req, res) => {
 // ── Affiliate: Google login (server-side, phase 1 → 2FA) ─────────────────────
 router.post('/api/affiliate/google-login', requireDb, async (req, res) => {
   try {
-    const { uid, email, name } = req.body;
-    if (!uid || !email) return res.status(400).json({ error: 'uid et email requis.' });
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'Jeton Google requis.' });
+    const token = await getAuth().verifyIdToken(idToken);
+    const uid = token.uid;
+    const email = token.email?.toLowerCase();
+    const name = token.name || '';
+    if (!uid || !email || !token.email_verified) return res.status(401).json({ error: 'Compte Google non vérifié.' });
 
     // Look up affiliate by email
     let affSnap = await adminDb.collection('affiliates').where('email', '==', email.toLowerCase()).limit(1).get();
@@ -2872,14 +3054,23 @@ router.post('/api/affiliate/verify-2fa', requireDb, async (req, res) => {
 
     const affSnap = await adminDb.collection('affiliates').doc(result.accountId!).get();
     if (!affSnap.exists) return res.status(404).json({ error: 'Compte affilié introuvable.' });
+    if (affSnap.data()?.disabled === true || affSnap.data()?.status === 'inactive') {
+      return res.status(403).json({ error: 'Ce compte affilié est inactif.' });
+    }
 
     const affiliate = { id: affSnap.id, ...affSnap.data() };
     delete (affiliate as any).password;
+    setAffiliateSession(res, affSnap.id);
     res.json({ success: true, affiliate });
   } catch (e: any) {
     console.error('[affiliate/verify-2fa]', e);
     res.status(500).json({ error: 'Erreur de vérification.' });
   }
+});
+
+router.post('/api/affiliate/logout', (_req, res) => {
+  res.clearCookie('rena_affiliate_session', { path: '/' });
+  res.json({ success: true });
 });
 
 // ── Auth: Resend 2FA OTP (unified for all roles) ──────────────────────────────
