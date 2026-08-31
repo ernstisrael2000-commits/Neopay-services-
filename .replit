@@ -104,7 +104,7 @@ build = ["npm", "run", "build"]
 [userenv.shared]
 VAPID_PUBLIC_KEY = "BAPllhYun-SJKSonTZxvPznQRV1rrATVfZud7TiMYTD7lVaAj0U7gYwQs8EPePllRcL8o268EHhgPN8Xy6ufOac"
 FIREBASE_VAPID_KEY = "BAPllhYun-SJKSonTZxvPznQRV1rrATVfZud7TiMYTD7lVaAj0U7gYwQs8EPePllRcL8o268EHhgPN8Xy6ufOac"
-APP_URL = "https://neopay-services--ernstisrael2000.replit.app"
+APP_URL = "https://solutionpam.com"
 NAPI_RS_FORCE_WASI = "true"
 RESEND_FROM_EMAIL = "noreply@renaservices.shop"
 ADMIN_EMAIL = "neopayservices509@gmail.com"
