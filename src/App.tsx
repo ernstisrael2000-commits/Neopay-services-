@@ -567,11 +567,11 @@ function AppInner() {
                         onRequestAuth={() => setShowAuthModal(true)}
                       />
                     ) : (
-                      <section className="min-h-[calc(100dvh-3.5rem)] bg-slate-950 px-5 py-16 text-white">
-                        <div className="mx-auto flex max-w-md flex-col items-center rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl">
-                          <CreditCard className="mb-5 h-10 w-10 text-blue-300" />
+                      <section className="min-h-[calc(100dvh-3.5rem)] bg-[#f3f8fb] px-5 py-16 text-[#18384d]">
+                        <div className="mx-auto flex max-w-md flex-col items-center rounded-[2rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.12)]">
+                          <CreditCard className="mb-5 h-10 w-10 text-[#1979a8]" />
                           <h1 className="text-3xl font-black">Votre espace Cartes</h1>
-                          <p className="mt-3 text-sm leading-6 text-slate-300">
+                          <p className="mt-3 text-sm leading-6 text-[#60798a]">
                             Connectez-vous pour créer et gérer votre carte virtuelle HeyQO en toute sécurité.
                           </p>
                           <Button

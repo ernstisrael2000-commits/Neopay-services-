@@ -90,10 +90,10 @@ function cardStatusLabel(status: ViewStatus) {
 
 function transactionMeta(tx: HeyQOCardTransaction) {
   const description = String(tx.description || '').toLowerCase();
-  if (tx.type === 'deposit' || description.includes('recharge')) return { icon: ArrowDownToLine, tone: 'bg-sky-500/20 text-sky-300', positive: true };
-  if (tx.type === 'refund' || description.includes('rembourse')) return { icon: RefreshCw, tone: 'bg-emerald-500/20 text-emerald-300', positive: true };
-  if (description.includes('netflix')) return { icon: CreditCard, tone: 'bg-red-500/20 text-red-300', positive: false };
-  return { icon: CreditCard, tone: 'bg-white/10 text-slate-300', positive: false };
+  if (tx.type === 'deposit' || description.includes('recharge')) return { icon: ArrowDownToLine, tone: 'bg-sky-100 text-sky-700', positive: true };
+  if (tx.type === 'refund' || description.includes('rembourse')) return { icon: RefreshCw, tone: 'bg-emerald-100 text-emerald-700', positive: true };
+  if (description.includes('netflix')) return { icon: CreditCard, tone: 'bg-rose-100 text-rose-700', positive: false };
+  return { icon: CreditCard, tone: 'bg-slate-100 text-slate-600', positive: false };
 }
 
 function CardLogo({ className = 'h-9 w-9' }: { className?: string }) {
@@ -166,7 +166,7 @@ function ActionButton({ children, onClick, disabled, danger, testId }: { childre
       data-testid={testId}
       onClick={onClick}
       disabled={disabled}
-      className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition active:scale-[.98] disabled:opacity-45 ${danger ? 'border border-red-300/20 bg-red-400/10 text-red-200 hover:bg-red-400/15' : 'bg-[#0e78b2] text-white shadow-lg shadow-sky-950/20 hover:bg-[#168ac4]'}`}
+      className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition active:scale-[.98] disabled:opacity-45 ${danger ? 'border border-[#f3b7b0] bg-[#fff1f0] text-[#b42318] hover:bg-[#ffe6e3]' : 'bg-[#1979a8] text-white shadow-lg shadow-[#1979a8]/20 hover:bg-[#12678f]'}`}
     >
       {children}
     </button>
@@ -175,13 +175,13 @@ function ActionButton({ children, onClick, disabled, danger, testId }: { childre
 
 function QuickAction({ label, icon: Icon, onClick, testId, tone = 'blue', disabled }: { label: string; icon: typeof CreditCard; onClick: () => void; testId: string; tone?: 'blue' | 'red' | 'slate' | 'violet'; disabled?: boolean }) {
   const toneClass = {
-    blue: 'bg-sky-400/10 text-sky-300',
-    red: 'bg-rose-400/10 text-rose-300',
-    slate: 'bg-white/[.06] text-slate-300',
-    violet: 'bg-violet-400/10 text-violet-300',
+    blue: 'bg-[#eaf7fc] text-[#1979a8]',
+    red: 'bg-[#fff1f0] text-[#c43d35]',
+    slate: 'bg-[#f0f4f6] text-[#60798a]',
+    violet: 'bg-[#f1efff] text-[#6552b8]',
   }[tone];
   return (
-    <button type="button" data-testid={testId} onClick={onClick} disabled={disabled} className="flex min-h-[74px] flex-col items-center justify-center gap-2 rounded-xl border border-white/[.07] bg-[#123553]/80 px-1.5 text-center text-[10px] font-bold text-white/90 transition hover:-translate-y-0.5 hover:border-white/15 hover:bg-[#174363] active:scale-[.98] disabled:opacity-45">
+    <button type="button" data-testid={testId} onClick={onClick} disabled={disabled} className="flex min-h-[74px] flex-col items-center justify-center gap-2 rounded-xl border border-[#dce8ee] bg-white px-1.5 text-center text-[10px] font-bold text-[#426579] shadow-[0_8px_22px_rgba(47,89,112,.07)] transition hover:-translate-y-0.5 hover:border-[#b9d9e6] hover:shadow-[0_12px_28px_rgba(47,89,112,.11)] active:scale-[.98] disabled:opacity-45">
       <span className={`flex h-8 w-8 items-center justify-center rounded-full ${toneClass}`}><Icon className="h-4 w-4" strokeWidth={1.8} /></span>
       <span>{label}</span>
     </button>
@@ -364,23 +364,23 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
 
   if (securityLoading || !security || !securityUnlocked) {
     return (
-      <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#061d33] px-4 pb-12 text-white sm:px-6">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#174d6c_0%,transparent_42%),linear-gradient(180deg,#071e34_0%,#0b2a45_65%,#0a2740_100%)]" />
+      <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#f3f8fb] px-4 pb-12 text-[#18384d] sm:px-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#dff3fb_0%,transparent_42%),linear-gradient(180deg,#f8fcfe_0%,#f3f8fb_65%,#edf5f8_100%)]" />
         <div className="relative mx-auto max-w-xl">
           <header className="py-4 sm:py-6">
-            <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-3.5 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white">
+            <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-[#cfe0e8] bg-white/80 px-3.5 py-2 text-xs font-bold text-[#426579] shadow-sm transition hover:border-[#9ec8db] hover:bg-white hover:text-[#18384d]">
               <ArrowLeft className="h-4 w-4" /> Retour à l’accueil
             </button>
           </header>
           {securityLoading ? (
-            <div className="mt-16 rounded-[1.75rem] border border-white/10 bg-white/[.05] p-8 text-center">
-              <ShieldCheck className="mx-auto h-9 w-9 animate-pulse text-sky-300" />
+            <div className="mt-16 rounded-[1.75rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.1)]">
+              <ShieldCheck className="mx-auto h-9 w-9 animate-pulse text-[#1979a8]" />
               <p className="mt-4 text-sm font-bold">Vérification de sécurité…</p>
             </div>
           ) : security ? (
             <CardsSecurityGate security={security} onSecurityChange={setSecurity} externalError={securityError} />
           ) : (
-            <div role="alert" className="mt-16 rounded-2xl border border-red-300/20 bg-red-400/10 p-5 text-sm text-red-100">
+            <div role="alert" className="mt-16 rounded-2xl border border-[#f3b7b0] bg-[#fff1f0] p-5 text-sm text-[#b42318]">
               {securityError || 'La protection Cartes est indisponible.'}
             </div>
           )}
@@ -390,60 +390,60 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
   }
 
   return (
-    <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#061d33] px-4 pb-12 text-white sm:px-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#174d6c_0%,transparent_42%),linear-gradient(180deg,#071e34_0%,#0b2a45_65%,#0a2740_100%)]" />
-      <div className="pointer-events-none absolute left-1/2 top-24 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full border border-white/[.025]" />
+    <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#f3f8fb] px-4 pb-12 text-[#18384d] sm:px-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#dff3fb_0%,transparent_42%),linear-gradient(180deg,#f8fcfe_0%,#f3f8fb_65%,#edf5f8_100%)]" />
+      <div className="pointer-events-none absolute left-1/2 top-24 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full border border-[#b9d9e6]/25" />
 
       <div className="relative mx-auto max-w-xl">
         <header className="py-4 sm:py-6">
-          <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-3.5 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white">
+          <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-[#cfe0e8] bg-white/80 px-3.5 py-2 text-xs font-bold text-[#426579] shadow-sm transition hover:border-[#9ec8db] hover:bg-white hover:text-[#18384d]">
             <ArrowLeft className="h-4 w-4" /> Retour à l’accueil
           </button>
         </header>
 
         <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-3">
           <div className="flex items-center gap-2">
-            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-sky-200/70">Espace cartes</p>
-             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black ${status === 'active' ? 'bg-emerald-400/15 text-emerald-300' : status === 'frozen' ? 'bg-rose-400/15 text-rose-200' : 'bg-white/10 text-white/65'}`}>
-               <span className={`h-1.5 w-1.5 rounded-full ${status === 'active' ? 'bg-emerald-300' : status === 'frozen' ? 'bg-rose-300' : 'bg-white/50'}`} /> {cardStatusLabel(status)}
+            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-[#1979a8]">Espace cartes</p>
+             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black ${status === 'active' ? 'bg-emerald-100 text-emerald-700' : status === 'frozen' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+               <span className={`h-1.5 w-1.5 rounded-full ${status === 'active' ? 'bg-emerald-500' : status === 'frozen' ? 'bg-rose-500' : 'bg-slate-400'}`} /> {cardStatusLabel(status)}
             </span>
           </div>
-           <h1 data-testid="heading-cards" className="mt-2 text-[2rem] font-black tracking-[-.045em] text-[#f1f8ff] sm:text-4xl">Ma carte</h1>
-           <p className="mt-1.5 max-w-sm text-sm leading-5 text-sky-50/80">Gérez votre carte, consultez votre solde et vos transactions en toute sécurité.</p>
+           <h1 data-testid="heading-cards" className="mt-2 text-[2rem] font-black tracking-[-.045em] text-[#18384d] sm:text-4xl">Ma carte</h1>
+           <p className="mt-1.5 max-w-sm text-sm leading-5 text-[#60798a]">Gérez votre carte, consultez votre solde et vos transactions en toute sécurité.</p>
         </motion.section>
 
         <motion.section initial={{ opacity: 0, scale: .98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: .08 }} className="mt-5">
           {loading ? (
-            <div data-testid="loading-card" className="aspect-[1.58/1] animate-pulse rounded-[1.35rem] border border-white/10 bg-white/10" />
+            <div data-testid="loading-card" className="aspect-[1.58/1] animate-pulse rounded-[1.35rem] border border-[#dce8ee] bg-white shadow-sm" />
           ) : card ? (
             <CardVisual card={card} clientName={clientName} frozen={status === 'frozen'} />
           ) : (
-            <div data-testid="empty-card" className="flex aspect-[1.58/1] flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-sky-200/25 bg-white/[.06] px-8 text-center">
+            <div data-testid="empty-card" className="flex aspect-[1.58/1] flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-[#b9d9e6] bg-white px-8 text-center shadow-[0_18px_45px_rgba(47,89,112,.08)]">
               <CardLogo className="mb-3 h-12 w-[74px]" />
               <p className="font-bold">Votre carte vous attend</p>
-              <p className="mt-1.5 text-xs leading-5 text-sky-100/55">Créez votre carte virtuelle Solution PAM en quelques étapes.</p>
+              <p className="mt-1.5 text-xs leading-5 text-[#718898]">Créez votre carte virtuelle Solution PAM en quelques étapes.</p>
             </div>
           )}
         </motion.section>
 
         {card && isUsable && (
-          <button type="button" data-testid="button-secure-view" onClick={() => { setSecureDetailsOpen((open) => !open); setDetailsError(null); }} disabled={busy} className="mx-auto mt-2.5 flex items-center gap-2 text-xs font-semibold text-sky-50/85 transition hover:text-white disabled:opacity-45">
+          <button type="button" data-testid="button-secure-view" onClick={() => { setSecureDetailsOpen((open) => !open); setDetailsError(null); }} disabled={busy} className="mx-auto mt-2.5 flex items-center gap-2 text-xs font-semibold text-[#1979a8] transition hover:text-[#12678f] disabled:opacity-45">
             <Eye className="h-4 w-4" /> {secureDetailsOpen ? 'Masquer les détails sécurisés' : 'Afficher les détails sécurisés'} <ArrowRight className="h-3.5 w-3.5" />
           </button>
         )}
 
         {card && isUsable && secureDetailsOpen && (
-          <section data-testid="panel-secure-details" className="mt-3 rounded-2xl border border-sky-200/15 bg-[#0d2c48]/95 p-4 shadow-lg shadow-[#031425]/20">
+          <section data-testid="panel-secure-details" className="mt-3 rounded-2xl border border-[#dce8ee] bg-white p-4 text-[#18384d] shadow-[0_18px_45px_rgba(47,89,112,.1)]">
             {!secureDetails ? (
               <form onSubmit={(event) => { event.preventDefault(); void revealSecureDetails(); }}>
                 <div className="flex items-start gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-sky-200"><ShieldCheck className="h-4 w-4" /></span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#b9dfef] bg-[#eaf7fc] text-[#1979a8]"><ShieldCheck className="h-4 w-4" /></span>
                   <div>
-                    <h2 className="text-sm font-black text-white">Détails de la carte</h2>
-                    <p className="mt-1 text-xs leading-5 text-sky-50/70">Pour protéger votre numéro, confirmez le code Cartes à 6 chiffres que vous avez créé.</p>
+                    <h2 className="text-sm font-black text-[#18384d]">Détails de la carte</h2>
+                    <p className="mt-1 text-xs leading-5 text-[#60798a]">Pour protéger votre numéro, confirmez le code Cartes à 6 chiffres que vous avez créé.</p>
                   </div>
                 </div>
-                <label className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-sky-100/65">
+                <label className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-[#60798a]">
                   Code Cartes
                   <input
                     data-testid="input-secure-details-pin"
@@ -455,12 +455,12 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
                     value={detailsPin}
                     onChange={(event) => setDetailsPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="••••••"
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#061d33] p-3 text-center font-mono text-lg tracking-[.45em] text-white outline-none transition focus:border-sky-400"
+                    className="mt-2 w-full rounded-xl border border-[#d7e4eb] bg-[#f8fbfd] p-3 text-center font-mono text-lg tracking-[.45em] text-[#18384d] outline-none transition placeholder:text-[#9db1bd] focus:border-[#4ba4cf] focus:ring-2 focus:ring-[#4ba4cf]/15"
                     aria-label="Code Cartes à 6 chiffres"
                   />
                 </label>
-                {detailsError && <p data-testid="error-secure-details" role="alert" className="mt-2 text-xs font-semibold text-red-200">{detailsError}</p>}
-                <button type="submit" data-testid="button-reveal-secure-details" disabled={busy || detailsPin.length !== 6} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168ac4] px-4 text-sm font-bold text-white transition hover:bg-[#21a0df] disabled:opacity-45">
+                {detailsError && <p data-testid="error-secure-details" role="alert" className="mt-2 text-xs font-semibold text-[#b42318]">{detailsError}</p>}
+                <button type="submit" data-testid="button-reveal-secure-details" disabled={busy || detailsPin.length !== 6} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1979a8] px-4 text-sm font-bold text-white transition hover:bg-[#12678f] disabled:opacity-45">
                   <Eye className="h-4 w-4" /> {busy ? 'Vérification…' : 'Révéler les détails'}
                 </button>
               </form>
@@ -468,54 +468,54 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[.14em] text-sky-100/60">Détails sécurisés</p>
-                    <h2 className="mt-1 text-base font-black text-white">Informations de la carte</h2>
+                    <p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#1979a8]">Détails sécurisés</p>
+                    <h2 className="mt-1 text-base font-black text-[#18384d]">Informations de la carte</h2>
                   </div>
-                  <button type="button" data-testid="button-hide-secure-details" onClick={() => { setSecureDetails(null); setDetailsError(null); }} className="rounded-lg px-2 py-1 text-xs font-bold text-sky-100/65 transition hover:bg-white/10 hover:text-white">Masquer</button>
+                  <button type="button" data-testid="button-hide-secure-details" onClick={() => { setSecureDetails(null); setDetailsError(null); }} className="rounded-lg px-2 py-1 text-xs font-bold text-[#60798a] transition hover:bg-[#edf5f8] hover:text-[#18384d]">Masquer</button>
                 </div>
                 <div className="mt-4 space-y-2">
                    {secureDetails.cardNumber && (
-                     <div className="rounded-xl border border-sky-200/15 bg-[#061d33] p-3">
+                     <div className="rounded-xl border border-[#dce8ee] bg-[#f8fbfd] p-3">
                        <div className="flex items-center justify-between gap-3">
-                         <p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Numéro de carte</p>
-                         <button type="button" data-testid="button-copy-card-number" aria-label="Copier le numéro de carte" onClick={() => void copyCardNumber()} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-sky-300/25 bg-sky-400/15 px-3 py-2 text-[10px] font-black text-sky-100 transition hover:bg-sky-400/25">
+                          <p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#60798a]">Numéro de carte</p>
+                          <button type="button" data-testid="button-copy-card-number" aria-label="Copier le numéro de carte" onClick={() => void copyCardNumber()} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#9ed4e7] bg-[#eaf7fc] px-3 py-2 text-[10px] font-black text-[#1979a8] transition hover:bg-[#d9f2fa]">
                            {copiedCardNumber ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copiedCardNumber ? 'Copié' : 'Copier le numéro'}
                          </button>
                       </div>
-                      <p data-testid="text-secure-card-number" className="mt-2 break-all font-mono text-lg font-bold tracking-[.12em] text-white">{secureDetails.cardNumber.replace(/(.{4})/g, '$1 ').trim()}</p>
+                       <p data-testid="text-secure-card-number" className="mt-2 break-all font-mono text-lg font-bold tracking-[.12em] text-[#18384d]">{secureDetails.cardNumber.replace(/(.{4})/g, '$1 ').trim()}</p>
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-2">
-                    {secureDetails.expiry && <div className="rounded-xl border border-white/[.08] bg-[#061d33] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Expiration</p><p data-testid="text-secure-card-expiry" className="mt-1.5 font-mono text-sm font-bold text-white">{secureDetails.expiry}</p></div>}
-                    {secureDetails.cvv && <div className="rounded-xl border border-white/[.08] bg-[#061d33] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">CVV</p><p data-testid="text-secure-card-cvv" className="mt-1.5 font-mono text-sm font-bold text-white">{secureDetails.cvv}</p></div>}
+                     {secureDetails.expiry && <div className="rounded-xl border border-[#dce8ee] bg-[#f8fbfd] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#60798a]">Expiration</p><p data-testid="text-secure-card-expiry" className="mt-1.5 font-mono text-sm font-bold text-[#18384d]">{secureDetails.expiry}</p></div>}
+                     {secureDetails.cvv && <div className="rounded-xl border border-[#dce8ee] bg-[#f8fbfd] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#60798a]">CVV</p><p data-testid="text-secure-card-cvv" className="mt-1.5 font-mono text-sm font-bold text-[#18384d]">{secureDetails.cvv}</p></div>}
                   </div>
-                   {(secureDetails.cardNumber || !secureDetails.secureViewUrl) && (secureDetails.cardholderName || secureDetails.brand) && <div className="flex items-center justify-between rounded-xl border border-white/[.08] bg-[#061d33] p-3"><div><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Titulaire</p><p data-testid="text-secure-card-holder" className="mt-1.5 text-sm font-bold uppercase text-white">{secureDetails.cardholderName || clientName}</p></div><span className="text-sm font-black italic text-white/80">{secureDetails.brand || card.brand}</span></div>}
+                    {(secureDetails.cardNumber || !secureDetails.secureViewUrl) && (secureDetails.cardholderName || secureDetails.brand) && <div className="flex items-center justify-between rounded-xl border border-[#dce8ee] bg-[#f8fbfd] p-3"><div><p className="text-[9px] font-bold uppercase tracking-[.14em] text-[#60798a]">Titulaire</p><p data-testid="text-secure-card-holder" className="mt-1.5 text-sm font-bold uppercase text-[#18384d]">{secureDetails.cardholderName || clientName}</p></div><span className="text-sm font-black italic text-[#426579]">{secureDetails.brand || card.brand}</span></div>}
                 </div>
                 {!secureDetails.cardNumber && secureDetails.secureViewUrl && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-white">
                     <iframe data-testid="iframe-secure-view-inline" title="Vue sécurisée de la carte" src={secureDetails.secureViewUrl} className="h-[28rem] w-full border-0" referrerPolicy="no-referrer" sandbox="allow-scripts allow-forms allow-same-origin" />
                   </div>
                 )}
-                {!secureDetails.cardNumber && !secureDetails.secureViewUrl && <p className="mt-3 text-xs text-amber-100">Les détails complets ne sont pas disponibles pour le moment.</p>}
-                {detailsError && <p data-testid="error-secure-details" role="alert" className="mt-3 text-xs font-semibold text-red-200">{detailsError}</p>}
+                 {!secureDetails.cardNumber && !secureDetails.secureViewUrl && <p className="mt-3 text-xs text-[#a97720]">Les détails complets ne sont pas disponibles pour le moment.</p>}
+                 {detailsError && <p data-testid="error-secure-details" role="alert" className="mt-3 text-xs font-semibold text-[#b42318]">{detailsError}</p>}
               </div>
             )}
           </section>
         )}
 
-        <section data-testid="panel-card-balance" className="mt-4 rounded-2xl border border-white/[.08] bg-[#103450]/90 shadow-lg shadow-[#031425]/20">
-          <div className="flex items-center justify-between border-b border-white/[.07] px-4 py-3.5">
+        <section data-testid="panel-card-balance" className="mt-4 rounded-2xl border border-[#dce8ee] bg-white shadow-[0_16px_38px_rgba(47,89,112,.09)]">
+          <div className="flex items-center justify-between border-b border-[#edf2f4] px-4 py-3.5">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-sky-100/55">Solde disponible</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-[#60798a]">Solde disponible</p>
               <p data-testid="text-card-balance" className="mt-1 text-xl font-black tracking-[-.02em]">{formatAmount(card?.balance || 0, card?.currency || 'USD')}</p>
             </div>
-            <ArrowRight className="h-5 w-5 text-white/45" />
+            <ArrowRight className="h-5 w-5 text-[#9db1bd]" />
           </div>
           <div className="px-4 py-3.5">
-            <div className="flex items-center justify-between text-[10px] text-sky-100/55"><span>Limite mensuelle</span><span data-testid="text-card-limit" className="font-semibold text-sky-100/75">{limit ? `${formatAmount(spent, card?.currency)} / ${formatAmount(limit, card?.currency)}` : 'Non définie'}</span></div>
+            <div className="flex items-center justify-between text-[10px] text-[#718898]"><span>Limite mensuelle</span><span data-testid="text-card-limit" className="font-semibold text-[#426579]">{limit ? `${formatAmount(spent, card?.currency)} / ${formatAmount(limit, card?.currency)}` : 'Non définie'}</span></div>
             <div className="mt-2 flex items-center gap-2">
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[.08]"><div data-testid="progress-card-limit" className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div>
-              <span className="w-7 text-right text-[10px] font-semibold text-sky-100/55">{Math.round(progress)}%</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#e7eff2]"><div data-testid="progress-card-limit" className="h-full rounded-full bg-[#24a978] transition-all" style={{ width: `${progress}%` }} /></div>
+              <span className="w-7 text-right text-[10px] font-semibold text-[#718898]">{Math.round(progress)}%</span>
             </div>
           </div>
         </section>
@@ -529,13 +529,13 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
           </section>
         )}
 
-        {(error || actionError) && <div data-testid="error-card-action" role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-red-300/20 bg-red-400/10 p-3 text-xs leading-5 text-red-100"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />{error || actionError}</div>}
-        {notice && <div data-testid="notice-card-action" className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-xs leading-5 text-emerald-100"><Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />{notice}</div>}
+        {(error || actionError) && <div data-testid="error-card-action" role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-[#f3b7b0] bg-[#fff1f0] p-3 text-xs leading-5 text-[#b42318]"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#d5534a]" />{error || actionError}</div>}
+        {notice && <div data-testid="notice-card-action" className="mt-3 flex items-start gap-2 rounded-xl border border-[#a9ddc4] bg-[#effaf4] p-3 text-xs leading-5 text-[#16805a]"><Check className="mt-0.5 h-4 w-4 shrink-0 text-[#24a978]" />{notice}</div>}
 
         {!card && snapshot?.configured !== false && (status === 'none' || status === 'failed' || status === 'kyc_required') && (
-          <section className="mt-3 rounded-2xl border border-white/[.08] bg-white/[.05] p-4">
-            <p className="text-xs font-bold uppercase tracking-[.14em] text-sky-100/55">{meta.label}</p>
-            <p data-testid="text-card-status-detail" className="mt-1.5 text-xs leading-5 text-sky-100/65">{meta.detail}</p>
+          <section className="mt-3 rounded-2xl border border-[#dce8ee] bg-white p-4 shadow-[0_14px_34px_rgba(47,89,112,.08)]">
+            <p className="text-xs font-bold uppercase tracking-[.14em] text-[#60798a]">{meta.label}</p>
+            <p data-testid="text-card-status-detail" className="mt-1.5 text-xs leading-5 text-[#718898]">{meta.detail}</p>
             <div className="mt-3">
               <ActionButton testId="button-request-card" onClick={() => { setActionError(null); if (customerApproved) void issueCard(); else setKycOpen(true); }} disabled={busy}>
                 <ShieldCheck className="h-4 w-4" /> {customerApproved ? 'Créer ma carte Visa' : snapshot?.customer ? 'Mettre à jour mon KYC' : 'Commencer ma vérification'}
@@ -545,13 +545,13 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
         )}
 
         {card && (
-          <section data-testid="panel-card-history" className="mt-3 overflow-hidden rounded-2xl border border-white/[.08] bg-[#103450]/90">
-            <div className="flex items-center justify-between border-b border-white/[.07] px-4 py-3.5">
-              <p className="text-xs font-bold text-white/85">Transactions récentes</p>
-              <span className="text-[10px] font-semibold text-sky-300">{transactions.length ? `${transactions.length} opération${transactions.length > 1 ? 's' : ''}` : 'Aucune'}</span>
+          <section data-testid="panel-card-history" className="mt-3 overflow-hidden rounded-2xl border border-[#dce8ee] bg-white shadow-[0_16px_38px_rgba(47,89,112,.09)]">
+            <div className="flex items-center justify-between border-b border-[#edf2f4] px-4 py-3.5">
+              <p className="text-xs font-bold text-[#18384d]">Transactions récentes</p>
+              <span className="text-[10px] font-semibold text-[#1979a8]">{transactions.length ? `${transactions.length} opération${transactions.length > 1 ? 's' : ''}` : 'Aucune'}</span>
             </div>
             {transactions.length ? (
-              <div className="divide-y divide-white/[.06]">
+              <div className="divide-y divide-[#edf2f4]">
                 {transactions.map((tx) => {
                   const txMeta = transactionMeta(tx);
                   const TxIcon = txMeta.icon;
@@ -559,48 +559,48 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
                     <div data-testid={`row-card-transaction-${tx.id}`} key={tx.id} className="flex items-center gap-3 px-4 py-3">
                       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${txMeta.tone}`}><TxIcon className="h-4 w-4" /></span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-bold text-white/90">{tx.description || (tx.type === 'deposit' ? 'Recharge de carte' : tx.type === 'withdrawal' ? 'Retrait vers Wallet' : 'Paiement')}</p>
-                        <p className="mt-0.5 text-[10px] text-sky-100/45">{formatDate(tx.createdAt)} · <span className="text-emerald-300/80">{tx.status}</span></p>
+                        <p className="truncate text-xs font-bold text-[#29485d]">{tx.description || (tx.type === 'deposit' ? 'Recharge de carte' : tx.type === 'withdrawal' ? 'Retrait vers Wallet' : 'Paiement')}</p>
+                        <p className="mt-0.5 text-[10px] text-[#8196a3]">{formatDate(tx.createdAt)} · <span className="text-[#16805a]">{tx.status}</span></p>
                       </div>
-                      <span className={`shrink-0 text-xs font-bold ${txMeta.positive ? 'text-emerald-300' : 'text-white/85'}`}>{txMeta.positive ? '+' : '−'}{formatAmount(tx.amount, tx.currency)}</span>
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-white/35" />
+                      <span className={`shrink-0 text-xs font-bold ${txMeta.positive ? 'text-[#16805a]' : 'text-[#426579]'}`}>{txMeta.positive ? '+' : '−'}{formatAmount(tx.amount, tx.currency)}</span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#9db1bd]" />
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <p data-testid="empty-card-history" className="px-4 py-6 text-center text-xs text-sky-100/45">Aucune opération récente.</p>
+              <p data-testid="empty-card-history" className="px-4 py-6 text-center text-xs text-[#8196a3]">Aucune opération récente.</p>
             )}
           </section>
         )}
 
         {card && (
-          <section className="mt-3 rounded-2xl border border-white/[.08] bg-white/[.04] p-4">
+          <section className="mt-3 rounded-2xl border border-[#dce8ee] bg-white p-4 shadow-[0_14px_34px_rgba(47,89,112,.08)]">
             <div className="flex items-start justify-between gap-3">
-              <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-sky-100/45">Statut de la carte</p><p data-testid="status-card" className="mt-1 text-sm font-bold text-white/90">{meta.label}</p></div>
-              <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[9px] font-bold text-emerald-300">{snapshot?.stale ? 'Dernière mise à jour' : 'Protégée'}</span>
+              <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-[#60798a]">Statut de la carte</p><p data-testid="status-card" className="mt-1 text-sm font-bold text-[#29485d]">{meta.label}</p></div>
+              <span className="rounded-full bg-[#effaf4] px-2 py-1 text-[9px] font-bold text-[#16805a]">{snapshot?.stale ? 'Dernière mise à jour' : 'Protégée'}</span>
             </div>
-            <p data-testid="text-card-status-detail" className="mt-2 text-xs leading-5 text-sky-100/55">{meta.detail}</p>
+            <p data-testid="text-card-status-detail" className="mt-2 text-xs leading-5 text-[#718898]">{meta.detail}</p>
           </section>
         )}
 
-        <details data-testid="panel-heyqo-diagnostics" className="mt-3 rounded-2xl border border-white/[.08] bg-white/[.035] p-4">
-          <summary className="flex cursor-pointer list-none items-center justify-between text-[10px] font-bold uppercase tracking-[.14em] text-sky-100/45">
-            <span>Informations de sécurité</span><ShieldCheck className="h-4 w-4 text-emerald-300/70" />
+        <details data-testid="panel-heyqo-diagnostics" className="mt-3 rounded-2xl border border-[#dce8ee] bg-white/75 p-4 shadow-[0_12px_30px_rgba(47,89,112,.06)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-[10px] font-bold uppercase tracking-[.14em] text-[#60798a]">
+            <span>Informations de sécurité</span><ShieldCheck className="h-4 w-4 text-[#24a978]" />
           </summary>
-          <p className="mt-3 text-xs leading-5 text-sky-100/45">Aucun token, document, PAN ou CVV n’est affiché ici.</p>
+          <p className="mt-3 text-xs leading-5 text-[#8196a3]">Aucun token, document, PAN ou CVV n’est affiché ici.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {(snapshot?.diagnostics || []).map((item) => <div key={item.step} className="rounded-xl border border-white/[.06] bg-black/10 p-3"><p className="text-[9px] font-bold uppercase tracking-[.12em] text-sky-100/35">{item.step.replaceAll('_', ' ')}</p><p className={`mt-1.5 text-xs font-bold ${['success', 'approved', 'active'].includes(item.status) ? 'text-emerald-300' : item.status === 'error' || item.status === 'rejected' ? 'text-red-300' : 'text-amber-200'}`}>{item.status}</p>{item.detail && <p className="mt-1 break-words text-[10px] leading-4 text-sky-100/40">{item.detail}</p>}</div>)}
+            {(snapshot?.diagnostics || []).map((item) => <div key={item.step} className="rounded-xl border border-[#e3edf1] bg-[#f8fbfd] p-3"><p className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8196a3]">{item.step.replaceAll('_', ' ')}</p><p className={`mt-1.5 text-xs font-bold ${['success', 'approved', 'active'].includes(item.status) ? 'text-[#16805a]' : item.status === 'error' || item.status === 'rejected' ? 'text-[#c43d35]' : 'text-[#a97720]'}`}>{item.status}</p>{item.detail && <p className="mt-1 break-words text-[10px] leading-4 text-[#8196a3]">{item.detail}</p>}</div>)}
           </div>
-          {!snapshot?.webhookConfigured && <p data-testid="warning-heyqo-webhook" className="mt-3 flex gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-[10px] leading-4 text-amber-100"><TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />Le secret webhook HeyQO n’est pas encore configuré. Actualisez le statut pour relire les données Sandbox.</p>}
+          {!snapshot?.webhookConfigured && <p data-testid="warning-heyqo-webhook" className="mt-3 flex gap-2 rounded-xl border border-[#f2d9a0] bg-[#fff8e8] p-3 text-[10px] leading-4 text-[#8a6517]"><TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />Le secret webhook HeyQO n’est pas encore configuré. Actualisez le statut pour relire les données Sandbox.</p>}
         </details>
       </div>
 
       {amountMode && createPortal(
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#031321]/85 p-3 backdrop-blur-sm sm:items-center">
-          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-white/10 bg-[#103450] p-5 text-white shadow-2xl">
-            <div className="flex justify-between"><h2 className="text-lg font-black">{amountMode === 'deposit' ? 'Recharger depuis Wallet' : 'Retirer vers Wallet'}</h2><button type="button" aria-label="Fermer" data-testid="button-close-money-modal" onClick={() => setAmountMode(null)} className="text-white/65"><X className="h-5 w-5" /></button></div>
-            <label className="mt-5 block text-xs font-semibold text-sky-100/65">Montant ({card?.currency || 'USD'})<input data-testid="input-card-amount" type="number" min="1" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#061d33] p-3 text-lg text-white outline-none focus:border-sky-400" /></label>
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#18384d]/25 p-3 backdrop-blur-sm sm:items-center">
+          <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-[#dce8ee] bg-white p-5 text-[#18384d] shadow-2xl">
+            <div className="flex justify-between"><h2 className="text-lg font-black">{amountMode === 'deposit' ? 'Recharger depuis Wallet' : 'Retirer vers Wallet'}</h2><button type="button" aria-label="Fermer" data-testid="button-close-money-modal" onClick={() => setAmountMode(null)} className="text-[#60798a] transition hover:text-[#18384d]"><X className="h-5 w-5" /></button></div>
+            <label className="mt-5 block text-xs font-semibold text-[#60798a]">Montant ({card?.currency || 'USD'})<input data-testid="input-card-amount" type="number" min="1" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-2 w-full rounded-xl border border-[#d7e4eb] bg-[#f8fbfd] p-3 text-lg text-[#18384d] outline-none focus:border-[#4ba4cf] focus:ring-2 focus:ring-[#4ba4cf]/15" /></label>
             <div className="mt-5"><ActionButton testId="button-submit-card-money" onClick={() => void submitMoney()} disabled={busy}>{busy ? 'Traitement…' : 'Confirmer l’opération'}</ActionButton></div>
           </div>
         </div>,
