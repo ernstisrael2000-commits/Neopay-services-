@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type Dispatch, type Rea
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, ArrowRight, Check, FileCheck2, FileText, LockKeyhole, ShieldCheck, Upload, X } from 'lucide-react';
+import { fileToBase64 } from '../../lib/fileToBase64';
 
 export type HeyQOGender = 'male' | 'female' | 'other' | '';
 export type HeyQODocumentType = 'NATIONAL_ID' | 'PASSPORT' | 'DRIVERS_LICENSE' | '';
@@ -16,13 +17,16 @@ export interface HeyQOKycValue {
   documentNumber: string;
   taxIdNumber: string;
   documentFrontFile: HeyQOFile;
+  documentFrontBase64?: string;
   documentBackFile?: HeyQOFile;
+  documentBackBase64?: string;
   addressStreet: string;
   addressCity: string;
   addressState: string;
   addressPostalCode: string;
   addressCountry: string;
   proofOfAddressFile: HeyQOFile;
+  proofOfAddressBase64?: string;
   employmentStatus: HeyQOEmploymentStatus;
   occupation: string;
   primaryPurpose: string;
@@ -61,7 +65,7 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 
 const inputClass = 'mt-2 min-h-12 w-full rounded-2xl border border-[#f8edd5]/12 bg-[#17151a]/80 px-4 text-[15px] text-[#f8edd5] outline-none transition-colors placeholder:text-[#f8edd5]/25 focus:border-[#d7b879]/75 focus:ring-2 focus:ring-[#d7b879]/10';
 
-function UploadField({ label, value, onChange, onInvalidFile, optional = false, testId }: { label: string; value: HeyQOFile | undefined; onChange: (file: File | null) => void; onInvalidFile?: () => void; optional?: boolean; testId: string }) {
+function UploadField({ label, value, onChange, onInvalidFile, optional = false, testId }: { label: string; value: HeyQOFile | undefined; onChange: (file: File | null) => void | Promise<void>; onInvalidFile?: () => void; optional?: boolean; testId: string }) {
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
     if (!file) return;
@@ -71,7 +75,7 @@ function UploadField({ label, value, onChange, onInvalidFile, optional = false, 
       event.target.value = '';
       return;
     }
-    onChange(file);
+    void onChange(file);
   };
   return <div className="rounded-2xl border border-dashed border-[#d7b879]/30 bg-[#d7b879]/[.035] p-4 transition-colors hover:border-[#d7b879]/65">
     <div className="flex items-start gap-3"><div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#d7b879]/10 text-[#d7b879]"><Upload className="h-4 w-4" /></div><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-[#f8edd5]">{label} {optional && <span className="font-normal text-[#f8edd5]/35">· optionnel</span>}</p><p className="mt-1 text-[11px] text-[#f8edd5]/40">JPG ou PNG · 4 Mo maximum</p>{value ? <div data-testid={`${testId}-name`} className="mt-3 flex items-center gap-2 truncate rounded-lg bg-[#17151a]/70 px-3 py-2 text-xs text-[#d7b879]"><FileCheck2 className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{value.name}</span></div> : <p className="mt-3 text-xs text-[#f8edd5]/35">Aucun fichier sélectionné</p>}</div><label data-testid={testId} className="cursor-pointer rounded-xl border border-[#f8edd5]/15 px-3 py-2 text-xs font-semibold text-[#f8edd5]/75 transition-colors hover:border-[#d7b879]/60 hover:text-[#d7b879]"><span>{value ? 'Remplacer' : 'Choisir'}</span><input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={handleChange} /></label></div>
@@ -97,6 +101,22 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
   }, [busy, onClose]);
 
   const update = (key: keyof HeyQOKycValue, next: string | boolean | File | null) => setValue((current) => ({ ...current, [key]: next }));
+  const cacheFile = async (
+    fileKey: 'documentFrontFile' | 'documentBackFile' | 'proofOfAddressFile',
+    base64Key: 'documentFrontBase64' | 'documentBackBase64' | 'proofOfAddressBase64',
+    file: File | null,
+  ) => {
+    update(fileKey, file);
+    update(base64Key, null);
+    if (!file) return;
+    try {
+      const encoded = await fileToBase64(file);
+      update(base64Key, encoded || null);
+    } catch (cause: any) {
+      update(fileKey, null);
+      setFileError(cause?.message || `Impossible de lire ${file.name}.`);
+    }
+  };
   const current = steps[step];
   const progress = ((step + 1) / steps.length) * 100;
   const validate = () => {
@@ -129,8 +149,8 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
       <Field label="Numéro du document"><input data-testid="input-documentNumber" className={inputClass} value={value.documentNumber} onChange={(event) => update('documentNumber', event.target.value)} placeholder="Ex. 123456789" /></Field>
       <Field label="NIF / numéro fiscal" hint="Utilisé pour confirmer votre identité fiscale."><input data-testid="input-taxIdNumber" className={inputClass} value={value.taxIdNumber} onChange={(event) => update('taxIdNumber', event.target.value)} placeholder="Votre numéro fiscal" /></Field>
     </div>,
-    <div className="space-y-4"><UploadField label="Recto du document" value={value.documentFrontFile} onChange={(file) => { setFileError(''); update('documentFrontFile', file); }} onInvalidFile={() => setFileError('Ce fichier doit être au format JPG ou PNG et ne pas dépasser 4 Mo.')} testId="input-documentFrontFile" /><UploadField label="Verso du document" value={value.documentBackFile} onChange={(file) => { setFileError(''); update('documentBackFile', file); }} onInvalidFile={() => setFileError('Ce fichier doit être au format JPG ou PNG et ne pas dépasser 4 Mo.')} optional testId="input-documentBackFile" /><div className="flex gap-3 rounded-2xl border border-[#f8edd5]/8 bg-[#f8edd5]/[.035] p-4 text-xs leading-5 text-[#f8edd5]/48"><FileText className="h-4 w-4 shrink-0 text-[#d7b879]" /> Gardez les quatre coins visibles. Les photos floues peuvent retarder la vérification.</div></div>,
-    <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><Field label="Adresse"><input data-testid="input-addressStreet" className={inputClass} value={value.addressStreet} onChange={(event) => update('addressStreet', event.target.value)} placeholder="Rue et numéro" /></Field><Field label="Ville"><input data-testid="input-addressCity" className={inputClass} value={value.addressCity} onChange={(event) => update('addressCity', event.target.value)} placeholder="Port-au-Prince" /></Field><Field label="Département / État"><input data-testid="input-addressState" className={inputClass} value={value.addressState} onChange={(event) => update('addressState', event.target.value)} placeholder="Ouest" /></Field><Field label="Code postal"><input data-testid="input-addressPostalCode" className={inputClass} value={value.addressPostalCode} onChange={(event) => update('addressPostalCode', event.target.value)} placeholder="HT6110" /></Field><Field label="Pays"><input data-testid="input-addressCountry" className={inputClass} value={value.addressCountry} onChange={(event) => update('addressCountry', event.target.value)} placeholder="HT" /></Field></div><UploadField label="Justificatif de domicile" value={value.proofOfAddressFile} onChange={(file) => { setFileError(''); update('proofOfAddressFile', file); }} onInvalidFile={() => setFileError('Ce fichier doit être au format JPG ou PNG et ne pas dépasser 4 Mo.')} testId="input-proofOfAddressFile" /></div>,
+    <div className="space-y-4"><UploadField label="Recto du document" value={value.documentFrontFile} onChange={(file) => { setFileError(''); return cacheFile('documentFrontFile', 'documentFrontBase64', file); }} onInvalidFile={() => setFileError('Ce fichier doit être au format JPG ou PNG et ne pas dépasser 4 Mo.')} testId="input-documentFrontFile" /><UploadField label="Verso du document" value={value.documentBackFile} onChange={(file) => { setFileError(''); return cacheFile('documentBackFile', 'documentBackBase64', file); }} onInvalidFile={() => setFileError('Ce fichier doit être au format JPG ou PNG et ne pas dépasser 4 Mo.')} optional testId="input-documentBackFile" /><div className="flex gap-3 rounded-2xl border border-[#f8edd5]/8 bg-[#f8edd5]/[.035] p-4 text-xs leading-5 text-[#f8edd5]/48"><FileText className="h-4 w-4 shrink-0 text-[#d7b879]" /> Gardez les quatre coins visibles. Les photos floues peuvent retarder la vérification.</div></div>,
+    <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><Field label="Adresse"><input data-testid="input-addressStreet" className={inputClass} value={value.addressStreet} onChange={(event) => update('addressStreet', event.target.value)} placeholder="Rue et numéro" /></Field><Field label="Ville"><input data-testid="input-addressCity" className={inputClass} value={value.addressCity} onChange={(event) => update('addressCity', event.target.value)} placeholder="Port-au-Prince" /></Field><Field label="Département / État"><input data-testid="input-addressState" className={inputClass} value={value.addressState} onChange={(event) => update('addressState', event.target.value)} placeholder="Ouest" /></Field><Field label="Code postal"><input data-testid="input-addressPostalCode" className={inputClass} value={value.addressPostalCode} onChange={(event) => update('addressPostalCode', event.target.value)} placeholder="HT6110" /></Field><Field label="Pays"><input data-testid="input-addressCountry" className={inputClass} value={value.addressCountry} onChange={(event) => update('addressCountry', event.target.value)} placeholder="HT" /></Field></div><UploadField label="Justificatif de domicile" value={value.proofOfAddressFile} onChange={(file) => { setFileError(''); return cacheFile('proofOfAddressFile', 'proofOfAddressBase64', file); }} onInvalidFile={() => setFileError('Ce fichier doit être au format JPG ou PNG et ne pas dépasser 4 Mo.')} testId="input-proofOfAddressFile" /></div>,
     <div className="grid gap-4 sm:grid-cols-2"><Field label="Situation professionnelle"><select data-testid="select-employmentStatus" className={inputClass} value={value.employmentStatus} onChange={(event) => valueFor(event, setValue, 'employmentStatus')}><option value="">Sélectionner</option>{selectOptions.employmentStatus.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field><Field label="Code profession"><input data-testid="input-occupation" className={inputClass} inputMode="numeric" value={value.occupation} onChange={(event) => update('occupation', event.target.value)} placeholder="Ex. 151252" /></Field><Field label="Objectif principal"><select data-testid="select-primaryPurpose" className={inputClass} value={value.primaryPurpose} onChange={(event) => valueFor(event, setValue, 'primaryPurpose')}><option value="">Sélectionner</option><option value="personal_or_living_expenses">Dépenses personnelles</option><option value="payments_to_friends_or_family_abroad">Paiements à des proches à l’étranger</option></select></Field><Field label="Source des fonds"><select data-testid="select-sourceOfFunds" className={inputClass} value={value.sourceOfFunds} onChange={(event) => valueFor(event, setValue, 'sourceOfFunds')}><option value="">Sélectionner</option><option value="salary">Salaire</option><option value="savings">Épargne</option><option value="company_funds">Fonds d’entreprise</option></select></Field><Field label="Revenus mensuels attendus"><select data-testid="select-expectedMonthlyPay" className={inputClass} value={value.expectedMonthlyPay} onChange={(event) => valueFor(event, setValue, 'expectedMonthlyPay')}><option value="">Sélectionner</option><option value="0_4999">0 à 4 999</option><option value="5000_9999">5 000 à 9 999</option></select></Field></div>,
     <div className="space-y-5"><div className="rounded-2xl border border-[#d7b879]/20 bg-[#d7b879]/[.06] p-5"><div className="flex gap-3"><ShieldCheck className="h-5 w-5 shrink-0 text-[#d7b879]" /><div><p className="font-semibold text-[#f8edd5]">Vos données restent protégées</p><p className="mt-2 text-sm leading-6 text-[#f8edd5]/50">Solutionpam transmet ces informations à HeyQO uniquement pour vérifier votre identité et évaluer votre demande de carte.</p></div></div></div><label data-testid="label-consent" className="flex cursor-pointer gap-3 text-sm leading-6 text-[#f8edd5]/70"><input data-testid="input-consent" type="checkbox" checked={value.consent} onChange={(event) => update('consent', event.target.checked)} className="mt-1 h-4 w-4 accent-[#d7b879]" /><span>J’autorise la vérification de mon identité et confirme que les informations fournies sont exactes.</span></label><div className="grid grid-cols-2 gap-3 border-t border-[#f8edd5]/8 pt-4 text-xs text-[#f8edd5]/45"><span>Date de naissance<br /><strong className="text-[#f8edd5]/75">{value.dateOfBirth || '—'}</strong></span><span>Document<br /><strong className="text-[#f8edd5]/75">{value.documentNumber || '—'}</strong></span><span>Adresse<br /><strong className="text-[#f8edd5]/75">{value.addressCity || '—'}</strong></span><span>Recto reçu<br /><strong className="text-[#d7b879]">{value.documentFrontFile ? 'Oui' : '—'}</strong></span></div></div>,
   ][step];

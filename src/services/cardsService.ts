@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/apiFetch';
+import { fileToBase64 } from '../lib/fileToBase64';
 import type { HeyQOCard, HeyQOCardTransaction, HeyQOCustomer } from '../types';
 
 export interface CardsSnapshot {
@@ -38,55 +39,23 @@ export const getCards = () => apiFetch<CardsSnapshot>('/api/client/cards');
 export const createHeyQOCard = (brand: 'visa' | 'mastercard', idempotencyKey?: string) =>
   post<CreateCardResult>('/api/client/cards', { brand }, idempotencyKey, 60_000);
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
-}
-
-async function fileToBase64(file: File | null | undefined): Promise<string | undefined> {
-  if (!file) return undefined;
-
-  // Android browsers can expose a valid selected File while failing
-  // FileReader.readAsDataURL for files returned by the document picker.
-  // Reading the bytes directly is more reliable and avoids retaining a data
-  // URL longer than necessary. The FileReader path remains as a fallback for
-  // older WebViews.
-  try {
-    if (typeof file.arrayBuffer === 'function') {
-      return bytesToBase64(new Uint8Array(await file.arrayBuffer()));
-    }
-  } catch {
-    // Try the compatibility path below before reporting a real read failure.
-  }
-
-  if (typeof FileReader !== 'undefined') {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error(`Impossible de lire ${file.name}. Vérifiez que le fichier est toujours disponible, puis réessayez.`));
-      reader.onload = () => {
-        const result = String(reader.result || '');
-        resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result);
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  throw new Error(`Impossible de lire ${file.name}. Vérifiez que le fichier est toujours disponible, puis réessayez.`);
-}
-
 export async function submitHeyQOCustomerKyc(
   value: Record<string, string | boolean | File | null | undefined>,
   idempotencyKey?: string,
 ) {
-  const { documentFrontFile, documentBackFile, proofOfAddressFile, ...fields } = value;
+  const {
+    documentFrontFile,
+    documentBackFile,
+    proofOfAddressFile,
+    documentFrontBase64: cachedDocumentFrontBase64,
+    documentBackBase64: cachedDocumentBackBase64,
+    proofOfAddressBase64: cachedProofOfAddressBase64,
+    ...fields
+  } = value;
   const [documentFrontBase64, documentBackBase64, proofOfAddressBase64] = await Promise.all([
-    fileToBase64(documentFrontFile as File | null),
-    fileToBase64(documentBackFile as File | null),
-    fileToBase64(proofOfAddressFile as File | null),
+    cachedDocumentFrontBase64 as string | undefined || fileToBase64(documentFrontFile as File | null),
+    cachedDocumentBackBase64 as string | undefined || fileToBase64(documentBackFile as File | null),
+    cachedProofOfAddressBase64 as string | undefined || fileToBase64(proofOfAddressFile as File | null),
   ]);
   return post<{
     success: boolean;
