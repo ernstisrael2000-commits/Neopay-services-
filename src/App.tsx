@@ -338,7 +338,7 @@ function AppInner() {
           pathname={view === 'seo' && seoPath ? seoPath : PUBLIC_VIEW_PATHS[view] || window.location.pathname}
           indexable={view === 'seo' || (view !== 'cards' && Boolean(PUBLIC_VIEW_PATHS[view]))}
         />
-        {view !== 'formations' && (
+        {!['formations', 'cards'].includes(view) && (
           <Navbar 
             currentView={view}
             onViewChange={handleViewChange}
@@ -462,7 +462,7 @@ function AppInner() {
           )}
         </AnimatePresence>
         
-        {!['admin', 'affiliate', 'formations'].includes(view) && !isProductDetailOpen && (
+        {!['admin', 'affiliate', 'formations', 'cards'].includes(view) && !isProductDetailOpen && (
           <BottomNav
             currentView={view}
             onViewChange={handleViewChange}
@@ -476,7 +476,7 @@ function AppInner() {
 
         <main
           className={`${
-            view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
+            view === 'cards' ? 'pt-0' : view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
           } flex-grow relative ${
             !['admin', 'affiliate', 'formations', 'wallet', 'cards'].includes(view)
               ? 'pb-[64px]'

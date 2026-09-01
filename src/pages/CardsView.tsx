@@ -5,12 +5,10 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpFromLine,
-  Bell,
   Check,
   CreditCard,
   Eye,
   LockKeyhole,
-  MoreHorizontal,
   RefreshCw,
   ShieldCheck,
   Snowflake,
@@ -95,9 +93,7 @@ function transactionMeta(tx: HeyQOCardTransaction) {
 
 function CardLogo({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <span className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}>
-      <img data-testid="img-card-logo" src="/solution-pam-logo.png" alt="Logo Solution PAM" className="h-full w-full object-contain p-1" />
-    </span>
+    <img data-testid="img-card-logo" src="/solution-pam-logo-transparent.png" alt="Logo Solution PAM" className={`shrink-0 object-contain ${className}`} />
   );
 }
 
@@ -297,21 +293,10 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       <div className="pointer-events-none absolute left-1/2 top-24 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full border border-white/[.025]" />
 
       <div className="relative mx-auto max-w-xl">
-        <header className="flex items-center justify-between py-4 sm:py-6">
-          <div className="flex items-center gap-3">
-            <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[.04] text-white/75 transition hover:bg-white/10">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="flex items-center gap-2">
-              <CardLogo className="h-8 w-8" />
-              <span className="text-[11px] font-black tracking-[.14em] text-white/90">SOLUTION PAM</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span data-testid="icon-card-notifications" aria-label="Notifications" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[.04] text-white/80"><Bell className="h-4 w-4" /></span>
-            <div data-testid="img-card-avatar" className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-sky-300/50 bg-gradient-to-br from-amber-300 to-orange-500 text-xs font-black text-[#10233b]">{clientName.charAt(0).toUpperCase() || 'S'}</div>
-            <span data-testid="icon-card-more" aria-label="Plus d’options" className="flex h-9 w-7 items-center justify-center text-white/60"><MoreHorizontal className="h-5 w-5" /></span>
-          </div>
+        <header className="py-4 sm:py-6">
+          <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-3.5 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white">
+            <ArrowLeft className="h-4 w-4" /> Retour à l’accueil
+          </button>
         </header>
 
         <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-3">
@@ -332,7 +317,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
             <CardVisual card={card} clientName={clientName} />
           ) : (
             <div data-testid="empty-card" className="flex aspect-[1.58/1] flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-sky-200/25 bg-white/[.06] px-8 text-center">
-              <CardLogo className="mb-3 h-12 w-12" />
+              <CardLogo className="mb-3 h-12 w-[74px]" />
               <p className="font-bold">Votre carte vous attend</p>
               <p className="mt-1.5 text-xs leading-5 text-sky-100/55">Créez votre carte virtuelle Solution PAM en quelques étapes.</p>
             </div>
