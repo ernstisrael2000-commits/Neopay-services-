@@ -15,3 +15,4 @@
 - [Wallet API trust boundary](wallet-api-trust-boundary.md) — Firestore rules do not protect Admin SDK routes; every balance route must bind identity to a verified server session
 - [Financial concurrency boundary](financial-concurrency-boundary.md) — rate limits and idempotency never replace an atomic state-and-balance transaction
 - [HeyQO virtual cards](heyqo-cards-integration.md) — server-side card issuance, KYC-first customers, secure-view iframe, and signed webhooks are required
+- [Mobile file picker compatibility](mobile-file-picker.md) — Android document-picker files can fail with FileReader; prefer chunked File.arrayBuffer reads
