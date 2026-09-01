@@ -15,6 +15,7 @@ import {
   Snowflake,
   TriangleAlert,
   UnlockKeyhole,
+  Wifi,
   X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -102,55 +103,64 @@ function CardLogo({ className = 'h-9 w-9' }: { className?: string }) {
   );
 }
 
-function CardVisual({ card, clientName }: { card: HeyQOCard; clientName: string }) {
-  const last4 = card.last4 ? `••••   ••••   ••••   ${card.last4}` : '••••   ••••   ••••   ••••';
+function CardVisual({ card, clientName, expiry }: { card: HeyQOCard; clientName: string; expiry?: string }) {
+  const last4 = card.last4 ? card.last4.slice(-4) : '••••';
+  const isFrozen = card.status === 'frozen' || card.status === 'blocked';
+  const holder = card.cardholderName || clientName || 'TITULAIRE';
   return (
-    <div data-testid="card-visual" className="relative aspect-[1.58/1] w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-[radial-gradient(circle_at_12%_115%,#0e6e9c_0%,transparent_38%),radial-gradient(circle_at_90%_5%,#1d7098_0%,transparent_33%),linear-gradient(135deg,#0d5579_0%,#073553_52%,#061f3a_100%)] p-5 text-white shadow-[0_22px_48px_rgba(1,13,28,.45)] sm:rounded-[1.6rem] sm:p-6">
-      <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full border border-white/[.07]" />
-      <div className="pointer-events-none absolute -right-4 -top-10 h-40 w-40 rounded-full border border-white/[.06]" />
-      <div className="pointer-events-none absolute -bottom-24 left-16 h-64 w-64 rounded-full border border-white/[.05]" />
-      <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(125deg,transparent_30%,rgba(255,255,255,.16)_31%,transparent_32%),linear-gradient(165deg,transparent_48%,rgba(255,255,255,.12)_49%,transparent_50%)] [background-size:24px_24px]" />
+    <div
+      data-testid="card-visual"
+      className="relative aspect-[1.58/1] w-full overflow-hidden rounded-[1.35rem] border-2 border-[#53c8f6]/75 p-[6%] text-white shadow-[0_22px_48px_rgba(1,13,28,.48)] sm:rounded-[1.6rem]"
+      style={{ background: 'radial-gradient(circle at 7% 108%, #0d6f9d 0%, transparent 34%), radial-gradient(circle at 88% 4%, #147ca4 0%, transparent 32%), linear-gradient(143deg, #103f5d 0%, #07527b 42%, #062542 100%)' }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(148deg,transparent_0%,transparent_35%,rgba(65,190,231,.18)_35.2%,rgba(65,190,231,.05)_59%,transparent_59.2%),linear-gradient(33deg,transparent_0%,transparent_57%,rgba(2,28,55,.5)_57.2%,rgba(2,28,55,.15)_83%,transparent_83.2%)]" />
+      <div className="pointer-events-none absolute -right-[8%] top-[9%] select-none text-[clamp(8rem,31vw,17rem)] font-black leading-[.78] tracking-[-.22em] text-transparent opacity-90 [-webkit-text-stroke:3px_rgba(70,196,239,.14)]">SP</div>
+      <div className="pointer-events-none absolute inset-[1.5%] rounded-[1.1rem] border border-white/[.08]" />
 
-      <div className="relative flex h-full flex-col justify-between">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <CardLogo className="h-9 w-9 sm:h-10 sm:w-10" />
-            <div>
-              <p data-testid="text-card-brand" className="text-[11px] font-black tracking-[.16em]">SOLUTION PAM</p>
-              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[.12em] text-white/55">Carte virtuelle</p>
-            </div>
-          </div>
-           <div className="flex flex-col items-end gap-2 text-right">
-             {card.status === 'frozen' || card.status === 'blocked' ? (
-               <span data-testid="icon-card-frozen" aria-label="Carte gelée" title="Carte gelée" className="inline-flex items-center gap-1.5 rounded-full border border-red-300/35 bg-red-950/45 px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-red-100 shadow-[0_4px_14px_rgba(127,29,29,.28)]">
-                 <LockKeyhole className="h-3.5 w-3.5 text-red-300" strokeWidth={2.2} /> Gelée
-               </span>
-             ) : null}
-            <p className="text-[9px] font-semibold uppercase tracking-[.1em] text-white/55">Carte</p>
-            <p className="text-lg font-black italic tracking-[-.09em]">VISA</p>
-          </div>
-        </div>
-
-        <div>
-          <p data-testid="text-card-last4" className="font-mono text-[clamp(1rem,4vw,1.35rem)] tracking-[.1em] text-white/95">{last4}</p>
-          <p className="mt-1 font-mono text-[9px] tracking-[.25em] text-white/50">{card.last4 || '••••'}</p>
-        </div>
-
-        <div className="flex items-end justify-between gap-4">
+      <div className="relative h-full">
+        <div className="absolute left-[5.5%] top-[4%] flex items-center gap-3 sm:gap-4">
+          <CardLogo className="h-[clamp(2.7rem,10vw,4.7rem)] w-[clamp(2.7rem,10vw,4.7rem)]" />
           <div>
-            <p className="text-[8px] font-semibold uppercase tracking-[.18em] text-white/50">Titulaire</p>
-            <p data-testid="text-card-holder" className="mt-1 max-w-[190px] truncate text-xs font-bold uppercase tracking-[.08em] sm:text-sm">{card.cardholderName || clientName}</p>
+            <p data-testid="text-card-brand" className="text-[clamp(.62rem,2.1vw,1.05rem)] font-bold tracking-[.24em]">SOLUTION PAM</p>
+            <p className="mt-1 text-[clamp(.48rem,1.7vw,.78rem)] font-medium uppercase tracking-[.2em] text-[#54d5fa]/85">Carte virtuelle</p>
           </div>
-          <div className="flex items-end gap-4">
-            <div>
-              <p className="text-[8px] font-semibold uppercase tracking-[.18em] text-white/50">Détails</p>
-              <p className="mt-1 text-xs font-bold text-white/85">Sécurisés</p>
-            </div>
-            <div className="relative h-6 w-8 opacity-90">
-              <span className="absolute right-0 top-0 h-6 w-3 rounded-r-full border-2 border-l-0 border-white" />
-              <span className="absolute right-1 top-1 h-4 w-2 rounded-r-full border-2 border-l-0 border-white" />
-              <span className="absolute right-2 top-2 h-2 w-1 rounded-r-full border-2 border-l-0 border-white" />
-            </div>
+        </div>
+
+        <div className="absolute right-[5.5%] top-[5%] text-right">
+          <p className="text-[clamp(1.25rem,5vw,2.8rem)] font-black italic leading-none tracking-[-.08em]">VISA</p>
+          <p className="mt-2 text-[clamp(.55rem,1.8vw,.9rem)] font-medium uppercase tracking-[.24em] text-[#52d4f8]/85">Carte</p>
+        </div>
+
+        <div className="absolute left-[5.5%] top-[37%] flex items-center gap-2 sm:gap-4">
+          <Wifi className="h-[clamp(1.9rem,7vw,3.2rem)] w-[clamp(1.9rem,7vw,3.2rem)] rotate-90 text-white/90" strokeWidth={1.7} />
+          <div className="relative h-[clamp(2.7rem,10vw,4.7rem)] w-[clamp(3.8rem,14vw,6.5rem)] overflow-hidden rounded-[.65rem] border border-white/45 bg-gradient-to-br from-[#fffdf3] via-[#d7d6cc] to-[#8f918f] shadow-[inset_0_1px_2px_rgba(255,255,255,.85),0_5px_12px_rgba(0,0,0,.2)]">
+            <span className="absolute left-1/3 top-0 h-full w-px bg-[#6e716f]/70" />
+            <span className="absolute left-0 top-1/3 h-px w-1/3 bg-[#6e716f]/70" />
+            <span className="absolute left-0 top-2/3 h-px w-1/3 bg-[#6e716f]/70" />
+            <span className="absolute right-0 top-1/3 h-px w-1/3 bg-[#6e716f]/70" />
+            <span className="absolute right-0 top-2/3 h-px w-1/3 bg-[#6e716f]/70" />
+          </div>
+        </div>
+
+        <div className="absolute left-[6%] top-[59%] flex items-center gap-[clamp(.35rem,2vw,1.15rem)] whitespace-nowrap font-mono text-[clamp(.95rem,4.6vw,2rem)] font-medium tracking-[.12em] text-white/95 sm:tracking-[.2em]">
+          <span>••••</span><span>••••</span><span>••••</span><span data-testid="text-card-last4">{last4}</span>
+        </div>
+
+        <div className="absolute bottom-[7%] left-[6%]">
+          <p className="text-[clamp(.43rem,1.55vw,.72rem)] font-medium uppercase tracking-[.2em] text-[#55d2f6]/85">Titulaire</p>
+          <p data-testid="text-card-holder" className="mt-1 max-w-[48vw] truncate text-[clamp(.72rem,2.9vw,1.35rem)] font-medium uppercase tracking-[.12em]">{holder}</p>
+        </div>
+
+        <div className="absolute bottom-[7%] left-[43%]">
+          <p className="text-[clamp(.43rem,1.55vw,.72rem)] font-medium uppercase tracking-[.2em] text-[#55d2f6]/85">Expire fin</p>
+          <p className="mt-1 font-mono text-[clamp(.72rem,2.8vw,1.3rem)] tracking-[.14em]">{expiry || '••/••'}</p>
+        </div>
+
+        <div data-testid={isFrozen ? 'icon-card-frozen' : 'card-secure-mark'} aria-label={isFrozen ? 'Carte gelée' : 'Carte sécurisée'} title={isFrozen ? 'Carte gelée' : 'Carte sécurisée'} className={`absolute bottom-[6%] right-[5.5%] flex items-center gap-2 ${isFrozen ? 'text-red-300' : 'text-[#55e3ff]'}`}>
+          {isFrozen ? <LockKeyhole className="h-[clamp(1.7rem,6vw,3rem)] w-[clamp(1.7rem,6vw,3rem)]" strokeWidth={1.8} /> : <ShieldCheck className="h-[clamp(1.7rem,6vw,3rem)] w-[clamp(1.7rem,6vw,3rem)]" strokeWidth={1.8} />}
+          <div className="hidden text-left sm:block">
+            <p className="text-[clamp(.5rem,1.8vw,.9rem)] font-medium uppercase tracking-[.12em]">{isFrozen ? 'Carte gelée' : 'Sécurisée'}</p>
+            <p className={`mt-1 text-[clamp(.38rem,1.25vw,.65rem)] uppercase tracking-[.08em] ${isFrozen ? 'text-red-200/75' : 'text-[#54d5fa]/75'}`}>{isFrozen ? 'Paiements suspendus' : 'Vos données protégées'}</p>
           </div>
         </div>
       </div>
@@ -415,7 +425,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
           {loading ? (
             <div data-testid="loading-card" className="aspect-[1.58/1] animate-pulse rounded-[1.35rem] border border-white/10 bg-white/10" />
           ) : card ? (
-            <CardVisual card={card} clientName={clientName} />
+            <CardVisual card={card} clientName={clientName} expiry={secureDetails?.expiry} />
           ) : (
             <div data-testid="empty-card" className="flex aspect-[1.58/1] flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-sky-200/25 bg-white/[.06] px-8 text-center">
               <CardLogo className="mb-3 h-12 w-[74px]" />
