@@ -13,6 +13,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Snowflake,
+  Star,
   TriangleAlert,
   UnlockKeyhole,
   X,
@@ -103,8 +104,21 @@ function CardLogo({ className = 'h-9 w-9' }: { className?: string }) {
 }
 
 function CardVisual({ card, clientName, frozen }: { card: HeyQOCard; clientName: string; frozen?: boolean }) {
-  const last4 = card.last4 ? `••••   ••••   ••••   ${card.last4}` : '••••   ••••   ••••   ••••';
   const isFrozen = frozen ?? (card.status === 'frozen' || card.status === 'blocked');
+  const maskedGroups = Array.from({ length: 3 }, (_, groupIndex) => (
+    <span key={`masked-card-group-${groupIndex}`} className="inline-flex items-center gap-[.08em]" aria-hidden="true">
+      {Array.from({ length: 4 }, (_, starIndex) => (
+        <Star key={`masked-card-star-${groupIndex}-${starIndex}`} className="h-[.72em] w-[.72em] fill-current" strokeWidth={1.8} />
+      ))}
+    </span>
+  ));
+  const maskedTail = (
+    <span className="inline-flex items-center gap-[.08em]" aria-hidden="true">
+      {Array.from({ length: 4 }, (_, starIndex) => (
+        <Star key={`masked-card-tail-star-${starIndex}`} className="h-[.72em] w-[.72em] fill-current" strokeWidth={1.8} />
+      ))}
+    </span>
+  );
   return (
     <div data-testid="card-visual" className="relative aspect-[1.58/1] w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-[radial-gradient(circle_at_12%_115%,#0e6e9c_0%,transparent_38%),radial-gradient(circle_at_90%_5%,#1d7098_0%,transparent_33%),linear-gradient(135deg,#0d5579_0%,#073553_52%,#061f3a_100%)] p-5 text-white shadow-[0_22px_48px_rgba(1,13,28,.45)] sm:rounded-[1.6rem] sm:p-6">
       <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full border border-white/[.07]" />
@@ -133,8 +147,11 @@ function CardVisual({ card, clientName, frozen }: { card: HeyQOCard; clientName:
         </div>
 
         <div>
-          <p data-testid="text-card-last4" className="font-mono text-[clamp(1rem,4vw,1.35rem)] tracking-[.1em] text-white/95">{last4}</p>
-          <p className="mt-1 font-mono text-[9px] tracking-[.25em] text-white/50">{card.last4 || '••••'}</p>
+          <p data-testid="text-card-last4" aria-label={card.last4 ? `Numéro masqué se terminant par ${card.last4}` : 'Numéro de carte masqué'} className="flex items-center gap-[.5em] font-mono text-[clamp(1rem,4vw,1.35rem)] tracking-[.1em] text-white/95">
+            {maskedGroups}
+            <span className="tracking-[.14em]">{card.last4 || maskedTail}</span>
+          </p>
+          <p className="mt-1 font-mono text-[9px] tracking-[.25em] text-white/50">{card.last4 || 'Carte sécurisée'}</p>
         </div>
 
         <div className="flex items-end justify-between gap-4">
