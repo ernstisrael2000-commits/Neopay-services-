@@ -21,6 +21,16 @@ export interface CardsSecuritySnapshot {
   maskedEmail: string;
 }
 
+export interface SecureCardDetails {
+  cardNumber?: string;
+  expiry?: string;
+  cvv?: string;
+  cardholderName?: string;
+  brand?: string;
+  secureViewUrl?: string;
+  expiresAt?: string;
+}
+
 export interface CreateCardResult {
   success: boolean;
   processing?: boolean;
@@ -89,7 +99,11 @@ export async function submitHeyQOCustomerKyc(
     kyc: { ...fields, documentFrontBase64, documentBackBase64, proofOfAddressBase64 },
   }, idempotencyKey, 90_000);
 }
-export const getSecureView = (cardId: string) => post(`/api/client/cards/${encodeURIComponent(cardId)}/secure-view`);
+export const getSecureCardDetails = (cardId: string, pin: string) =>
+  post<{ success: boolean; details: SecureCardDetails; secureViewUrl?: string; expiresAt?: string }>(
+    `/api/client/cards/${encodeURIComponent(cardId)}/secure-details`,
+    { pin },
+  );
 export const depositToCard = (cardId: string, amount: number, idempotencyKey?: string) =>
   post(`/api/client/cards/${encodeURIComponent(cardId)}/deposit`, { amount }, idempotencyKey);
 export const withdrawFromCard = (cardId: string, amount: number, idempotencyKey?: string) =>

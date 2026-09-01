@@ -10166,6 +10166,40 @@ function publicHeyQOCard(card: any, monthlyLimit = 0): Record<string, unknown> {
   };
 }
 
+function secureCardDetails(input: any): Record<string, string> {
+  const source = input?.card || input || {};
+  const candidates = [
+    source,
+    source.info,
+    source.details,
+    source.card_details,
+    source.cardDetails,
+    source.secure_view,
+  ].filter((value) => value && typeof value === 'object');
+  const read = (keys: string[]) => {
+    for (const candidate of candidates) {
+      for (const key of keys) {
+        const value = candidate[key];
+        if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+      }
+    }
+    return '';
+  };
+  const rawNumber = read(['pan', 'card_number', 'cardNumber', 'card_pan', 'number']);
+  const cardNumber = rawNumber.replace(/[^\d]/g, '');
+  const expiry = read(['expiry', 'expiration', 'expiration_date', 'expiry_date', 'exp']);
+  const cvv = read(['cvv', 'cvc', 'cvv2', 'security_code']);
+  const cardholderName = read(['name_on_card', 'cardholder_name', 'cardholder', 'name']);
+  const brand = read(['brand', 'card_brand']).toUpperCase();
+  return {
+    ...(cardNumber.length >= 12 && cardNumber.length <= 19 ? { cardNumber } : {}),
+    ...(expiry ? { expiry: expiry.slice(0, 24) } : {}),
+    ...(cvv && /^\d{3,4}$/.test(cvv) ? { cvv } : {}),
+    ...(cardholderName ? { cardholderName: cardholderName.slice(0, 120) } : {}),
+    ...(brand ? { brand: brand.slice(0, 24) } : {}),
+  };
+}
+
 function publicHeyQOCustomer(customer: any, fallback: any = {}): Record<string, unknown> {
   const source = customer || {};
   return {
@@ -10229,6 +10263,26 @@ async function loadOwnedHeyQOCard(clientId: string, cardId: string, client: any)
   }
   await cacheHeyQOCard(clientId, card);
   return card;
+}
+
+async function createHeyQOSecureView(cardId: string) {
+  const payload = await heyqoRequest(`/cards/${encodeURIComponent(cardId)}/secure-view`, {
+    method: 'POST',
+    body: JSON.stringify({
+      layout: 'free',
+      background_color: '#07111F',
+      text_color: '#FFFFFF',
+      show_branding: false,
+      brand_label: 'Solutionpam',
+      fields_order: 'pan,expiry,cvv,cardholder,brand',
+    }),
+  });
+  const data = unwrapHeyQO<any>(payload);
+  const url = data?.url || data?.secure_view_url || data?.iframe_url;
+  if (typeof url !== 'string' || !url.startsWith('https://heyqo.cash/')) {
+    throw new HeyQOError('HeyQO n’a pas renvoyé de vue sécurisée valide.', 502);
+  }
+  return { url, expiresAt: data?.expires_at || new Date(Date.now() + 90_000).toISOString(), data };
 }
 
 function cardOperationId(res: express.Response, suffix: string): string {
@@ -10703,7 +10757,7 @@ router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => 
   res.setHeader('Cache-Control', 'no-store');
   res.json({
     success: true,
-    security: { ...cardSecurityStatus(client, req, clientId), unlocked: true },
+    security: { ...cardSecurityStatus(client, req, clientId, security), unlocked: true },
   });
 });
 
@@ -11080,29 +11134,44 @@ router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req
   }
 });
 
+router.post('/api/client/cards/:cardId/secure-details', requireDb, requireClientCardsAccess, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  try {
+    const { data: security } = await getClientCardSecurity(clientId, client);
+    const pin = String(req.body?.pin || '');
+    if (!/^\d{6}$/.test(pin)) return res.status(400).json({ error: 'Le code Cartes doit comporter exactement 6 chiffres.' });
+    if (!security.pinHash || !security.emailTwoFactorEnabled) {
+      return res.status(423).json({ error: 'La protection Cartes doit d’abord être configurée.' });
+    }
+    if (!verifyPin(pin, security.pinHash)) return res.status(401).json({ error: 'Code Cartes incorrect.' });
+
+    const card = await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
+    const secureView = await createHeyQOSecureView(req.params.cardId);
+    const details = {
+      ...secureCardDetails(card),
+      ...secureCardDetails(secureView.data),
+    };
+    if (!details.cardholderName || !details.brand) {
+      const safe = publicHeyQOCard(card);
+      if (!details.cardholderName && typeof safe.cardholderName === 'string') details.cardholderName = safe.cardholderName;
+      if (!details.brand && typeof safe.brand === 'string') details.brand = safe.brand.toUpperCase();
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ success: true, details, secureViewUrl: secureView.url, expiresAt: secureView.expiresAt });
+  } catch (error: any) {
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Affichage sécurisé indisponible.' });
+  }
+});
+
 router.post('/api/client/cards/:cardId/secure-view', requireDb, requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   try {
     await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
-    const payload = await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}/secure-view`, {
-      method: 'POST',
-      body: JSON.stringify({
-        layout: 'free',
-        background_color: '#07111F',
-        text_color: '#FFFFFF',
-        show_branding: false,
-        brand_label: 'Solutionpam',
-        fields_order: 'pan,expiry,cvv,cardholder,brand',
-      }),
-    });
-    const data = unwrapHeyQO<any>(payload);
-    const url = data?.url || data?.secure_view_url || data?.iframe_url;
-    if (typeof url !== 'string' || !url.startsWith('https://heyqo.cash/')) {
-      throw new HeyQOError('HeyQO n’a pas renvoyé de vue sécurisée valide.', 502);
-    }
+    const secureView = await createHeyQOSecureView(req.params.cardId);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ url, expiresAt: data?.expires_at || new Date(Date.now() + 90_000).toISOString() });
+    res.json({ url: secureView.url, expiresAt: secureView.expiresAt });
   } catch (error: any) {
     res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Affichage sécurisé indisponible.' });
   }

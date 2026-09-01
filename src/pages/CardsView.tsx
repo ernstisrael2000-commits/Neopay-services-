@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUpFromLine,
   Check,
+  Copy,
   CreditCard,
   Eye,
   LockKeyhole,
@@ -23,13 +24,14 @@ import {
   createHeyQOCard,
   depositToCard,
   getCardsSecurity,
+  getSecureCardDetails,
   freezeCard,
-  getSecureView,
   submitHeyQOCustomerKyc,
   terminateCard,
   unfreezeCard,
   useClientCards,
   type CardsSecuritySnapshot,
+  type SecureCardDetails,
   withdrawFromCard,
 } from '../services/cardsService';
 import type { HeyQOCard, HeyQOCardTransaction } from '../types';
@@ -192,7 +194,11 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
   const [amountMode, setAmountMode] = useState<'deposit' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [kycOpen, setKycOpen] = useState(false);
-  const [secureUrl, setSecureUrl] = useState<string | null>(null);
+  const [secureDetailsOpen, setSecureDetailsOpen] = useState(false);
+  const [secureDetails, setSecureDetails] = useState<SecureCardDetails | null>(null);
+  const [detailsPin, setDetailsPin] = useState('');
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [copiedCardNumber, setCopiedCardNumber] = useState(false);
   const intentKeys = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -306,17 +312,48 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     } finally { setBusy(false); }
   };
 
-  const openSecureView = async () => {
+  const revealSecureDetails = async () => {
     if (!card) return;
+    if (!/^\d{6}$/.test(detailsPin)) {
+      setDetailsError('Saisissez le code Cartes à 6 chiffres que vous avez créé.');
+      return;
+    }
     setBusy(true); setActionError(null);
+    setDetailsError(null);
     try {
-      const result = await getSecureView(card.id) as { url?: string; secureViewUrl?: string };
-      const url = result?.url || result?.secureViewUrl;
-      if (!url || !url.startsWith('https://heyqo.cash/')) throw new Error('Vue sécurisée invalide.');
-      setSecureUrl(url);
+      const result = await getSecureCardDetails(card.id, detailsPin);
+      setSecureDetails({ ...result.details, secureViewUrl: result.secureViewUrl, expiresAt: result.expiresAt });
+      setDetailsPin('');
+      setCopiedCardNumber(false);
     } catch (cause: any) {
-      setActionError(cause?.message || 'La vue sécurisée est indisponible.');
-    } finally { setBusy(false); }
+      setDetailsError(cause?.message || 'Les détails sécurisés sont indisponibles.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyCardNumber = async () => {
+    if (!secureDetails?.cardNumber) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(secureDetails.cardNumber);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = secureDetails.cardNumber;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) throw new Error('copy_failed');
+      }
+      setCopiedCardNumber(true);
+      window.setTimeout(() => setCopiedCardNumber(false), 1800);
+    } catch {
+      setDetailsError('La copie automatique n’est pas disponible sur cet appareil.');
+    }
   };
 
   if (securityLoading || !security || !securityUnlocked) {
@@ -365,8 +402,8 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
               <span className={`h-1.5 w-1.5 rounded-full ${status === 'active' ? 'bg-emerald-300' : status === 'frozen' ? 'bg-amber-300' : 'bg-white/50'}`} /> {cardStatusLabel(status)}
             </span>
           </div>
-          <h1 data-testid="heading-cards" className="mt-2 text-[2rem] font-black tracking-[-.045em] sm:text-4xl">Ma carte</h1>
-          <p className="mt-1.5 max-w-sm text-sm leading-5 text-sky-100/65">Gérez votre carte, consultez votre solde et vos transactions en toute sécurité.</p>
+           <h1 data-testid="heading-cards" className="mt-2 text-[2rem] font-black tracking-[-.045em] text-[#f1f8ff] sm:text-4xl">Ma carte</h1>
+           <p className="mt-1.5 max-w-sm text-sm leading-5 text-sky-50/80">Gérez votre carte, consultez votre solde et vos transactions en toute sécurité.</p>
         </motion.section>
 
         <motion.section initial={{ opacity: 0, scale: .98 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: .08 }} className="mt-5">
@@ -384,9 +421,80 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
         </motion.section>
 
         {card && isUsable && (
-          <button type="button" data-testid="button-secure-view" onClick={() => void openSecureView()} disabled={busy} className="mx-auto mt-2.5 flex items-center gap-2 text-xs font-semibold text-sky-100/65 transition hover:text-white disabled:opacity-45">
-            <Eye className="h-4 w-4" /> Afficher les détails sécurisés <ArrowRight className="h-3.5 w-3.5" />
+          <button type="button" data-testid="button-secure-view" onClick={() => { setSecureDetailsOpen((open) => !open); setDetailsError(null); }} disabled={busy} className="mx-auto mt-2.5 flex items-center gap-2 text-xs font-semibold text-sky-50/85 transition hover:text-white disabled:opacity-45">
+            <Eye className="h-4 w-4" /> {secureDetailsOpen ? 'Masquer les détails sécurisés' : 'Afficher les détails sécurisés'} <ArrowRight className="h-3.5 w-3.5" />
           </button>
+        )}
+
+        {card && isUsable && secureDetailsOpen && (
+          <section data-testid="panel-secure-details" className="mt-3 rounded-2xl border border-sky-200/15 bg-[#0d2c48]/95 p-4 shadow-lg shadow-[#031425]/20">
+            {!secureDetails ? (
+              <form onSubmit={(event) => { event.preventDefault(); void revealSecureDetails(); }}>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-sky-200"><ShieldCheck className="h-4 w-4" /></span>
+                  <div>
+                    <h2 className="text-sm font-black text-white">Détails de la carte</h2>
+                    <p className="mt-1 text-xs leading-5 text-sky-50/70">Pour protéger votre numéro, confirmez le code Cartes à 6 chiffres que vous avez créé.</p>
+                  </div>
+                </div>
+                <label className="mt-4 block text-[10px] font-bold uppercase tracking-[.14em] text-sky-100/65">
+                  Code Cartes
+                  <input
+                    data-testid="input-secure-details-pin"
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={6}
+                    pattern="\d{6}"
+                    value={detailsPin}
+                    onChange={(event) => setDetailsPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="••••••"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#061d33] p-3 text-center font-mono text-lg tracking-[.45em] text-white outline-none transition focus:border-sky-400"
+                    aria-label="Code Cartes à 6 chiffres"
+                  />
+                </label>
+                {detailsError && <p data-testid="error-secure-details" role="alert" className="mt-2 text-xs font-semibold text-red-200">{detailsError}</p>}
+                <button type="submit" data-testid="button-reveal-secure-details" disabled={busy || detailsPin.length !== 6} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#168ac4] px-4 text-sm font-bold text-white transition hover:bg-[#21a0df] disabled:opacity-45">
+                  <Eye className="h-4 w-4" /> {busy ? 'Vérification…' : 'Révéler les détails'}
+                </button>
+              </form>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[.14em] text-sky-100/60">Détails sécurisés</p>
+                    <h2 className="mt-1 text-base font-black text-white">Informations de la carte</h2>
+                  </div>
+                  <button type="button" data-testid="button-hide-secure-details" onClick={() => { setSecureDetails(null); setDetailsError(null); }} className="rounded-lg px-2 py-1 text-xs font-bold text-sky-100/65 transition hover:bg-white/10 hover:text-white">Masquer</button>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {secureDetails.cardNumber && (
+                    <div className="rounded-xl border border-sky-200/15 bg-[#061d33] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Numéro de carte</p>
+                        <button type="button" data-testid="button-copy-card-number" onClick={() => void copyCardNumber()} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-400/10 px-2.5 py-1.5 text-[10px] font-bold text-sky-200 transition hover:bg-sky-400/20">
+                          {copiedCardNumber ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copiedCardNumber ? 'Copié' : 'Copier'}
+                        </button>
+                      </div>
+                      <p data-testid="text-secure-card-number" className="mt-2 break-all font-mono text-lg font-bold tracking-[.12em] text-white">{secureDetails.cardNumber.replace(/(.{4})/g, '$1 ').trim()}</p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {secureDetails.expiry && <div className="rounded-xl border border-white/[.08] bg-[#061d33] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Expiration</p><p data-testid="text-secure-card-expiry" className="mt-1.5 font-mono text-sm font-bold text-white">{secureDetails.expiry}</p></div>}
+                    {secureDetails.cvv && <div className="rounded-xl border border-white/[.08] bg-[#061d33] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">CVV</p><p data-testid="text-secure-card-cvv" className="mt-1.5 font-mono text-sm font-bold text-white">{secureDetails.cvv}</p></div>}
+                  </div>
+                  {(secureDetails.cardholderName || secureDetails.brand) && <div className="flex items-center justify-between rounded-xl border border-white/[.08] bg-[#061d33] p-3"><div><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Titulaire</p><p data-testid="text-secure-card-holder" className="mt-1.5 text-sm font-bold uppercase text-white">{secureDetails.cardholderName || clientName}</p></div><span className="text-sm font-black italic text-white/80">{secureDetails.brand || card.brand}</span></div>}
+                </div>
+                {!secureDetails.cardNumber && secureDetails.secureViewUrl && (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-white">
+                    <iframe data-testid="iframe-secure-view-inline" title="Vue sécurisée de la carte" src={secureDetails.secureViewUrl} className="h-[28rem] w-full border-0" referrerPolicy="no-referrer" sandbox="allow-scripts allow-forms allow-same-origin" />
+                  </div>
+                )}
+                {!secureDetails.cardNumber && !secureDetails.secureViewUrl && <p className="mt-3 text-xs text-amber-100">Les détails complets ne sont pas disponibles pour le moment.</p>}
+                {detailsError && <p data-testid="error-secure-details" role="alert" className="mt-3 text-xs font-semibold text-red-200">{detailsError}</p>}
+              </div>
+            )}
+          </section>
         )}
 
         <section data-testid="panel-card-balance" className="mt-4 rounded-2xl border border-white/[.08] bg-[#103450]/90 shadow-lg shadow-[#031425]/20">
@@ -409,8 +517,8 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
         {card && isUsable && (
           <section className="mt-2.5 grid grid-cols-4 gap-2">
             <QuickAction label="Recharger" icon={ArrowDownToLine} tone="blue" testId="button-open-deposit" onClick={() => setAmountMode('deposit')} />
-            <QuickAction label={status === 'frozen' ? 'Réactiver' : 'Bloquer'} icon={status === 'frozen' ? UnlockKeyhole : LockKeyhole} tone={status === 'frozen' ? 'blue' : 'red'} testId={status === 'frozen' ? 'button-unfreeze-card' : 'button-freeze-card'} onClick={() => void doCardAction(status === 'frozen' ? 'unfreeze' : 'freeze')} disabled={busy} />
-            <QuickAction label="Détails" icon={Eye} tone="violet" testId="button-quick-secure-view" onClick={() => void openSecureView()} disabled={busy} />
+            <QuickAction label={status === 'frozen' ? 'Réactiver' : 'Geler'} icon={status === 'frozen' ? UnlockKeyhole : Snowflake} tone={status === 'frozen' ? 'blue' : 'red'} testId={status === 'frozen' ? 'button-unfreeze-card' : 'button-freeze-card'} onClick={() => void doCardAction(status === 'frozen' ? 'unfreeze' : 'freeze')} disabled={busy} />
+            <QuickAction label={secureDetailsOpen ? 'Masquer' : 'Détails'} icon={Eye} tone="violet" testId="button-quick-secure-view" onClick={() => { setSecureDetailsOpen((open) => !open); setDetailsError(null); }} disabled={busy} />
             <QuickAction label="Clôturer" icon={LockKeyhole} tone="red" testId="button-terminate-card" onClick={() => void doCardAction('terminate')} disabled={busy} />
           </section>
         )}
@@ -495,15 +603,6 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
 
       {kycOpen && <HeyQOKycWizard onSubmit={submitKyc} onClose={() => !busy && setKycOpen(false)} busy={busy} error={actionError} initialValue={{ phone: clientPhone }} sandboxPreview={snapshot?.environment === 'sandbox'} />}
 
-      {secureUrl && createPortal(
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#031321]/85 p-3 backdrop-blur-sm sm:items-center">
-          <div className="relative h-[80dvh] w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
-            <button type="button" aria-label="Fermer" data-testid="button-close-secure-view" onClick={() => setSecureUrl(null)} className="absolute right-3 top-3 z-10 rounded-full bg-[#061d33] p-2 text-white"><X className="h-4 w-4" /></button>
-            <iframe data-testid="iframe-secure-view" title="Vue sécurisée de la carte" src={secureUrl} className="h-full w-full border-0" referrerPolicy="no-referrer" sandbox="allow-scripts allow-forms allow-same-origin" />
-          </div>
-        </div>,
-        document.body,
-      )}
     </main>
   );
 }
