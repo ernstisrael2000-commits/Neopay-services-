@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
+import { AdminContentSkeleton } from '../components/skeletons/AdminContentSkeleton';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { updateSettings } from '../services/parcelService';
@@ -656,7 +657,7 @@ export default function AdminWalletManager() {
 
         {/* Transaction cards */}
         {txLoading ? (
-          <div className="py-16 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <AdminContentSkeleton variant="list" rows={5} />
         ) : filteredTx.length === 0 ? (
           <div className="py-16 text-center">
             <History className="h-10 w-10 text-gray-200 mx-auto mb-3" />

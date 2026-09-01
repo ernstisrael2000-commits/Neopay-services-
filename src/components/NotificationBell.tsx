@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { type RoleNotification } from '../hooks/useRealtimeNotifs';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Skeleton } from './ui/skeleton';
 
 interface NotificationBellProps {
   notifications: RoleNotification[];
@@ -134,8 +135,8 @@ export default function NotificationBell({
             {/* List */}
             <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800">
               {loading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 size={20} className="animate-spin text-gray-400" />
+                <div className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {[1, 2, 3].map(i => <div key={i} className="flex items-center gap-3 p-3"><Skeleton className="h-9 w-9 shrink-0 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3 w-3/5 rounded-full" /><Skeleton className="h-2.5 w-4/5 rounded-full" /></div></div>)}
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-2">

@@ -486,7 +486,7 @@ function AppInner() {
           }`}
           style={{ overflowX: 'hidden' }}
         >
-          <Suspense fallback={<PageSkeleton />}>
+          <Suspense fallback={<PageSkeleton view={view} />}>
             {/* Wallet page — full-screen, rendered outside AnimatePresence for clean layout */}
             {view === 'wallet' && loggedClient && (
               <ClientDashboard

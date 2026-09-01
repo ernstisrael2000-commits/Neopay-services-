@@ -4,18 +4,29 @@ import { Skeleton } from '../ui/skeleton';
  * Reproduces the 2-column product/game/card grid used in HomeView and ProductsView.
  * count: number of cards to show (default 6)
  */
-export function ProductGridSkeleton({ count = 6 }: { count?: number }) {
+export function ProductGridSkeleton({ count = 6, featured = false }: { count?: number; featured?: boolean }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700/50 bg-white dark:bg-gray-800/30">
+        <div key={i} className={`rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700/50 bg-white dark:bg-gray-800/30 ${featured && i === 0 ? 'col-span-2' : ''}`}>
           {/* Image area */}
-          <Skeleton className="w-full h-36 rounded-none" />
-          {/* Text area */}
-          <div className="p-3 space-y-2">
-            <Skeleton className="h-3.5 w-4/5 rounded-full" />
-            <Skeleton className="h-3 w-2/5 rounded-full" />
+          <div className={`relative overflow-hidden ${featured && i === 0 ? 'aspect-[16/7]' : 'aspect-[4/3]'}`}>
+            <Skeleton className="absolute inset-0 h-full w-full rounded-none" />
+            {featured && i === 0 && (
+              <div className="absolute inset-x-3 bottom-3 space-y-1.5">
+                <Skeleton className="h-3.5 w-2/5 rounded-full bg-white/40" />
+                <Skeleton className="h-2.5 w-1/4 rounded-full bg-white/30" />
+              </div>
+            )}
           </div>
+          {/* Text area */}
+          {!featured || i !== 0 ? (
+            <div className="p-3 space-y-2">
+              <Skeleton className="h-3.5 w-4/5 rounded-full" />
+              <Skeleton className="h-3 w-2/5 rounded-full" />
+              <Skeleton className="h-2.5 w-1/3 rounded-full" />
+            </div>
+          ) : null}
         </div>
       ))}
     </div>

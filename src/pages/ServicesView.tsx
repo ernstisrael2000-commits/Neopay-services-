@@ -18,6 +18,7 @@ import { useOnlineServices } from '../services/parcelService';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { Client } from '../types';
 import { toast } from 'sonner';
+import { ServicesSkeleton } from '../components/skeletons/ServicesSkeleton';
 
 interface ServicesViewProps {
   onTrackingClick: () => void;
@@ -147,7 +148,7 @@ function serviceCta(target?: string, isExternal?: boolean) {
 }
 
 export default function ServicesView({ onTrackingClick, onViewChange, loggedClient, onRequestAuth }: ServicesViewProps) {
-  const { services: rawServices } = useOnlineServices();
+  const { services: rawServices, loading } = useOnlineServices();
   const { settings } = useSettingsCtx();
   const activeServices = rawServices.filter(s => s.active);
   const displayServices = [
@@ -157,6 +158,10 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
     const order: Record<string, number> = { cards: 1, tracking: 2, shipping: 3 };
     return (order[a.target] || 4) - (order[b.target] || 4) || (a.order || 0) - (b.order || 0);
   });
+
+  if (loading && rawServices.length === 0) {
+    return <ServicesSkeleton count={3} />;
+  }
 
   const handleServiceClick = (svc: any) => {
     if (svc.target === 'tracking') onTrackingClick();

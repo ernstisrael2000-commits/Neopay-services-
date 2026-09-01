@@ -43,6 +43,7 @@ import { useSettingsCtx } from '../contexts/SettingsContext';
 import ErnstChat from '../components/ErnstChat';
 import { AgentDashboardSkeleton } from '../components/skeletons/AgentDashboardSkeleton';
 import { TransactionListSkeleton } from '../components/skeletons/TransactionListSkeleton';
+import { AdminContentSkeleton } from '../components/skeletons/AdminContentSkeleton';
 
 interface AgentDashboardProps {
   agentUid: string;
@@ -827,7 +828,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                 </button>
               </div>
               {loadingTx ? (
-                <TransactionListSkeleton count={4} />
+                <TransactionListSkeleton variant="agent" count={4} />
               ) : allTransactions.length === 0 ? (
                 <div className="bg-gray-50 rounded-2xl p-8 text-center border-2 border-dashed border-gray-200">
                   <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />
@@ -910,7 +911,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               </div>
 
               {loadingRequests ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                <AdminContentSkeleton variant="cards" rows={2} />
               ) : withdrawRequests.length === 0 ? (
                 <div className="bg-gray-50 rounded-[2rem] p-10 text-center border-2 border-dashed border-gray-200">
                   <CheckCircle2 className="h-10 w-10 text-gray-200 mx-auto mb-3" />
@@ -1072,7 +1073,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               </div>
 
               {clientDepReqLoading && clientDepositReqs.length === 0 ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                <AdminContentSkeleton variant="cards" rows={2} />
               ) : clientDepositReqs.length === 0 ? (
                 <div className="bg-gray-50 rounded-[2rem] p-10 text-center border-2 border-dashed border-gray-200">
                   <CheckCircle2 className="h-10 w-10 text-gray-200 mx-auto mb-3" />
@@ -1322,7 +1323,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             </Card>
 
             {loadingFees ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-amber-400" /></div>
+              <TransactionListSkeleton variant="agent" count={4} />
             ) : feeRecords.length === 0 ? (
               <div className="bg-gray-50 rounded-[2rem] p-16 text-center border-2 border-dashed border-gray-200">
                 <BadgeDollarSign className="h-12 w-12 text-gray-200 mx-auto mb-3" />
@@ -1368,7 +1369,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             </div>
 
             {loadingTx ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-blue-400" /></div>
+              <TransactionListSkeleton variant="agent" count={4} />
             ) : uniqueClients.length === 0 ? (
               <div className="bg-gray-50 rounded-[2rem] p-16 text-center border-2 border-dashed border-gray-200">
                 <Users className="h-12 w-12 text-gray-200 mx-auto mb-3" />
@@ -1504,7 +1505,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                 </button>
               </div>
               {loadingPersonalTxs ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                <TransactionListSkeleton variant="agent" count={4} />
               ) : personalTxs.length === 0 ? (
                 <div className="bg-gray-50 rounded-[2rem] p-10 text-center border-2 border-dashed border-gray-200">
                   <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />

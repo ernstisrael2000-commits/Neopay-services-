@@ -18,6 +18,7 @@ import {
   ImageIcon, Wallet, Package, Calendar, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdminContentSkeleton } from './skeletons/AdminContentSkeleton';
 import {
   awardMonthlyPrizes,
   awardAgentMonthlyPrizes,
@@ -691,7 +692,7 @@ export default function AdminContestManager() {
         </CardHeader>
         <CardContent className="p-5">
           {histLoading ? (
-            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
+            <AdminContentSkeleton variant="list" rows={3} />
           ) : history.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <Trophy className="h-8 w-8 mx-auto mb-2 opacity-30" />

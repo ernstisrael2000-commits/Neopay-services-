@@ -6,6 +6,7 @@ import { useSettingsCtx } from '../contexts/SettingsContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
+import { Skeleton } from './ui/skeleton';
 
 async function loadOverrides(): Promise<Record<string, number>> {
   const r = await fetch('/api/fazer/price-overrides');
@@ -173,10 +174,7 @@ function OfferPriceEditor({ category, onBack }: { category: FazerCategory; onBac
       </div>
 
       {(loading || loadingOverrides) ? (
-        <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">Chargement des offres…</span>
-        </div>
+        <div className="space-y-2">{[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-14 w-full rounded-2xl" />)}</div>
       ) : offers.length === 0 ? (
         <p className="text-sm text-gray-400 text-center py-12">Aucune offre disponible.</p>
       ) : (

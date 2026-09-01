@@ -23,6 +23,7 @@ import { useSettingsCtx } from '../contexts/SettingsContext';
 import { loginClientWithGoogle } from '../services/clientService';
 import { openCertificate } from '../lib/certificateGenerator';
 import { FormationGridSkeleton } from '../components/skeletons/FormationGridSkeleton';
+import { Skeleton } from '../components/ui/skeleton';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -1117,9 +1118,7 @@ function AcademyProfilePage({ loggedClient, myCourses, progressMap, onTabChange,
           <h3 className="font-editorial text-base font-semibold text-gray-900">Mes certificats</h3>
         </div>
         {loadingCerts ? (
-          <div className="bg-white rounded-2xl border border-stone-200/80 p-8 flex items-center justify-center">
-            <Loader2 className="h-5 w-5 text-violet-400 animate-spin" />
-          </div>
+          <div className="space-y-2.5">{[1, 2].map(i => <div key={i} className="bg-white rounded-2xl border border-stone-200/80 p-4 flex items-center gap-3"><Skeleton className="h-12 w-12 rounded-xl" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-2/5 rounded-full" /><Skeleton className="h-2.5 w-1/3 rounded-full" /></div><Skeleton className="h-8 w-20 rounded-xl" /></div>)}</div>
         ) : certificates.length === 0 ? (
           <div className="bg-white rounded-2xl border border-stone-200/80 p-8 text-center">
             <Trophy className="h-8 w-8 text-gray-200 mx-auto mb-2" />

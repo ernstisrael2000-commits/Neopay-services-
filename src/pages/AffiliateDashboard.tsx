@@ -1408,7 +1408,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 )}
               </div>
               {transactionsLoading ? (
-                <TransactionListSkeleton count={3} />
+                <TransactionListSkeleton variant="affiliate" count={3} />
               ) : recentTx.length > 0 ? (
                 <div className="divide-y divide-gray-50">
                   {recentTx.map(t => {
@@ -1549,7 +1549,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
             {/* Transaction list */}
             {transactionsLoading ? (
-              <TransactionListSkeleton count={5} />
+              <TransactionListSkeleton variant="affiliate" count={5} />
             ) : transactions.length === 0 ? (
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
                 <History className="h-12 w-12 mx-auto mb-3 text-gray-200" />

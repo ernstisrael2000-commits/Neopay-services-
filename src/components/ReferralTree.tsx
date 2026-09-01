@@ -4,6 +4,7 @@ import { getAffiliateReferrals } from '../services/affiliateService';
 import { Affiliate } from '../types';
 import { Loader2, User, Users, ChevronDown, ChevronRight, Crown, Star, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Skeleton } from './ui/skeleton';
 
 // ── Couleurs par niveau ───────────────────────────────────────────────────────
 const LEVEL_COLORS: Record<string, { bg: string; text: string; border: string; badge: string }> = {
@@ -197,9 +198,15 @@ export default function ReferralTree({ affiliate }: Props) {
 
       {/* Arbre */}
       {loading ? (
-        <div className="flex items-center justify-center py-10 text-gray-400">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          <span className="text-sm">Chargement du réseau…</span>
+        <div className="space-y-3 rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-32 rounded-full" /><Skeleton className="h-2.5 w-24 rounded-full" /></div>
+            <Skeleton className="h-5 w-12 rounded-full" />
+          </div>
+          <div className="ml-6 space-y-2 border-l-2 border-gray-100 pl-4">
+            {[1, 2, 3].map(i => <div key={i} className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3"><Skeleton className="h-8 w-8 rounded-full" /><div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-28 rounded-full" /><Skeleton className="h-2.5 w-20 rounded-full" /></div></div>)}
+          </div>
         </div>
       ) : totalMembers === 0 ? (
         <div className="bg-gray-50 rounded-3xl border border-gray-100 p-8 text-center">

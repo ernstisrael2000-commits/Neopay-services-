@@ -1,104 +1,41 @@
 import { Skeleton } from '../ui/skeleton';
+import { TransactionListSkeleton } from './TransactionListSkeleton';
 
 /**
- * Full-page skeleton for the AffiliateDashboard — matches the fixed header,
- * gradient banner, stats cards, and tab navigation layout.
+ * Loading state for the affiliate home screen: fixed header, contest podium,
+ * greeting, single commission wallet, stats and five bottom tabs.
  */
 export function AffiliateDashboardSkeleton() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900" aria-label="Chargement du tableau de bord affilié">
-      {/* ── Fixed Header ── */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700/50">
-        <div className="flex items-center justify-between px-4 py-3 max-w-2xl mx-auto">
-          <div className="flex items-center gap-2.5">
-            <Skeleton className="h-9 w-9 rounded-full" />
-            <div className="space-y-1.5">
-              <Skeleton className="h-3.5 w-20 rounded-full" />
-              <Skeleton className="h-2.5 w-24 rounded-full" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <Skeleton className="h-8 w-8 rounded-full" />
-          </div>
+    <div className="min-h-screen bg-gray-50" aria-label="Chargement du tableau de bord affilié">
+      <div className="fixed left-0 right-0 top-0 z-40 border-b border-gray-100 bg-white">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5"><Skeleton className="h-9 w-9 rounded-full" /><div className="space-y-1.5"><Skeleton className="h-3.5 w-24 rounded-full" /><Skeleton className="h-2 w-28 rounded-full" /></div></div>
+          <div className="flex gap-2"><Skeleton className="h-9 w-9 rounded-xl" /><Skeleton className="h-9 w-9 rounded-xl" /></div>
         </div>
       </div>
 
-      {/* Spacer for fixed header */}
-      <div className="h-[57px]" />
+      <div className="mx-auto max-w-2xl px-4 pb-28 pt-14">
+        <Skeleton className="mb-4 h-36 w-full rounded-3xl" />
 
-      {/* ── Profile banner ── */}
-      <div className="bg-gradient-to-br from-primary/80 to-indigo-600/80 px-4 pt-6 pb-20">
-        <div className="max-w-2xl mx-auto space-y-4">
-          {/* Avatar + name */}
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-16 w-16 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32 rounded-full bg-white/30" />
-              <Skeleton className="h-3 w-24 rounded-full bg-white/20" />
-            </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pt-1"><div className="space-y-2"><Skeleton className="h-3 w-16 rounded-full" /><Skeleton className="h-7 w-40 rounded-full" /></div><Skeleton className="h-7 w-24 rounded-full" /></div>
+
+          <div className="rounded-3xl bg-gradient-to-br from-blue-900 to-blue-700 p-6 shadow-2xl">
+            <div className="flex items-start justify-between"><Skeleton className="h-3 w-32 rounded-full bg-white/25" /><Skeleton className="h-7 w-7 rounded-full bg-white/15" /></div>
+            <Skeleton className="mt-3 h-10 w-48 rounded-full bg-white/30" />
+            <Skeleton className="mt-2 h-3 w-28 rounded-full bg-white/15" />
+            <div className="mt-5 grid grid-cols-2 gap-4 border-t border-white/10 pt-4"><div className="space-y-2"><Skeleton className="h-2 w-20 rounded-full bg-white/15" /><Skeleton className="h-4 w-24 rounded-full bg-white/25" /></div><div className="space-y-2"><Skeleton className="h-2 w-16 rounded-full bg-white/15" /><Skeleton className="h-4 w-24 rounded-full bg-white/25" /></div></div>
           </div>
-          {/* Stats pill row */}
-          <div className="flex gap-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex-1 bg-white/15 rounded-2xl p-3 space-y-1.5">
-                <Skeleton className="h-5 w-10 rounded-full bg-white/30 mx-auto" />
-                <Skeleton className="h-2.5 w-14 rounded-full bg-white/20 mx-auto" />
-              </div>
-            ))}
-          </div>
+
+          <div className="grid grid-cols-2 gap-3">{[1, 2, 3, 4].map(i => <div key={i} className="space-y-2 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm"><Skeleton className="h-9 w-9 rounded-xl" /><Skeleton className="h-2.5 w-20 rounded-full" /><Skeleton className="h-5 w-16 rounded-full" /></div>)}</div>
+
+          <div className="space-y-3 rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><Skeleton className="h-4 w-36 rounded-full" /><Skeleton className="h-3 w-16 rounded-full" /></div><Skeleton className="h-12 w-full rounded-2xl" /><Skeleton className="h-12 w-full rounded-2xl" /></div>
+          <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm"><div className="border-b border-gray-100 px-5 py-4"><Skeleton className="h-4 w-32 rounded-full" /></div><TransactionListSkeleton variant="affiliate" count={4} /></div>
         </div>
       </div>
 
-      {/* ── Main card floating over banner ── */}
-      <div className="max-w-2xl mx-auto px-4 -mt-12 pb-32 space-y-4">
-        {/* Wallet card */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700/50 shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-4 w-24 rounded-full" />
-            <Skeleton className="h-6 w-20 rounded-full" />
-          </div>
-          <Skeleton className="h-8 w-36 rounded-full" />
-          {/* Action buttons */}
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-12 rounded-2xl" />
-            ))}
-          </div>
-        </div>
-
-        {/* Recent transactions skeleton */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700/50 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-50 dark:border-gray-700/30">
-            <Skeleton className="h-4 w-36 rounded-full" />
-          </div>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-50 dark:border-gray-700/20 last:border-0">
-              <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
-              <div className="flex-1 space-y-1.5">
-                <Skeleton className="h-3 w-2/5 rounded-full" />
-                <Skeleton className="h-2.5 w-1/3 rounded-full" />
-              </div>
-              <div className="space-y-1.5 text-right">
-                <Skeleton className="h-3.5 w-16 rounded-full ml-auto" />
-                <Skeleton className="h-4 w-14 rounded-full ml-auto" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Bottom tab bar skeleton ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700/50 safe-area-bottom">
-        <div className="flex justify-around py-2 max-w-2xl mx-auto">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="flex flex-col items-center gap-1 py-1">
-              <Skeleton className="h-6 w-6 rounded-lg" />
-              <Skeleton className="h-2 w-10 rounded-full" />
-            </div>
-          ))}
-        </div>
-      </div>
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-100 bg-white pb-safe"><div className="mx-auto flex max-w-2xl justify-around py-2">{[1, 2, 3, 4, 5].map(i => <div key={i} className="flex flex-col items-center gap-1 py-1"><Skeleton className="h-6 w-6 rounded-lg" /><Skeleton className="h-2 w-10 rounded-full" /></div>)}</div></div>
     </div>
   );
 }

@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Skeleton } from '../ui/skeleton';
+import { TransactionListSkeleton } from '../skeletons/TransactionListSkeleton';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface FFPackage {
@@ -420,9 +422,7 @@ export default function FreeFireResellerSection({ agentId, agentName, agentBalan
             </div>
 
             {loadingTx ? (
-              <div className="bg-white rounded-3xl shadow-sm p-10 flex justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-              </div>
+              <div className="overflow-hidden rounded-3xl bg-white shadow-sm"><TransactionListSkeleton variant="agent" count={3} /></div>
             ) : transactions.length === 0 ? (
               <div className="bg-white rounded-3xl shadow-sm p-10 text-center">
                 <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -560,7 +560,7 @@ export default function FreeFireResellerSection({ agentId, agentName, agentBalan
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pack de diamants *</Label>
               {loadingPkgs ? (
-                <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
+                <div className="grid grid-cols-2 gap-2">{[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 rounded-2xl" />)}</div>
               ) : packages.length === 0 ? (
                 <p className="text-center text-slate-400 text-sm py-4">Aucun pack disponible pour cette région.</p>
               ) : (
@@ -665,9 +665,7 @@ export default function FreeFireResellerSection({ agentId, agentName, agentBalan
 
           <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[60vh]">
             {loadingCreditPacks ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-              </div>
+              <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
             ) : creditPacks.length === 0 ? (
               <p className="text-center text-slate-400 text-sm py-6">Aucun pack disponible.</p>
             ) : (

@@ -11,6 +11,7 @@ import { useFazerTopups, useFazerOffers, useFazerValidatableGames, useFazerPrice
 import { isGameAvailableInHaiti } from '../lib/haitiFilter';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
+import { Skeleton } from './ui/skeleton';
 
 export type { FazerCategory };
 
@@ -434,7 +435,7 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
                   1 · Choisissez votre offre
                 </p>
                 {offersLoading ? (
-                  <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 text-purple-400 animate-spin" /></div>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">{[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
                 ) : offers.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-6">Aucune offre disponible.</p>
                 ) : (

@@ -6,6 +6,7 @@ import { Truck, MapPin, ExternalLink, MessageCircle, Play, ChevronLeft, LayoutGr
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
+import { PageSkeleton } from '../components/skeletons/PageSkeleton';
 
 export default function ShippingView() {
   const { configs, loading } = useShippingConfigs();
@@ -26,11 +27,7 @@ export default function ShippingView() {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-      </div>
-    );
+    return <PageSkeleton view="shipping" />;
   }
 
   return (

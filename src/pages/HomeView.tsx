@@ -444,7 +444,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           )}
         </div>
         {(productsLoading || gamesLoading || cardsLoading) ? (
-          <ProductGridSkeleton count={6} />
+          <ProductGridSkeleton count={6} featured />
         ) : (
           (() => {
             const q = debouncedSearch.trim().toLowerCase();

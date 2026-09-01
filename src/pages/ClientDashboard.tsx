@@ -26,6 +26,8 @@ import { apiFetch } from '../lib/apiFetch';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { Client, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 import CryptoDepositFlow from '../components/CryptoDepositFlow';
+import { ClientDashboardSkeleton } from '../components/skeletons/ClientDashboardSkeleton';
+import { TransactionListSkeleton } from '../components/skeletons/TransactionListSkeleton';
 
 interface ClientDashboardProps {
   clientId: string;
@@ -660,6 +662,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
   const pendingCount = transactions.filter(t => t.status === 'pending').length;
 
   if (!asPage && !open) return null;
+  if (loading) return <ClientDashboardSkeleton />;
 
   return (
     <div className={asPage
@@ -698,9 +701,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
 
         {/* Card */}
         <div className="px-3 pb-2 shrink-0">
-          {loading ? (
-            <div className="w-full rounded-[1.75rem] bg-violet-100 animate-pulse" style={{ aspectRatio: '2 / 1' }} />
-          ) : client ? (
+          {client ? (
             <VirtualCard
               client={client} balance={balance} rate={rate}
               copied={copied} onCopy={copyWalletId}
@@ -712,14 +713,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
             </div>
           )}
 
-          {/* Balance strip skeleton */}
-          {loading && (
-            <div className="mt-2 grid grid-cols-3 gap-2 px-1 animate-pulse">
-              <div><div className="h-2.5 bg-gray-200 rounded-full w-16 mb-1.5" /><div className="h-5 bg-gray-300 rounded-full w-20" /></div>
-              <div><div className="h-2.5 bg-gray-200 rounded-full w-16 mb-1.5" /><div className="h-5 bg-gray-300 rounded-full w-20" /></div>
-              <div className="text-right"><div className="h-2.5 bg-gray-200 rounded-full w-10 ml-auto mb-1.5" /><div className="h-5 bg-violet-200 rounded-full w-16 ml-auto" /></div>
-            </div>
-          )}
           {/* Balance strip */}
           {client && (
             <div className="mt-2 grid grid-cols-3 gap-2 px-1">
@@ -745,40 +738,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto no-scrollbar">
-          {/* ── Skeleton while client data loads ── */}
-          {loading && (
-            <div className="px-3 pb-3 space-y-2.5 animate-pulse">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="h-20 rounded-2xl bg-emerald-100" />
-                <div className="h-20 rounded-2xl bg-red-100" />
-              </div>
-              <div className="h-14 rounded-2xl bg-gray-100" />
-              <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                <div className="h-9 bg-gray-50 border-b border-gray-100" />
-                {[1,2,3].map(i => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0">
-                    <div className="h-8 w-8 rounded-xl bg-gray-200 shrink-0" />
-                    <div className="flex-1 space-y-1.5">
-                      <div className="h-3 bg-gray-200 rounded-full w-2/3" />
-                      <div className="h-2.5 bg-gray-100 rounded-full w-1/2" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="h-10 rounded-2xl bg-gray-100" />
-              {[1,2,3].map(i => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-100 bg-white">
-                  <div className="h-9 w-9 rounded-xl bg-gray-200 shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 bg-gray-200 rounded-full w-3/5" />
-                    <div className="h-2.5 bg-gray-100 rounded-full w-2/5" />
-                  </div>
-                  <div className="h-4 w-14 bg-gray-200 rounded-full" />
-                </div>
-              ))}
-            </div>
-          )}
-          <div className={`px-3 pb-3 space-y-2.5${loading ? ' hidden' : ''}`}>
+          <div className="px-3 pb-3 space-y-2.5">
 
             {/* ── Pending withdrawal confirmations (agent-initiated) */}
             <AnimatePresence>
@@ -952,9 +912,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
                   >
                     <div className="p-3 space-y-2">
                       {txLoading ? (
-                        <div className="flex justify-center py-6">
-                          <Loader2 className="h-5 w-5 animate-spin text-violet-400" />
-                        </div>
+                        <TransactionListSkeleton variant="client" count={3} />
                       ) : transactions.length === 0 ? (
                         <div className="text-center py-8">
                           <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, History, TrendingUp, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Skeleton } from '../components/ui/skeleton';
 
 interface FeeRecord {
   id: string;
@@ -58,8 +59,8 @@ export default function AgentFeeHistory() {
       {open && (
         <Card className="rounded-2xl border-gray-100 shadow-sm overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+            <div className="divide-y divide-gray-100">
+              {[1, 2, 3].map(i => <div key={i} className="flex items-center gap-3 p-4"><Skeleton className="h-9 w-9 rounded-xl" /><div className="flex-1 space-y-2"><Skeleton className="h-3 w-2/5 rounded-full" /><Skeleton className="h-2.5 w-1/3 rounded-full" /></div><Skeleton className="h-4 w-16 rounded-full" /></div>)}
             </div>
           ) : records.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">

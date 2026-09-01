@@ -66,6 +66,7 @@ import {
   updateAgentBalance
 } from '../services/agentService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, CardFeeRule, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
+import { AdminContentSkeleton } from '../components/skeletons/AdminContentSkeleton';
 import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, clearAllAdminNotifications, approvePurchaseRequest, declinePurchaseRequest, usePromoCodes, savePromoCode, deletePromoCode } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
@@ -2245,9 +2246,7 @@ function EmailLogsPanel() {
 
       {/* Table */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <AdminContentSkeleton variant="stats" rows={5} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <LucideIcons.Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -4294,10 +4293,7 @@ function EmailLogsPanel() {
 
       {/* ── Liste des agents ── */}
       {agentsLoading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-300">
-          <Loader2 className="h-12 w-12 animate-spin" />
-          <p className="text-sm font-bold uppercase tracking-widest">Chargement…</p>
-        </div>
+        <AdminContentSkeleton variant="cards" rows={6} />
       ) : filteredAgentsList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-200">
           <UserCheck className="h-16 w-16" />
@@ -4926,10 +4922,7 @@ function EmailLogsPanel() {
             </CardHeader>
             <CardContent className="p-0">
               {parcelsLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des données...</p>
-                </div>
+                <AdminContentSkeleton variant="table" rows={6} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -5005,10 +4998,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {productsLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des produits...</p>
-                </div>
+                <AdminContentSkeleton variant="gallery" rows={6} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -5085,10 +5075,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {formationsLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des formations...</p>
-                </div>
+                <AdminContentSkeleton variant="gallery" rows={6} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -5189,10 +5176,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {loadingPaymentRequests ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des demandes...</p>
-                </div>
+                <AdminContentSkeleton variant="cards" rows={4} />
               ) : formationPaymentRequests.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                   <LucideIcons.CreditCard className="h-12 w-12 text-gray-200 mb-3" />
@@ -5374,7 +5358,7 @@ function EmailLogsPanel() {
                       <p className="text-xs text-gray-400 mt-0.5">Cliquez sur "Émettre" pour délivrer un certificat</p>
                     </div>
                     {loadingCertStudents ? (
-                      <div className="flex items-center justify-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                      <AdminContentSkeleton variant="list" rows={4} />
                     ) : certStudents.length === 0 ? (
                       <div className="py-10 text-center text-gray-400 text-sm">Aucun étudiant inscrit</div>
                     ) : (
@@ -5418,7 +5402,7 @@ function EmailLogsPanel() {
                       </h3>
                     </div>
                     {loadingCertificates ? (
-                      <div className="flex items-center justify-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                      <AdminContentSkeleton variant="list" rows={4} />
                     ) : certificates.length === 0 ? (
                       <div className="py-10 text-center text-gray-400 text-sm">Aucun certificat émis</div>
                     ) : (
@@ -5511,10 +5495,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {cardsLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des cartes...</p>
-                </div>
+                <AdminContentSkeleton variant="gallery" rows={6} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -5661,9 +5642,7 @@ function EmailLogsPanel() {
               )}
 
               {sliderLoading ? (
-                <div className="flex justify-center py-20">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
+                <AdminContentSkeleton variant="gallery" rows={6} />
               ) : sliderImages.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {sliderImages.map((image) => (
@@ -5920,10 +5899,7 @@ function EmailLogsPanel() {
                 </CardHeader>
                 <CardContent className="p-0">
                   {affiliatesLoading ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                      <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                      <p>Chargement des affiliés...</p>
-                    </div>
+                    <AdminContentSkeleton variant="cards" rows={6} />
                   ) : affiliateViewMode === 'table' ? (
                     <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
                       <Table>
@@ -6127,9 +6103,7 @@ function EmailLogsPanel() {
                     </CardHeader>
                     <CardContent className="p-5 space-y-2">
                       {officialRankingsLoading ? (
-                        <div className="flex justify-center py-5">
-                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                        </div>
+                        <AdminContentSkeleton variant="list" rows={3} />
                       ) : officialRankings.length > 0 ? (
                         officialRankings.map((w, idx) => (
                           <div key={w.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
@@ -6194,7 +6168,7 @@ function EmailLogsPanel() {
                     </CardHeader>
                     <CardContent className="p-5 space-y-3">
                       {affiliateRequestsLoading ? (
-                        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                        <AdminContentSkeleton variant="list" rows={2} />
                       ) : affiliateRequests.filter(r => r.status === 'pending').length > 0 ? (
                         affiliateRequests.filter(r => r.status === 'pending').map((r) => (
                           <div key={r.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 space-y-3">
@@ -6237,7 +6211,7 @@ function EmailLogsPanel() {
                     </CardHeader>
                     <CardContent className="p-5 space-y-3">
                       {allWithdrawalsLoading ? (
-                        <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                        <AdminContentSkeleton variant="list" rows={2} />
                       ) : allWithdrawals.filter(w => w.status === 'pending').length > 0 ? (
                         allWithdrawals.filter(w => w.status === 'pending').map((w) => (
                           <div key={w.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 space-y-3">
@@ -6280,10 +6254,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {allWithdrawalsLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des retraits...</p>
-                </div>
+                <AdminContentSkeleton variant="table" rows={6} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -6378,10 +6349,7 @@ function EmailLogsPanel() {
             </CardHeader>
             <CardContent className="p-0">
               {walletTxLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                  <p>Chargement des flux...</p>
-                </div>
+                <AdminContentSkeleton variant="table" rows={6} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -6488,10 +6456,7 @@ function EmailLogsPanel() {
                   </h2>
                 </div>
                 {affiliateReqLoading ? (
-                  <div className="flex items-center gap-2 py-6 justify-center text-gray-400">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-sm">Chargement...</span>
-                  </div>
+                  <AdminContentSkeleton variant="cards" rows={2} />
                 ) : pending.length === 0 ? (
                   <div className="rounded-2xl bg-gray-50 border border-gray-100 py-6 text-center text-gray-400 text-sm">
                     <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-300" />
@@ -6628,10 +6593,7 @@ function EmailLogsPanel() {
 
           {/* Request cards */}
           {clientTxLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Loader2 className="h-8 w-8 animate-spin mb-2" />
-              <p>Chargement des demandes...</p>
-            </div>
+            <AdminContentSkeleton variant="cards" rows={3} />
           ) : pendingClientRequests.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-gray-400">
               <CheckCircle2 className="h-14 w-14 mb-4 text-emerald-300" />
@@ -6849,10 +6811,7 @@ function EmailLogsPanel() {
           </div>
 
           {clientTxLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Loader2 className="h-8 w-8 animate-spin mb-2" />
-              <p>Chargement des transactions clients...</p>
-            </div>
+            <AdminContentSkeleton variant="table" rows={6} />
           ) : filteredClientTransactions.length === 0 ? (
             <div className="text-center py-20 text-gray-400">
               <Wallet className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -8753,10 +8712,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {onlineServicesLoading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                  <Loader2 className="h-7 w-7 animate-spin mb-2" />
-                  <p>Chargement…</p>
-                </div>
+                <AdminContentSkeleton variant="table" rows={4} />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
@@ -8896,7 +8852,7 @@ function EmailLogsPanel() {
           <Card className="shadow-sm border-gray-200">
             <CardContent className="p-0">
               {promoCodesLoading ? (
-                <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                <AdminContentSkeleton variant="table" rows={5} />
               ) : promoCodes.length === 0 ? (
                 <div className="text-center py-16 text-gray-400">
                   <LucideIcons.Tag className="h-10 w-10 mx-auto mb-3 opacity-20" />
@@ -8977,9 +8933,7 @@ function EmailLogsPanel() {
               <TableBody>
                 {buttonsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
-                    </TableCell>
+                    <TableCell colSpan={5} className="p-4"><AdminContentSkeleton variant="table" rows={4} /></TableCell>
                   </TableRow>
                 ) : buttons.length === 0 ? (
                   <TableRow>
@@ -9161,7 +9115,7 @@ function EmailLogsPanel() {
           </div>
           {(() => { if (!teachers.length && !teachersLoading) fetchTeachers(); return null; })()}
           {teachersLoading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400"><Loader2 className="h-7 w-7 animate-spin" /></div>
+            <AdminContentSkeleton variant="cards" rows={6} />
           ) : teachers.length === 0 ? (
             <Card className="border-dashed border-2 border-gray-200 shadow-none">
               <CardContent className="py-16 text-center text-gray-400">
@@ -9272,7 +9226,7 @@ function EmailLogsPanel() {
           </Card>
 
           {teacherWithdrawalsLoading ? (
-            <div className="flex items-center justify-center py-12 text-gray-400"><Loader2 className="h-7 w-7 animate-spin" /></div>
+            <AdminContentSkeleton variant="cards" rows={4} />
           ) : teacherWithdrawals.length === 0 ? (
             <Card className="border-dashed border-2 border-gray-200 shadow-none">
               <CardContent className="py-14 text-center text-gray-400">
@@ -9430,7 +9384,7 @@ function EmailLogsPanel() {
 
             {/* ── Agents list ── */}
             {ffResellerLoading ? (
-              <div className="flex justify-center py-16"><Loader2 className="h-10 w-10 animate-spin text-orange-400" /></div>
+              <AdminContentSkeleton variant="cards" rows={6} />
             ) : ffResellerAgents.length === 0 ? (
               <div className="bg-white rounded-3xl shadow-sm p-12 text-center">
                 <Gamepad2 className="h-14 w-14 text-gray-200 mx-auto mb-4" />
@@ -9525,7 +9479,7 @@ function EmailLogsPanel() {
                             <button onClick={() => setFFAgentForTx(null)} className="text-[10px] text-gray-400 font-black">✕ Fermer</button>
                           </div>
                           {ffTxsLoading ? (
-                            <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-300" /></div>
+                            <AdminContentSkeleton variant="list" rows={3} />
                           ) : ffTxs.length === 0 ? (
                             <p className="text-center text-gray-400 text-xs py-3">Aucune vente enregistrée.</p>
                           ) : (
@@ -9577,7 +9531,7 @@ function EmailLogsPanel() {
           </div>
 
           {profitStatsLoading ? (
-            <div className="flex items-center justify-center py-16 text-gray-400"><Loader2 className="h-8 w-8 animate-spin" /></div>
+            <AdminContentSkeleton variant="stats" rows={5} />
           ) : profitStats ? (
             <>
               {/* Total profit card */}

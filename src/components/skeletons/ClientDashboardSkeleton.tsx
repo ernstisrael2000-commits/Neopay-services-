@@ -7,7 +7,7 @@ import { TransactionListSkeleton } from './TransactionListSkeleton';
  */
 export function ClientDashboardSkeleton() {
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900" aria-label="Chargement du tableau de bord">
+    <div className="flex min-h-full flex-col bg-white dark:bg-gray-900" aria-label="Chargement du tableau de bord">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 shrink-0">
         <Skeleton className="h-8 w-8 rounded-full" />
@@ -35,21 +35,21 @@ export function ClientDashboardSkeleton() {
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-hidden px-3 pb-3 space-y-2.5 pt-2">
-        {/* Action buttons row (Dépôt / Retrait) */}
-        <div className="grid grid-cols-2 gap-3">
-          <Skeleton className="h-20 rounded-2xl" />
-          <Skeleton className="h-20 rounded-2xl" />
+        {/* Action buttons row (Dépôt / Retrait / Transfert) */}
+        <div className="grid grid-cols-3 gap-2.5">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-[88px] rounded-2xl" />)}
         </div>
 
-        {/* Transfer button */}
-        <Skeleton className="h-14 w-full rounded-2xl" />
+        {/* Accepted methods / security notice */}
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <Skeleton className="h-16 w-full rounded-2xl" />
 
         {/* Recent transactions */}
         <div className="rounded-2xl border border-gray-100 dark:border-gray-700/50 bg-white dark:bg-gray-800/30 overflow-hidden">
           <div className="h-9 bg-gray-50 dark:bg-gray-700/30 border-b border-gray-100 dark:border-gray-700/40 flex items-center px-4">
             <Skeleton className="h-3 w-28 rounded-full" />
           </div>
-          <TransactionListSkeleton count={3} />
+          <TransactionListSkeleton variant="client" count={3} />
         </div>
       </div>
     </div>

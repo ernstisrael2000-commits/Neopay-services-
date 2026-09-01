@@ -11,6 +11,7 @@ import { useFazerGiftCards, useFazerGiftCardOffers, FazerGiftCategory, FazerOffe
 import { isGiftCardAvailableInHaiti } from '../lib/haitiFilter';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
+import { Skeleton } from './ui/skeleton';
 
 interface Props {
   loggedClient?: Client | null;
@@ -330,7 +331,7 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
                     Choisissez un montant
                   </p>
                   {offersLoading ? (
-                    <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 text-rose-400 animate-spin" /></div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">{[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
                   ) : offers.length === 0 ? (
                     <p className="text-sm text-gray-400 text-center py-6">Aucune offre disponible.</p>
                   ) : (

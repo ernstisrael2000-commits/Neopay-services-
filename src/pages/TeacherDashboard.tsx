@@ -21,6 +21,8 @@ import { Teacher, TeacherTransaction, Formation, FormationModule, FormationChapt
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { FormationGridSkeleton } from '../components/skeletons/FormationGridSkeleton';
+import { TransactionListSkeleton } from '../components/skeletons/TransactionListSkeleton';
 
 interface TeacherDashboardProps {
   teacher: Teacher;
@@ -435,9 +437,7 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
             </div>
 
             {loadingFormations ? (
-              <div className="flex items-center justify-center py-20 text-gray-400">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
+              <FormationGridSkeleton count={6} />
             ) : formations.length === 0 ? (
               <Card className="border-dashed border-2 border-gray-200 shadow-none">
                 <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -567,9 +567,7 @@ export default function TeacherDashboard({ teacher, onLogout }: TeacherDashboard
               </div>
 
               {loadingTx ? (
-                <div className="flex items-center justify-center py-12 text-gray-400">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
+                <TransactionListSkeleton variant="affiliate" count={4} />
               ) : transactions.length === 0 ? (
                 <Card className="border-dashed border-2 border-gray-200 shadow-none">
                   <CardContent className="flex flex-col items-center justify-center py-10 text-center">
