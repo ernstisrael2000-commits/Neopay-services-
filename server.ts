@@ -77,7 +77,9 @@ async function startServer() {
   app.use(compression({ level: 6, threshold: 1024 }));
 
   app.use(express.json({
-    limit: '2mb',
+    // Full HeyQO KYC can contain up to three short-lived base64 JPG/PNG files.
+    // The route validates each file at 4 MiB and never persists the payload.
+    limit: '18mb',
     verify: (req, _res, buffer) => {
       // HeyQO signs the exact request bytes. Keep a private copy for webhook
       // verification without changing the parsed JSON used by other routes.

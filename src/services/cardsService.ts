@@ -4,9 +4,12 @@ import type { HeyQOCard, HeyQOCardTransaction, HeyQOCustomer } from '../types';
 
 export interface CardsSnapshot {
   configured: boolean;
+  environment?: 'sandbox' | 'production' | 'custom';
+  webhookConfigured?: boolean;
   customer: HeyQOCustomer | null;
   cards: HeyQOCard[];
   cardTransactions: HeyQOCardTransaction[];
+  diagnostics?: Array<{ step: string; status: string; detail?: string }>;
   stale?: boolean;
 }
 
@@ -32,8 +35,40 @@ async function post<T = any>(
 }
 
 export const getCards = () => apiFetch<CardsSnapshot>('/api/client/cards');
-export const createHeyQOCard = (brand: 'visa' | 'mastercard', kyc: Record<string, string>, idempotencyKey?: string) =>
-  post<CreateCardResult>('/api/client/cards', { brand, kyc }, idempotencyKey, 60_000);
+export const createHeyQOCard = (brand: 'visa' | 'mastercard', idempotencyKey?: string) =>
+  post<CreateCardResult>('/api/client/cards', { brand }, idempotencyKey, 60_000);
+
+function fileToBase64(file: File | null | undefined): Promise<string | undefined> {
+  if (!file) return Promise.resolve(undefined);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Impossible de lire ${file.name}.`));
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function submitHeyQOCustomerKyc(
+  value: Record<string, string | boolean | File | null | undefined>,
+  idempotencyKey?: string,
+) {
+  const { documentFrontFile, documentBackFile, proofOfAddressFile, ...fields } = value;
+  const [documentFrontBase64, documentBackBase64, proofOfAddressBase64] = await Promise.all([
+    fileToBase64(documentFrontFile as File | null),
+    fileToBase64(documentBackFile as File | null),
+    fileToBase64(proofOfAddressFile as File | null),
+  ]);
+  return post<{
+    success: boolean;
+    customer: HeyQOCustomer;
+    diagnostics?: CardsSnapshot['diagnostics'];
+  }>('/api/client/cards/customer', {
+    kyc: { ...fields, documentFrontBase64, documentBackBase64, proofOfAddressBase64 },
+  }, idempotencyKey, 90_000);
+}
 export const getSecureView = (cardId: string) => post(`/api/client/cards/${encodeURIComponent(cardId)}/secure-view`);
 export const depositToCard = (cardId: string, amount: number, idempotencyKey?: string) =>
   post(`/api/client/cards/${encodeURIComponent(cardId)}/deposit`, { amount }, idempotencyKey);

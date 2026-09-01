@@ -43,6 +43,12 @@ export function isHeyQOConfigured(): boolean {
   return credentialsConfigured();
 }
 
+export function getHeyQOEnvironment(): 'sandbox' | 'production' | 'custom' {
+  if (HEYQO_BASE_URL === 'https://heyqo.cash/business/sandbox/v1') return 'sandbox';
+  if (HEYQO_BASE_URL === 'https://heyqo.cash/business/v1') return 'production';
+  return 'custom';
+}
+
 function providerMessage(payload: any, status: number): string {
   const message =
     payload?.error ||
@@ -142,22 +148,22 @@ export function unwrapHeyQO<T = any>(payload: HeyQOResponse<T> | T): T {
   return payload as T;
 }
 
-const PRIVATE_KEYS = /pan|cvv|cvc|number|expiry|expiration|secret|token|track/i;
-
 export function sanitizeHeyQOCard(input: any): Record<string, unknown> {
   const source = input?.card || input || {};
+  const info = source?.info && typeof source.info === 'object' ? source.info : {};
+  const normalized = { ...source, ...info };
   const output: Record<string, unknown> = {};
   const allowedKeys = new Set([
     'id', 'local_id', 'customer_id', 'status', 'state', 'brand', 'currency',
     'last4', 'last_four', 'masked_pan', 'masked_number', 'cardholder',
-    'cardholder_name', 'balance', 'available_balance', 'limit', 'monthly_limit',
-    'monthly_spent', 'created_at', 'updated_at', 'activated_at', 'frozen_at',
+    'cardholder_name', 'name_on_card', 'balance', 'available_balance', 'limit', 'monthly_limit',
+    'monthly_spent', 'amount', 'created_at', 'updated_at', 'activated_at', 'frozen_at',
   ]);
-  for (const [key, value] of Object.entries(source)) {
-    if (!allowedKeys.has(key) || PRIVATE_KEYS.test(key)) continue;
+  for (const [key, value] of Object.entries(normalized)) {
+    if (!allowedKeys.has(key)) continue;
     if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) output[key] = value;
   }
-  if (typeof output.id !== 'string' && typeof output.local_id === 'string') output.id = output.local_id;
+  if (!output.id && output.local_id !== undefined && output.local_id !== null) output.id = String(output.local_id);
   return output;
 }
 
@@ -170,6 +176,12 @@ export function extractCardList(payload: any): any[] {
 export function extractCard(payload: any): any {
   const data = unwrapHeyQO<any>(payload);
   if (data?.card) return data.card;
+  return data;
+}
+
+export function extractCustomer(payload: any): any {
+  const data = unwrapHeyQO<any>(payload);
+  if (data?.customer) return data.customer;
   return data;
 }
 

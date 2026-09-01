@@ -2,7 +2,8 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDownToLine, ArrowLeft, ArrowUpFromLine, Check, CreditCard, Eye, LockKeyhole, RefreshCw, ShieldCheck, Snowflake, TriangleAlert, UnlockKeyhole, X } from 'lucide-react';
 import { motion } from 'motion/react';
-import { createHeyQOCard, depositToCard, freezeCard, getSecureView, terminateCard, unfreezeCard, useClientCards, withdrawFromCard } from '../services/cardsService';
+import HeyQOKycWizard, { type HeyQOKycValue } from '../components/cards/HeyQOKycWizard';
+import { createHeyQOCard, depositToCard, freezeCard, getSecureView, submitHeyQOCustomerKyc, terminateCard, unfreezeCard, useClientCards, withdrawFromCard } from '../services/cardsService';
 import type { HeyQOCard, HeyQOCardTransaction } from '../types';
 
 interface CardsViewProps {
@@ -25,7 +26,10 @@ const statusCopy: Record<ViewStatus, { label: string; detail: string }> = {
 };
 
 function mapStatus(status?: string, customerStatus?: string): ViewStatus {
-  if (!status) return customerStatus === 'kyc_required' || customerStatus === 'pending_kyc' ? 'kyc_required' : 'none';
+  if (!status) {
+    const kyc = String(customerStatus || '').toLowerCase();
+    return ['pending', 'processing', 'submitted', 'rejected', 'kyc_required', 'pending_kyc'].includes(kyc) ? 'kyc_required' : 'none';
+  }
   if (status === 'pending' || status === 'processing') return 'provisioning';
   if (status === 'blocked') return 'frozen';
   if (status === 'failed') return 'failed';
@@ -65,9 +69,10 @@ export default function CardsView({ clientId, clientName, onBack, onRequestAuth 
   const [kycOpen, setKycOpen] = useState(false);
   const [secureUrl, setSecureUrl] = useState<string | null>(null);
   const intentKeys = useRef<Record<string, string>>({});
-  const [kyc, setKyc] = useState({ dateOfBirth: '', addressLine1: '', city: '', postalCode: '', country: 'HT' });
   const card = snapshot?.cards?.[0];
-  const status = mapStatus(card?.status, snapshot?.customer?.kycStatus || snapshot?.customer?.status);
+  const customerKycStatus = String(snapshot?.customer?.kycStatus || snapshot?.customer?.status || '').toLowerCase();
+  const customerApproved = ['approved', 'verified', 'active', 'completed'].includes(customerKycStatus);
+  const status = mapStatus(card?.status, customerKycStatus);
   const meta = snapshot?.configured === false
     ? { label: 'Service en configuration', detail: 'L’espace est prêt. L’administration doit encore connecter les identifiants HeyQO.' }
     : statusCopy[status];
@@ -80,25 +85,33 @@ export default function CardsView({ clientId, clientName, onBack, onRequestAuth 
     return intentKeys.current[intent];
   };
 
-  const submitKyc = async () => {
-    if (!kyc.dateOfBirth || !kyc.addressLine1 || !kyc.city || !kyc.country) return setActionError('Complétez les champs obligatoires.');
+  const issueCard = async () => {
     setBusy(true); setActionError(null);
     try {
-      const result = await createHeyQOCard('visa', {
-        dateOfBirth: kyc.dateOfBirth,
-        addressStreet: kyc.addressLine1,
-        addressCity: kyc.city,
-        addressPostalCode: kyc.postalCode,
-        countryCode: kyc.country,
-      }, intentKey('issue'));
+      const result = await createHeyQOCard('visa', intentKey('issue'));
       delete intentKeys.current.issue;
-      setKycOpen(false);
-      await refresh();
       if (result?.card) adoptCard(result.card);
+      await refresh();
       setNotice(result?.processing
         ? 'Votre carte est en cours de création. Son statut sera actualisé automatiquement.'
         : 'Votre carte a bien été créée.');
     } catch (cause: any) { setActionError(cause?.message || 'La demande n’a pas pu être envoyée.'); } finally { setBusy(false); }
+  };
+  const submitKyc = async (value: HeyQOKycValue) => {
+    setBusy(true); setActionError(null);
+    try {
+      const result = await submitHeyQOCustomerKyc(value as unknown as Record<string, string | boolean | File | null | undefined>, intentKey('kyc'));
+      delete intentKeys.current.kyc;
+      setKycOpen(false);
+      await refresh();
+      const kycStatus = String(result.customer?.kycStatus || result.customer?.status || '').toLowerCase();
+      if (['approved', 'verified', 'active', 'completed'].includes(kycStatus)) {
+        setNotice('KYC approuvé. Émission de votre carte en cours.');
+        await issueCard();
+      } else {
+        setNotice(`Dossier KYC transmis à HeyQO. Statut : ${kycStatus || 'pending'}.`);
+      }
+    } catch (cause: any) { setActionError(cause?.message || 'Le dossier KYC n’a pas pu être envoyé.'); } finally { setBusy(false); }
   };
   const doCardAction = async (action: 'freeze' | 'unfreeze' | 'terminate') => {
     if (!card) return;
@@ -124,13 +137,18 @@ export default function CardsView({ clientId, clientName, onBack, onRequestAuth 
     <header className="flex items-center justify-between py-5 sm:py-8"><button type="button" data-testid="button-back-cards" onClick={onBack} className="flex items-center gap-2 text-sm font-semibold text-[#f8edd5]/65 hover:text-[#f8edd5]"><ArrowLeft className="h-4 w-4" /> Retour</button><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.22em] text-[#d7b879]"><ShieldCheck className="h-4 w-4" /> Espace sécurisé</div></header>
     <motion.section initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="grid gap-8 lg:grid-cols-[1fr_.8fr] lg:items-center"><div><p className="mb-3 text-xs font-bold uppercase tracking-[.25em] text-[#d7b879]">Carte virtuelle HeyQO</p><h1 data-testid="heading-cards" className="max-w-xl text-4xl font-semibold leading-[1.05] tracking-[-.04em] sm:text-6xl">Votre argent, <em className="font-serif font-normal text-[#d7b879]">à portée.</em></h1><p className="mt-5 max-w-md text-base leading-7 text-[#f8edd5]/58">Une carte pensée pour vos paiements en ligne, avec le contrôle et la tranquillité d’esprit Solutionpam.</p></div><div className="rounded-[30px] border border-[#f8edd5]/10 bg-[#211d22] p-3 sm:p-5">{loading ? <div data-testid="loading-card" className="aspect-[1.59/1] animate-pulse rounded-[28px] bg-[#30292d]" /> : card ? <CardVisual card={card} clientName={clientName} /> : <div data-testid="empty-card" className="flex aspect-[1.59/1] flex-col items-center justify-center rounded-[28px] border border-dashed border-[#d7b879]/35 bg-[#2a2328] px-8 text-center"><CreditCard className="mb-4 h-9 w-9 text-[#d7b879]" /><p className="font-semibold">Votre carte vous attend</p><p className="mt-2 text-sm text-[#f8edd5]/50">Demandez votre carte virtuelle en quelques étapes.</p></div>}</div></motion.section>
     <section className="mt-8 grid gap-4 lg:grid-cols-[1fr_.8fr]"><div className="rounded-[26px] border border-[#f8edd5]/10 bg-[#211d22] p-5 sm:p-7"><div className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-[.2em] text-[#f8edd5]/40">État de la carte</p><p data-testid="status-card" className="mt-2 text-2xl font-semibold">{meta.label}</p></div><span className="rounded-full bg-[#d7b879]/15 px-3 py-1 text-xs font-bold text-[#d7b879]">{snapshot?.stale ? 'Dernière mise à jour' : 'Protégée'}</span></div><p data-testid="text-card-status-detail" className="mt-3 text-sm leading-6 text-[#f8edd5]/55">{meta.detail}</p>{(error || actionError) && <div data-testid="error-card-action" role="alert" className="mt-4 flex gap-2 rounded-2xl border border-red-300/20 bg-red-400/10 p-3 text-sm text-red-200"><TriangleAlert className="h-4 w-4 shrink-0" />{error || actionError}</div>}{notice && <div data-testid="notice-card-action" className="mt-4 flex gap-2 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-sm text-emerald-200"><Check className="h-4 w-4 shrink-0" />{notice}</div>}
-    <div className="mt-6 grid gap-3 sm:grid-cols-2">{snapshot?.configured !== false && (status === 'none' || status === 'failed' || status === 'kyc_required') && <ActionButton testId="button-request-card" onClick={() => { setActionError(null); setKycOpen(true); }} disabled={busy}><ShieldCheck className="h-4 w-4" />{status === 'kyc_required' ? 'Compléter ma vérification' : 'Demander ma carte'}</ActionButton>}{status === 'provisioning' && <ActionButton testId="button-refresh-card" onClick={() => void refresh()} disabled={loading}><RefreshCw className="h-4 w-4" /> Actualiser le statut</ActionButton>}{status === 'kyc_required' && <ActionButton testId="button-request-auth" onClick={onRequestAuth}>Vérifier mon identité</ActionButton>}{(status === 'active' || status === 'frozen') && <><ActionButton testId="button-secure-view" onClick={() => void openSecureView()} disabled={busy}><Eye className="h-4 w-4" /> Voir les détails sécurisés</ActionButton><ActionButton testId={status === 'frozen' ? 'button-unfreeze-card' : 'button-freeze-card'} onClick={() => void doCardAction(status === 'frozen' ? 'unfreeze' : 'freeze')} disabled={busy} danger={status === 'active'}>{status === 'frozen' ? <UnlockKeyhole className="h-4 w-4" /> : <Snowflake className="h-4 w-4" />}{status === 'frozen' ? 'Dégeler la carte' : 'Geler la carte'}</ActionButton><ActionButton testId="button-terminate-card" onClick={() => void doCardAction('terminate')} disabled={busy} danger><LockKeyhole className="h-4 w-4" /> Clôturer la carte</ActionButton></>}</div>
+    <div className="mt-6 grid gap-3 sm:grid-cols-2">{snapshot?.configured !== false && (status === 'none' || status === 'failed' || status === 'kyc_required') && <ActionButton testId="button-request-card" onClick={() => { setActionError(null); if (customerApproved) void issueCard(); else setKycOpen(true); }} disabled={busy}><ShieldCheck className="h-4 w-4" />{customerApproved ? 'Créer ma carte Visa' : snapshot?.customer ? 'Mettre à jour mon KYC' : 'Commencer ma vérification'}</ActionButton>}{status === 'provisioning' && <ActionButton testId="button-refresh-card" onClick={() => void refresh()} disabled={loading}><RefreshCw className="h-4 w-4" /> Actualiser le statut</ActionButton>}{(status === 'active' || status === 'frozen') && <><ActionButton testId="button-secure-view" onClick={() => void openSecureView()} disabled={busy}><Eye className="h-4 w-4" /> Voir les détails sécurisés</ActionButton><ActionButton testId={status === 'frozen' ? 'button-unfreeze-card' : 'button-freeze-card'} onClick={() => void doCardAction(status === 'frozen' ? 'unfreeze' : 'freeze')} disabled={busy} danger={status === 'active'}>{status === 'frozen' ? <UnlockKeyhole className="h-4 w-4" /> : <Snowflake className="h-4 w-4" />}{status === 'frozen' ? 'Dégeler la carte' : 'Geler la carte'}</ActionButton><ActionButton testId="button-terminate-card" onClick={() => void doCardAction('terminate')} disabled={busy} danger><LockKeyhole className="h-4 w-4" /> Clôturer la carte</ActionButton></>}</div>
     {card && (status === 'active' || status === 'frozen') && <div className="mt-6 grid gap-3 sm:grid-cols-2"><ActionButton testId="button-open-deposit" onClick={() => setAmountMode('deposit')}><ArrowDownToLine className="h-4 w-4" /> Recharger depuis Wallet</ActionButton><ActionButton testId="button-open-withdraw" onClick={() => setAmountMode('withdraw')}><ArrowUpFromLine className="h-4 w-4" /> Retirer vers Wallet</ActionButton></div>}
     </div>
+    <section data-testid="panel-heyqo-diagnostics" className="mt-4 rounded-[26px] border border-[#d7b879]/15 bg-[#211d22] p-5 sm:p-7">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-[#d7b879]">Diagnostic API HeyQO</p><p className="mt-2 text-sm text-[#f8edd5]/50">Aucun token, document, PAN ou CVV n’est affiché ici.</p></div><span data-testid="badge-heyqo-environment" className="rounded-full border border-[#d7b879]/25 bg-[#d7b879]/10 px-3 py-1 text-xs font-bold uppercase text-[#d7b879]">{snapshot?.environment || 'sandbox'}</span></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">{(snapshot?.diagnostics || []).map((item) => <div key={item.step} className="rounded-2xl border border-[#f8edd5]/8 bg-[#17151a]/60 p-4"><p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#f8edd5]/35">{item.step.replaceAll('_', ' ')}</p><p className={`mt-2 text-sm font-semibold ${['success', 'approved', 'active'].includes(item.status) ? 'text-emerald-300' : item.status === 'error' || item.status === 'rejected' ? 'text-red-300' : 'text-[#d7b879]'}`}>{item.status}</p>{item.detail && <p className="mt-1 break-words text-xs leading-5 text-[#f8edd5]/45">{item.detail}</p>}</div>)}</div>
+      {!snapshot?.webhookConfigured && <p data-testid="warning-heyqo-webhook" className="mt-4 flex gap-2 rounded-2xl border border-amber-300/20 bg-amber-300/8 p-3 text-xs leading-5 text-amber-100"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />Le secret webhook HeyQO n’est pas encore configuré. Le bouton Actualiser reste disponible pour relire les statuts Sandbox.</p>}
+    </section>
     <div className="space-y-4"><div data-testid="panel-card-balance" className="rounded-[26px] border border-[#d7b879]/15 bg-[#2a2328] p-5 sm:p-7"><p className="text-xs uppercase tracking-[.2em] text-[#d7b879]">Solde disponible HeyQO</p><p data-testid="text-card-balance" className="mt-3 text-3xl font-semibold">{formatAmount(card?.balance || 0, card?.currency || 'USD')}</p><div className="mt-6 flex items-center justify-between text-xs text-[#f8edd5]/55"><span>Limite mensuelle</span><span data-testid="text-card-limit">{limit ? `${formatAmount(spent, card?.currency)} / ${formatAmount(limit, card?.currency)}` : 'Non définie'}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-[#f8edd5]/10"><div data-testid="progress-card-limit" className="h-full rounded-full bg-[#d7b879]" style={{ width: `${progress}%` }} /></div></div><div data-testid="panel-card-history" className="rounded-[26px] border border-[#f8edd5]/10 bg-[#211d22] p-5"><div className="flex justify-between"><p className="text-xs uppercase tracking-[.2em] text-[#f8edd5]/40">Activité récente</p>{snapshot?.stale && <span className="text-xs text-[#d7b879]">Hors ligne</span>}</div>{transactions.length ? transactions.map((tx: HeyQOCardTransaction) => <div data-testid={`row-card-transaction-${tx.id}`} key={tx.id} className="flex items-center justify-between border-b border-[#f8edd5]/8 py-3 last:border-0"><div><p className="text-sm font-medium">{tx.description || (tx.type === 'deposit' ? 'Recharge Wallet' : tx.type === 'withdrawal' ? 'Retrait vers Wallet' : 'Paiement')}</p><p className="text-xs text-[#f8edd5]/40">{tx.status}</p></div><span className="font-mono text-sm">{tx.type === 'withdrawal' || tx.type === 'charge' ? '−' : '+'}{formatAmount(tx.amount, tx.currency)}</span></div>) : <p data-testid="empty-card-history" className="py-6 text-sm text-[#f8edd5]/45">Aucune opération récente.</p>}</div></div></section>
     </div>
     {amountMode && createPortal(<div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#0b0a0d]/85 p-3 backdrop-blur-sm sm:items-center"><div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-[26px] border border-[#f8edd5]/10 bg-[#2a2328] p-6 text-[#f8edd5] shadow-2xl"><div className="flex justify-between"><h2 className="text-xl font-semibold">{amountMode === 'deposit' ? 'Recharger depuis Wallet' : 'Retirer vers Wallet'}</h2><button type="button" aria-label="Fermer" data-testid="button-close-money-modal" onClick={() => setAmountMode(null)}><X className="h-5 w-5" /></button></div><label className="mt-6 block text-sm text-[#f8edd5]/60">Montant ({card?.currency || 'USD'})<input data-testid="input-card-amount" type="number" min="1" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-2 w-full rounded-xl border border-[#f8edd5]/15 bg-[#17151a] p-3 text-lg text-[#f8edd5] outline-none focus:border-[#d7b879]" /></label><div className="mt-5"><ActionButton testId="button-submit-card-money" onClick={() => void submitMoney()} disabled={busy}>{busy ? 'Traitement…' : 'Confirmer l’opération'}</ActionButton></div></div></div>, document.body)}
-    {kycOpen && createPortal(<div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-end justify-center overflow-y-auto bg-[#0b0a0d]/85 p-3 backdrop-blur-sm sm:items-center"><div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-lg overflow-y-auto rounded-[26px] border border-[#f8edd5]/10 bg-[#2a2328] p-6 text-[#f8edd5] shadow-2xl"><div className="flex justify-between gap-4"><div><p className="text-xs uppercase tracking-[.2em] text-[#d7b879]">Émission HeyQO</p><h2 className="mt-2 text-2xl font-semibold">Quelques informations</h2></div><button type="button" aria-label="Fermer" data-testid="button-close-kyc" onClick={() => setKycOpen(false)}><X className="h-5 w-5" /></button></div><p className="mt-3 text-sm text-[#f8edd5]/65">Ces informations servent uniquement à la vérification de votre identité et à l’adresse de facturation.</p>{actionError && <div data-testid="error-kyc-submit" role="alert" aria-live="assertive" className="mt-4 flex gap-2 rounded-2xl border border-red-300/25 bg-red-400/10 p-3 text-sm text-red-100"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /><span>{actionError}</span></div>}<div className="mt-5 grid gap-3 sm:grid-cols-2">{[['dateOfBirth','Date de naissance','date'],['addressLine1','Adresse','text'],['city','Ville','text'],['postalCode','Code postal','text']].map(([key, label, type]) => <label key={key} className="text-sm text-[#f8edd5]/75">{label}<input data-testid={`input-kyc-${key}`} type={type} value={kyc[key as keyof typeof kyc]} onChange={(e) => setKyc({ ...kyc, [key]: e.target.value })} className="mt-1 w-full rounded-xl border border-[#f8edd5]/15 bg-[#17151a] p-3 text-[#f8edd5] outline-none focus:border-[#d7b879]" /></label>)}</div><div className="mt-5"><ActionButton testId="button-submit-kyc" onClick={() => void submitKyc()} disabled={busy}>{busy ? 'Envoi…' : 'Créer ma carte Visa'}</ActionButton></div></div></div>, document.body)}
+    {kycOpen && <HeyQOKycWizard onSubmit={submitKyc} onClose={() => !busy && setKycOpen(false)} busy={busy} error={actionError} />}
     {secureUrl && createPortal(<div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-end justify-center bg-[#0b0a0d]/85 p-3 backdrop-blur-sm sm:items-center"><div className="relative h-[80dvh] w-full max-w-lg overflow-hidden rounded-[26px] bg-[#f8edd5] shadow-2xl"><button type="button" aria-label="Fermer" data-testid="button-close-secure-view" onClick={() => setSecureUrl(null)} className="absolute right-3 top-3 z-10 rounded-full bg-[#17151a] p-2 text-[#f8edd5]"><X className="h-4 w-4" /></button><iframe data-testid="iframe-secure-view" title="Vue sécurisée de la carte" src={secureUrl} className="h-full w-full border-0" referrerPolicy="no-referrer" sandbox="allow-scripts allow-forms allow-same-origin" /></div></div>, document.body)}
   </main>;
 }

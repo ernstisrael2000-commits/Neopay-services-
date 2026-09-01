@@ -23,6 +23,8 @@ import { createPlopPlopPayment, verifyPlopPlopPayment, PLOPPLOP_METHODS, type Pl
 import {
   extractCard,
   extractCardList,
+  extractCustomer,
+  getHeyQOEnvironment,
   heyqoRequest,
   HeyQOError,
   isHeyQOConfigured,
@@ -9996,8 +9998,8 @@ function publicHeyQOCard(card: any, monthlyLimit = 0): Record<string, unknown> {
     currency: String(safe.currency || 'usd').toUpperCase(),
     last4: String(safe.last4 || safe.last_four || '').slice(-4) || undefined,
     maskedNumber: safe.masked_pan || safe.masked_number || undefined,
-    cardholderName: safe.cardholder_name || safe.cardholder || undefined,
-    balance: numberFrom(safe, ['available_balance', 'balance']),
+    cardholderName: safe.name_on_card || safe.cardholder_name || safe.cardholder || undefined,
+    balance: numberFrom(safe, ['available_balance', 'balance', 'amount']),
     monthlyLimit: numberFrom(safe, ['monthly_limit', 'limit'], monthlyLimit),
     monthlySpent: numberFrom(safe, ['monthly_spent']),
     createdAt: safe.created_at,
@@ -10005,7 +10007,34 @@ function publicHeyQOCard(card: any, monthlyLimit = 0): Record<string, unknown> {
   };
 }
 
+function publicHeyQOCustomer(customer: any, fallback: any = {}): Record<string, unknown> {
+  const source = customer || {};
+  return {
+    id: source.id || fallback.heyqoCustomerId || undefined,
+    localId: source.local_id ?? source.localId ?? fallback.heyqoCustomerLocalId ?? undefined,
+    status: source.status || fallback.heyqoCustomerStatus || undefined,
+    kycStatus: source.kyc_status || source.kycStatus || fallback.heyqoKycStatus || undefined,
+  };
+}
+
+function normalizedKycStatus(customer: any): string {
+  return String(customer?.kyc_status || customer?.kycStatus || customer?.status || '').toLowerCase();
+}
+
+function isApprovedHeyQOCustomer(customer: any): boolean {
+  return ['approved', 'verified', 'active', 'completed'].includes(normalizedKycStatus(customer));
+}
+
+function safeDiagnostic(step: string, status: string, detail?: string): Record<string, string> {
+  return {
+    step,
+    status,
+    ...(detail ? { detail: detail.slice(0, 160) } : {}),
+  };
+}
+
 function heyqoCustomerIds(client: any): string[] {
+  if (client?.heyqoEnvironment && client.heyqoEnvironment !== getHeyQOEnvironment()) return [];
   return [client?.heyqoCustomerLocalId, client?.heyqoCustomerId].filter(Boolean).map(String);
 }
 
@@ -10080,6 +10109,45 @@ async function acquireCardIssuanceLock(clientId: string): Promise<FirebaseFirest
 }
 
 async function finishCardIssuanceLock(
+  lockRef: FirebaseFirestore.DocumentReference,
+  status: 'completed' | 'failed' | 'reconciliation_required',
+  detail: Record<string, unknown> = {},
+): Promise<void> {
+  await lockRef.set({
+    status,
+    ...detail,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function acquireHeyQOKycLock(clientId: string, operationId: string): Promise<FirebaseFirestore.DocumentReference> {
+  const lockRef = adminDb.collection('heyqo_kyc_locks').doc(clientId);
+  await adminDb.runTransaction(async (txn) => {
+    const snapshot = await txn.get(lockRef);
+    const status = snapshot.data()?.status;
+    if (snapshot.exists && ['in_progress', 'reconciliation_required'].includes(status)) {
+      throw new HeyQOError(
+        status === 'reconciliation_required'
+          ? 'Une soumission KYC précédente doit être vérifiée avant un nouvel envoi.'
+          : 'Une soumission KYC est déjà en cours.',
+        409,
+        undefined,
+        'not_sent',
+      );
+    }
+    txn.set(lockRef, {
+      clientId,
+      operationId,
+      status: 'in_progress',
+      environment: getHeyQOEnvironment(),
+      createdAt: snapshot.exists ? snapshot.data()?.createdAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return lockRef;
+}
+
+async function finishHeyQOKycLock(
   lockRef: FirebaseFirestore.DocumentReference,
   status: 'completed' | 'failed' | 'reconciliation_required',
   detail: Record<string, unknown> = {},
@@ -10344,36 +10412,249 @@ async function listLocalCardActivity(clientId: string): Promise<Record<string, u
     .slice(0, 20);
 }
 
+const HEYQO_KYC_ENUMS = {
+  gender: new Set(['male', 'female', 'other']),
+  documentType: new Set(['NATIONAL_ID', 'PASSPORT', 'DRIVERS_LICENSE']),
+  employmentStatus: new Set(['employed', 'self_employed', 'student', 'retired', 'homemaker', 'unemployed']),
+  primaryPurpose: new Set(['personal_or_living_expenses', 'payments_to_friends_or_family_abroad']),
+  sourceOfFunds: new Set(['salary', 'savings', 'company_funds']),
+  expectedMonthlyPay: new Set(['0_4999', '5000_9999']),
+};
+
+function cleanKycText(value: unknown, maxLength: number): string {
+  return String(value || '').trim().slice(0, maxLength);
+}
+
+function validateKycImage(value: unknown, label: string, required = true): string | undefined {
+  const encoded = typeof value === 'string' ? value.replace(/^data:image\/(?:jpeg|png);base64,/i, '') : '';
+  if (!encoded) {
+    if (required) throw new HeyQOError(`${label} est requis.`, 400, undefined, 'not_sent');
+    return undefined;
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) {
+    throw new HeyQOError(`${label} est invalide.`, 400, undefined, 'not_sent');
+  }
+  const bytes = Buffer.from(encoded, 'base64');
+  if (bytes.length === 0 || bytes.length > 4 * 1024 * 1024) {
+    throw new HeyQOError(`${label} doit peser au maximum 4 Mo.`, 400, undefined, 'not_sent');
+  }
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes.length > 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (!isJpeg && !isPng) throw new HeyQOError(`${label} doit être une image JPG ou PNG.`, 400, undefined, 'not_sent');
+  return encoded;
+}
+
+router.post('/api/client/cards/customer', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const clientRef = adminDb.collection('clients').doc(clientId);
+  const client = res.locals.clientRecord.data() || {};
+  const operationId = cardOperationId(res, 'customer_kyc');
+  const operationRef = adminDb.collection('heyqo_kyc_operations').doc(operationId);
+  let lockRef: FirebaseFirestore.DocumentReference | null = null;
+  let providerMutationStarted = false;
+  if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le Sandbox HeyQO n’est pas configuré.' });
+  try {
+    const kyc = req.body?.kyc || {};
+    const dateOfBirth = cleanKycText(kyc.dateOfBirth, 10);
+    const gender = cleanKycText(kyc.gender, 16);
+    const documentType = cleanKycText(kyc.documentType, 32).toUpperCase();
+    const employmentStatus = cleanKycText(kyc.employmentStatus, 32);
+    const primaryPurpose = cleanKycText(kyc.primaryPurpose, 80);
+    const sourceOfFunds = cleanKycText(kyc.sourceOfFunds, 40);
+    const expectedMonthlyPay = cleanKycText(kyc.expectedMonthlyPay, 32);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) throw new HeyQOError('La date de naissance est invalide.', 400, undefined, 'not_sent');
+    if (!HEYQO_KYC_ENUMS.gender.has(gender)) throw new HeyQOError('Le genre sélectionné est invalide.', 400, undefined, 'not_sent');
+    if (!HEYQO_KYC_ENUMS.documentType.has(documentType)) throw new HeyQOError('Le type de document est invalide.', 400, undefined, 'not_sent');
+    if (!HEYQO_KYC_ENUMS.employmentStatus.has(employmentStatus)) throw new HeyQOError('Le statut professionnel est invalide.', 400, undefined, 'not_sent');
+    if (!HEYQO_KYC_ENUMS.primaryPurpose.has(primaryPurpose)) throw new HeyQOError('Le motif principal est invalide.', 400, undefined, 'not_sent');
+    if (!HEYQO_KYC_ENUMS.sourceOfFunds.has(sourceOfFunds)) throw new HeyQOError('La source des fonds est invalide.', 400, undefined, 'not_sent');
+    if (!HEYQO_KYC_ENUMS.expectedMonthlyPay.has(expectedMonthlyPay)) throw new HeyQOError('La tranche mensuelle est invalide.', 400, undefined, 'not_sent');
+    if (!client.email || !client.phone || !client.name) throw new HeyQOError('Le nom, l’adresse e-mail et le téléphone du profil client sont requis.', 400, undefined, 'not_sent');
+    if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à HeyQO.', 400, undefined, 'not_sent');
+
+    const nameParts = String(client.name).trim().split(/\s+/);
+    const documentFront = validateKycImage(kyc.documentFrontBase64, 'Le recto de la pièce');
+    const documentBack = validateKycImage(kyc.documentBackBase64, 'Le verso de la pièce', false);
+    const proofOfAddress = validateKycImage(kyc.proofOfAddressBase64, 'Le justificatif d’adresse');
+    const customerBody = {
+      first_name: nameParts.shift() || 'Client',
+      last_name: nameParts.join(' ') || 'Solutionpam',
+      email: String(client.email).trim(),
+      phone: String(client.phone).trim(),
+      country_code: cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase(),
+      date_of_birth: dateOfBirth,
+      gender,
+      document_type: documentType,
+      document_number: cleanKycText(kyc.documentNumber, 80),
+      ...(cleanKycText(kyc.taxIdNumber, 80) && { tax_id_number: cleanKycText(kyc.taxIdNumber, 80) }),
+      document_front_base64: documentFront,
+      ...(documentBack && { document_back_base64: documentBack }),
+      address_street: cleanKycText(kyc.addressStreet, 160),
+      address_city: cleanKycText(kyc.addressCity, 80),
+      address_state: cleanKycText(kyc.addressState, 80),
+      address_postal_code: cleanKycText(kyc.addressPostalCode, 24),
+      address_country: cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase(),
+      proof_of_address_base64: proofOfAddress,
+      pof_employment_status: employmentStatus,
+      pof_occupation: cleanKycText(kyc.occupation, 40),
+      pof_primary_purpose: primaryPurpose,
+      pof_source_of_funds: sourceOfFunds,
+      pof_expected_monthly_pay: expectedMonthlyPay,
+      external_ref: clientId,
+    };
+    const missing = Object.entries(customerBody)
+      .filter(([key, value]) => !String(value || '').trim() && !['tax_id_number', 'document_back_base64'].includes(key))
+      .map(([key]) => key);
+    if (missing.length) throw new HeyQOError('Complétez toutes les informations KYC obligatoires.', 400, undefined, 'not_sent');
+
+    const existingId = heyqoCustomerIds(client)[0];
+    if (client.heyqoKycReconciliationRequired) {
+      throw new HeyQOError('Une soumission KYC précédente doit être vérifiée avant un nouvel envoi.', 409, undefined, 'not_sent');
+    }
+    lockRef = await acquireHeyQOKycLock(clientId, operationId);
+    await operationRef.create({
+      clientId,
+      type: existingId ? 'customer_kyc_update' : 'customer_kyc_create',
+      status: 'in_progress',
+      environment: getHeyQOEnvironment(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    providerMutationStarted = true;
+    const customerPayload = await heyqoRequest(existingId ? `/customers/${encodeURIComponent(existingId)}` : '/customers', {
+      method: existingId ? 'PATCH' : 'POST',
+      headers: { 'Idempotency-Key': operationId },
+      body: JSON.stringify(customerBody),
+    });
+    const customer = extractCustomer(customerPayload);
+    const customerId = String(customer?.id || client.heyqoCustomerId || '');
+    const localId = String(customer?.local_id ?? customer?.localId ?? client.heyqoCustomerLocalId ?? customerId);
+    if (!localId) throw new HeyQOError('HeyQO n’a pas renvoyé de local_id client.', 502);
+    const status = String(customer?.status || 'processing').toLowerCase();
+    const kycStatus = String(customer?.kyc_status || customer?.kycStatus || status || 'pending').toLowerCase();
+    await clientRef.update({
+      heyqoCustomerId: customerId || localId,
+      heyqoCustomerLocalId: localId,
+      heyqoCustomerStatus: status,
+      heyqoKycStatus: kycStatus,
+      heyqoEnvironment: getHeyQOEnvironment(),
+      heyqoKycReconciliationRequired: false,
+      heyqoKycSubmittedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await operationRef.update({
+      status: 'completed',
+      customerId: customerId || localId,
+      customerLocalId: localId,
+      providerStatus: kycStatus,
+      completedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await finishHeyQOKycLock(lockRef, 'completed', {
+      operationId,
+      customerLocalId: localId,
+      providerStatus: kycStatus,
+    });
+    res.status(existingId ? 200 : 201).json({
+      success: true,
+      customer: publicHeyQOCustomer(customer, { heyqoCustomerId: customerId, heyqoCustomerLocalId: localId }),
+      diagnostics: [
+        safeDiagnostic('authentication', 'success', `${getHeyQOEnvironment()} connecté`),
+        safeDiagnostic('customer_kyc', kycStatus, `customer local_id ${localId}`),
+      ],
+    });
+  } catch (error: any) {
+    if (providerMutationStarted) {
+      const uncertain = !heyqoDefinitelyDidNotApply(error);
+      await operationRef.set({
+        status: uncertain ? 'reconciliation_required' : 'failed',
+        error: String(error?.message || 'Erreur HeyQO').slice(0, 240),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(() => {});
+      if (uncertain) {
+        await clientRef.update({
+          heyqoKycReconciliationRequired: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+      if (lockRef) {
+        await finishHeyQOKycLock(
+          lockRef,
+          uncertain ? 'reconciliation_required' : 'failed',
+          { operationId, error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+        ).catch(() => {});
+      }
+    } else if (lockRef) {
+      await finishHeyQOKycLock(lockRef, 'failed', {
+        operationId,
+        error: String(error?.message || 'Erreur avant appel HeyQO').slice(0, 240),
+      }).catch(() => {});
+    }
+    console.error('[HeyQO customer KYC]', error?.message || error);
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Impossible de soumettre le dossier KYC.' });
+  }
+});
+
 router.get('/api/client/cards', requireDb, async (_req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   if (!isHeyQOConfigured()) {
-    return res.json({ configured: false, customer: null, cards: [], cardTransactions: [] });
+    return res.json({
+      configured: false,
+      environment: getHeyQOEnvironment(),
+      webhookConfigured: Boolean(process.env.HEYQO_WEBHOOK_SECRET),
+      customer: null,
+      cards: [],
+      cardTransactions: [],
+      diagnostics: [safeDiagnostic('configuration', 'error', 'Identifiants HeyQO absents')],
+    });
   }
   try {
     const customerIds = heyqoCustomerIds(client);
     if (customerIds.length === 0) {
-      return res.json({ configured: true, customer: null, cards: [], cardTransactions: [] });
+      return res.json({
+        configured: true,
+        environment: getHeyQOEnvironment(),
+        webhookConfigured: Boolean(process.env.HEYQO_WEBHOOK_SECRET),
+        customer: null,
+        cards: [],
+        cardTransactions: [],
+        diagnostics: [
+          safeDiagnostic('authentication', 'success', `${getHeyQOEnvironment()} connecté`),
+          safeDiagnostic('customer_kyc', 'not_started'),
+        ],
+      });
     }
     const customerId = customerIds[0];
-    const [payload, settingsSnap, cardTransactions] = await Promise.all([
+    const [customerPayload, payload, settingsSnap, cardTransactions] = await Promise.all([
+      heyqoRequest(`/customers/${encodeURIComponent(customerId)}`),
       heyqoRequest(`/cards?customer_id=${encodeURIComponent(customerId)}`),
       adminDb.collection('settings').doc('global').get(),
       listLocalCardActivity(clientId),
     ]);
+    const customer = extractCustomer(customerPayload);
+    const currentStatus = String(customer?.status || client.heyqoCustomerStatus || 'processing').toLowerCase();
+    const currentKycStatus = String(customer?.kyc_status || customer?.kycStatus || client.heyqoKycStatus || currentStatus).toLowerCase();
+    await adminDb.collection('clients').doc(clientId).update({
+      heyqoCustomerStatus: currentStatus,
+      heyqoKycStatus: currentKycStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
     const monthlyLimit = Number(settingsSnap.data()?.heyqoMonthlyLimitUSD || 0);
     const rawCards = extractCardList(payload);
     await Promise.all(rawCards.map((card) => cacheHeyQOCard(clientId, card)));
     res.json({
       configured: true,
-      customer: {
-        id: client.heyqoCustomerId || undefined,
-        localId: client.heyqoCustomerLocalId || undefined,
-        status: client.heyqoCustomerStatus || undefined,
-        kycStatus: client.heyqoKycStatus || undefined,
-      },
+      environment: getHeyQOEnvironment(),
+      webhookConfigured: Boolean(process.env.HEYQO_WEBHOOK_SECRET),
+      customer: publicHeyQOCustomer(customer, client),
       cards: rawCards.map((card) => publicHeyQOCard(card, monthlyLimit)),
       cardTransactions,
+      diagnostics: [
+        safeDiagnostic('authentication', 'success', `${getHeyQOEnvironment()} connecté`),
+        safeDiagnostic('customer_kyc', currentKycStatus, `customer local_id ${customerId}`),
+        safeDiagnostic('cards', rawCards.length ? 'success' : 'empty', `${rawCards.length} carte(s)`),
+      ],
     });
   } catch (error: any) {
     console.error('[HeyQO cards list]', error?.message || error);
@@ -10381,6 +10662,8 @@ router.get('/api/client/cards', requireDb, async (_req, res) => {
     if (cached && !cached.empty) {
       return res.json({
         configured: true,
+        environment: getHeyQOEnvironment(),
+        webhookConfigured: Boolean(process.env.HEYQO_WEBHOOK_SECRET),
         customer: {
           id: client.heyqoCustomerId || undefined,
           localId: client.heyqoCustomerLocalId || undefined,
@@ -10390,6 +10673,7 @@ router.get('/api/client/cards', requireDb, async (_req, res) => {
         cards: cached.docs.map((doc) => publicHeyQOCard(doc.data())),
         cardTransactions: await listLocalCardActivity(clientId).catch(() => []),
         stale: true,
+        diagnostics: [safeDiagnostic('sync', 'stale', 'Données locales affichées')],
       });
     }
     res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Impossible de charger les cartes HeyQO.' });
@@ -10403,54 +10687,21 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
   const brand = String(req.body?.brand || 'visa').toLowerCase();
   if (!['visa', 'mastercard'].includes(brand)) return res.status(400).json({ error: 'Marque de carte invalide.' });
   if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Cartes est en attente de configuration HeyQO.' });
-  const suppliedKyc = req.body?.kyc || {};
-  if (heyqoCustomerIds(initialClient).length === 0) {
-    const dateOfBirth = String(suppliedKyc.dateOfBirth || '');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
-      return res.status(400).json({ error: 'La date de naissance est requise au format AAAA-MM-JJ.' });
-    }
-    if (!initialClient.email || !initialClient.phone || !initialClient.name) {
-      return res.status(400).json({ error: 'Le nom, l’adresse e-mail et le téléphone du profil client sont requis.' });
-    }
-  }
-
   let customerIds = heyqoCustomerIds(initialClient);
+  if (customerIds.length === 0) return res.status(409).json({ error: 'Soumettez d’abord votre dossier KYC HeyQO.' });
   let issuanceLockRef: FirebaseFirestore.DocumentReference | null = null;
   try {
     issuanceLockRef = await acquireCardIssuanceLock(clientId);
-    if (customerIds.length === 0) {
-      const kyc = suppliedKyc;
-      const dateOfBirth = String(kyc.dateOfBirth || '');
-      const nameParts = String(initialClient.name).trim().split(/\s+/);
-      const customerPayload = await heyqoRequest('/customers', {
-        method: 'POST',
-        body: JSON.stringify({
-          first_name: nameParts.shift() || 'Client',
-          last_name: nameParts.join(' ') || 'Solutionpam',
-          email: initialClient.email,
-          phone: initialClient.phone,
-          country_code: String(kyc.countryCode || 'HT').toUpperCase(),
-          date_of_birth: dateOfBirth,
-          external_ref: clientId,
-          ...(kyc.addressStreet && { address_street: String(kyc.addressStreet).slice(0, 160) }),
-          ...(kyc.addressCity && { address_city: String(kyc.addressCity).slice(0, 80) }),
-          ...(kyc.addressState && { address_state: String(kyc.addressState).slice(0, 80) }),
-          ...(kyc.addressPostalCode && { address_postal_code: String(kyc.addressPostalCode).slice(0, 24) }),
-          address_country: String(kyc.countryCode || 'HT').toUpperCase(),
-        }),
-      });
-      const customer = unwrapHeyQO<any>(customerPayload);
-      const customerId = String(customer?.id || '');
-      const localId = String(customer?.local_id || customer?.localId || customerId);
-      if (!localId) throw new HeyQOError('HeyQO n’a pas renvoyé d’identifiant client.', 502);
-      await clientRef.update({
-        heyqoCustomerId: customerId || localId,
-        heyqoCustomerLocalId: localId,
-        heyqoCustomerStatus: customer?.status || 'processing',
-        heyqoKycStatus: customer?.kyc_status || customer?.kycStatus || 'pending',
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      customerIds = [localId, customerId].filter(Boolean);
+    const customerPayload = await heyqoRequest(`/customers/${encodeURIComponent(customerIds[0])}`);
+    const currentCustomer = extractCustomer(customerPayload);
+    await clientRef.update({
+      heyqoCustomerStatus: currentCustomer?.status || initialClient.heyqoCustomerStatus || 'processing',
+      heyqoKycStatus: currentCustomer?.kyc_status || currentCustomer?.kycStatus || initialClient.heyqoKycStatus || 'pending',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (!isApprovedHeyQOCustomer(currentCustomer)) {
+      await finishCardIssuanceLock(issuanceLockRef, 'failed', { kycStatus: normalizedKycStatus(currentCustomer) || 'pending' });
+      return res.status(409).json({ error: `Le dossier KYC doit être approuvé avant l’émission (statut : ${normalizedKycStatus(currentCustomer) || 'pending'}).` });
     }
 
     const listPayload = await heyqoRequest(`/cards?customer_id=${encodeURIComponent(customerIds[0])}`);
@@ -10478,18 +10729,22 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
       const issuePayload = await heyqoRequest('/cards', {
         method: 'POST',
         headers: { 'Idempotency-Key': operationId },
-        body: JSON.stringify({ customer_id: customerIds[0], currency: 'usd', brand }),
+        body: JSON.stringify({
+          customer_id: customerIds[0],
+          currency: 'usd',
+          brand,
+          amount: initialDeposit,
+          label: 'Solutionpam virtual card',
+        }),
       });
       const card = extractCard(issuePayload);
       const cardId = providerCardId(card);
       if (!cardId) {
         await markCardOperationForReconciliation(reservations.issue.operationRef, reservations.issue.transactionRef, 'Carte créée sans identifiant exploitable.');
-        await refundCardWalletDebit(
+        await markCardOperationForReconciliation(
           reservations.funding.operationRef,
           reservations.funding.transactionRef,
-          clientId,
-          initialDeposit,
-          'Financement non envoyé : identifiant de carte indisponible.',
+          'Financement initial inclus dans une émission sans identifiant exploitable.',
         );
         await finishCardIssuanceLock(issuanceLockRef, 'reconciliation_required', { operationId });
         return res.status(202).json({ success: true, processing: true, card: publicHeyQOCard(card) });
@@ -10499,56 +10754,16 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
         cardId,
         providerStatus: providerCardStatus(card),
       });
-
-      const fundingOperationId = `${operationId}_funding`;
-      const fundingLockRef = await acquireCardMovementLock(clientId, cardId, 'card_deposit', fundingOperationId);
-      let fundingStatus: 'completed' | 'refunded' | 'reconciliation_required' = 'completed';
-      try {
-        const fundingPayload = await heyqoRequest(`/cards/${encodeURIComponent(cardId)}/deposit`, {
-          method: 'POST',
-          headers: { 'Idempotency-Key': fundingOperationId },
-          body: JSON.stringify({ amount: initialDeposit, currency: 'usd' }),
-        });
-        await settleCardWalletDebit(reservations.funding.operationRef, reservations.funding.transactionRef, {
-          cardId,
-          providerReference: unwrapHeyQO<any>(fundingPayload)?.id || null,
-        });
-        await finishCardMovementLock(fundingLockRef, 'completed', {
-          providerReference: unwrapHeyQO<any>(fundingPayload)?.id || null,
-        });
-      } catch (fundingError: any) {
-        if (heyqoDefinitelyDidNotApply(fundingError)) {
-          fundingStatus = 'refunded';
-          await refundCardWalletDebit(
-            reservations.funding.operationRef,
-            reservations.funding.transactionRef,
-            clientId,
-            initialDeposit,
-            fundingError.message,
-          );
-          await finishCardMovementLock(fundingLockRef, 'failed', { error: fundingError.message });
-        } else {
-          fundingStatus = 'reconciliation_required';
-          await markCardOperationForReconciliation(
-            reservations.funding.operationRef,
-            reservations.funding.transactionRef,
-            fundingError?.message || 'Financement initial HeyQO incertain.',
-          );
-          await finishCardMovementLock(fundingLockRef, 'reconciliation_required', {
-            operationId: fundingOperationId,
-            error: String(fundingError?.message || 'Financement initial HeyQO incertain.').slice(0, 240),
-          });
-        }
-      }
-      await finishCardIssuanceLock(
-        issuanceLockRef,
-        fundingStatus === 'reconciliation_required' ? 'reconciliation_required' : 'completed',
-        { operationId, cardId, fundingStatus },
-      );
+      await settleCardWalletDebit(reservations.funding.operationRef, reservations.funding.transactionRef, {
+        cardId,
+        providerStatus: providerCardStatus(card),
+        fundingIncludedInIssuance: true,
+      });
+      await finishCardIssuanceLock(issuanceLockRef, 'completed', { operationId, cardId, fundingStatus: 'completed' });
       return res.status(providerCardStatus(card) === 'processing' ? 202 : 201).json({
         success: true,
         processing: providerCardStatus(card) === 'processing',
-        fundingStatus,
+        fundingStatus: 'completed',
         card: publicHeyQOCard(card, Number(settings.heyqoMonthlyLimitUSD || 0)),
       });
     } catch (error: any) {
@@ -10561,12 +10776,10 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
       } else {
         await Promise.all([
           markCardOperationForReconciliation(reservations.issue.operationRef, reservations.issue.transactionRef, error?.message || 'Réponse HeyQO incertaine.'),
-          refundCardWalletDebit(
+          markCardOperationForReconciliation(
             reservations.funding.operationRef,
             reservations.funding.transactionRef,
-            clientId,
-            initialDeposit,
-            'Financement non envoyé pendant la vérification de l’émission.',
+            'Financement initial inclus dans une émission HeyQO incertaine.',
           ),
         ]);
         await finishCardIssuanceLock(issuanceLockRef, 'reconciliation_required', { operationId });
@@ -10692,7 +10905,7 @@ router.post('/api/client/cards/:cardId/withdraw', requireDb, async (req, res) =>
   let providerMutationStarted = false;
   try {
     const card = await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
-    if (numberFrom(card, ['available_balance', 'balance']) < amount) {
+    if (numberFrom(card, ['available_balance', 'balance', 'amount']) < amount) {
       return res.status(400).json({ error: 'Solde de carte insuffisant.' });
     }
     movementLockRef = await acquireCardMovementLock(clientId, req.params.cardId, 'card_withdrawal', operationId);
