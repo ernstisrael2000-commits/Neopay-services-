@@ -473,13 +473,13 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
                   <button type="button" data-testid="button-hide-secure-details" onClick={() => { setSecureDetails(null); setDetailsError(null); }} className="rounded-lg px-2 py-1 text-xs font-bold text-sky-100/65 transition hover:bg-white/10 hover:text-white">Masquer</button>
                 </div>
                 <div className="mt-4 space-y-2">
-                  {secureDetails.cardNumber && (
-                    <div className="rounded-xl border border-sky-200/15 bg-[#061d33] p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Numéro de carte</p>
-                        <button type="button" data-testid="button-copy-card-number" onClick={() => void copyCardNumber()} className="inline-flex items-center gap-1.5 rounded-lg bg-sky-400/10 px-2.5 py-1.5 text-[10px] font-bold text-sky-200 transition hover:bg-sky-400/20">
-                          {copiedCardNumber ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copiedCardNumber ? 'Copié' : 'Copier'}
-                        </button>
+                   {secureDetails.cardNumber && (
+                     <div className="rounded-xl border border-sky-200/15 bg-[#061d33] p-3">
+                       <div className="flex items-center justify-between gap-3">
+                         <p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Numéro de carte</p>
+                         <button type="button" data-testid="button-copy-card-number" aria-label="Copier le numéro de carte" onClick={() => void copyCardNumber()} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-sky-300/25 bg-sky-400/15 px-3 py-2 text-[10px] font-black text-sky-100 transition hover:bg-sky-400/25">
+                           {copiedCardNumber ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copiedCardNumber ? 'Copié' : 'Copier le numéro'}
+                         </button>
                       </div>
                       <p data-testid="text-secure-card-number" className="mt-2 break-all font-mono text-lg font-bold tracking-[.12em] text-white">{secureDetails.cardNumber.replace(/(.{4})/g, '$1 ').trim()}</p>
                     </div>
@@ -488,7 +488,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
                     {secureDetails.expiry && <div className="rounded-xl border border-white/[.08] bg-[#061d33] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Expiration</p><p data-testid="text-secure-card-expiry" className="mt-1.5 font-mono text-sm font-bold text-white">{secureDetails.expiry}</p></div>}
                     {secureDetails.cvv && <div className="rounded-xl border border-white/[.08] bg-[#061d33] p-3"><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">CVV</p><p data-testid="text-secure-card-cvv" className="mt-1.5 font-mono text-sm font-bold text-white">{secureDetails.cvv}</p></div>}
                   </div>
-                  {(secureDetails.cardholderName || secureDetails.brand) && <div className="flex items-center justify-between rounded-xl border border-white/[.08] bg-[#061d33] p-3"><div><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Titulaire</p><p data-testid="text-secure-card-holder" className="mt-1.5 text-sm font-bold uppercase text-white">{secureDetails.cardholderName || clientName}</p></div><span className="text-sm font-black italic text-white/80">{secureDetails.brand || card.brand}</span></div>}
+                   {(secureDetails.cardNumber || !secureDetails.secureViewUrl) && (secureDetails.cardholderName || secureDetails.brand) && <div className="flex items-center justify-between rounded-xl border border-white/[.08] bg-[#061d33] p-3"><div><p className="text-[9px] font-bold uppercase tracking-[.14em] text-sky-100/55">Titulaire</p><p data-testid="text-secure-card-holder" className="mt-1.5 text-sm font-bold uppercase text-white">{secureDetails.cardholderName || clientName}</p></div><span className="text-sm font-black italic text-white/80">{secureDetails.brand || card.brand}</span></div>}
                 </div>
                 {!secureDetails.cardNumber && secureDetails.secureViewUrl && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-white">

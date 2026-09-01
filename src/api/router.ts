@@ -10168,14 +10168,18 @@ function publicHeyQOCard(card: any, monthlyLimit = 0): Record<string, unknown> {
 
 function secureCardDetails(input: any): Record<string, string> {
   const source = input?.card || input || {};
-  const candidates = [
-    source,
-    source.info,
-    source.details,
-    source.card_details,
-    source.cardDetails,
-    source.secure_view,
-  ].filter((value) => value && typeof value === 'object');
+  const candidates: Record<string, any>[] = [];
+  const pending: any[] = [source];
+  const seen = new Set<any>();
+  while (pending.length && candidates.length < 32) {
+    const candidate = pending.shift();
+    if (!candidate || typeof candidate !== 'object' || seen.has(candidate)) continue;
+    seen.add(candidate);
+    candidates.push(candidate);
+    for (const key of ['card', 'info', 'details', 'card_details', 'cardDetails', 'secure_view', 'data', 'result', 'payload']) {
+      if (candidate[key] && typeof candidate[key] === 'object') pending.push(candidate[key]);
+    }
+  }
   const read = (keys: string[]) => {
     for (const candidate of candidates) {
       for (const key of keys) {
