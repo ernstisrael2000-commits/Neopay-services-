@@ -16,3 +16,4 @@
 - [Financial concurrency boundary](financial-concurrency-boundary.md) — rate limits and idempotency never replace an atomic state-and-balance transaction
 - [HeyQO virtual cards](heyqo-cards-integration.md) — server-side card issuance, KYC-first customers, secure-view iframe, and signed webhooks are required
 - [Mobile file picker compatibility](mobile-file-picker.md) — Android document-picker files can fail with FileReader; prefer chunked File.arrayBuffer reads
+- [HeyQO validation response](heyqo-validation-response.md) — nested provider validation details need safe parsing; customer phone values must be E.164

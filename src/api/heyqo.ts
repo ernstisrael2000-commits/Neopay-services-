@@ -49,7 +49,38 @@ export function getHeyQOEnvironment(): 'sandbox' | 'production' | 'custom' {
   return 'custom';
 }
 
-function providerMessage(payload: any, status: number): string {
+function collectProviderErrorMessages(value: unknown, output: string[] = [], depth = 0, field?: string): string[] {
+  if (depth > 4 || value === null || value === undefined) return output;
+  if (typeof value === 'string') {
+    const message = value.replace(/\s+/g, ' ').trim();
+    const formatted = field ? `${field} : ${message}` : message;
+    if (formatted && !output.includes(formatted)) output.push(formatted);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectProviderErrorMessages(item, output, depth + 1, field));
+    return output;
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (typeof record.message === 'string') {
+      const recordField = typeof record.field === 'string' ? record.field : field;
+      collectProviderErrorMessages(record.message, output, depth + 1, recordField);
+      return output;
+    }
+    const hasMessageKey = ['message', 'error', 'errors', 'detail', 'details'].some((key) => key in record);
+    Object.entries(record).forEach(([key, item]) => {
+      collectProviderErrorMessages(item, output, depth + 1, hasMessageKey || key === 'code' ? field : key);
+    });
+  }
+  return output;
+}
+
+export function providerMessage(payload: any, status: number): string {
+  const nestedMessages = collectProviderErrorMessages(payload?.message?.error);
+  if (nestedMessages.length) {
+    return nestedMessages.join(' · ').slice(0, 240);
+  }
   const message =
     payload?.error ||
     payload?.message ||
@@ -60,6 +91,31 @@ function providerMessage(payload: any, status: number): string {
   if (status === 402) return 'Le solde marchand HeyQO est insuffisant pour cette opération.';
   if (status === 401 || status === 403) return 'Les identifiants HeyQO sont invalides ou expirés.';
   return `HeyQO a refusé la demande (${status}).`;
+}
+
+export function normalizeHeyQOPhone(input: unknown, countryCode = 'HT'): string {
+  const raw = String(input ?? '').trim();
+  const compact = raw.replace(/[()\s-]/g, '');
+  if (!compact) return '';
+
+  if (compact.startsWith('+')) {
+    return /^\+[1-9]\d{7,14}$/.test(compact) ? compact : '';
+  }
+
+  if (compact.startsWith('00')) {
+    const international = `+${compact.slice(2)}`;
+    return /^\+[1-9]\d{7,14}$/.test(international) ? international : '';
+  }
+
+  if (!/^\d+$/.test(compact)) return '';
+  const digits = compact.replace(/\D/g, '');
+  if (String(countryCode).toUpperCase() === 'HT') {
+    const haitianLocal = digits.replace(/^0(?=\d{8}$)/, '');
+    if (/^\d{8}$/.test(haitianLocal)) return `+509${haitianLocal}`;
+    if (/^509\d{8}$/.test(digits)) return `+${digits}`;
+  }
+
+  return '';
 }
 
 async function readPayload(response: Response): Promise<any> {

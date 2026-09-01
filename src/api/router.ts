@@ -28,6 +28,7 @@ import {
   heyqoRequest,
   HeyQOError,
   isHeyQOConfigured,
+  normalizeHeyQOPhone,
   sanitizeHeyQOCard,
   unwrapHeyQO,
   webhookDigest,
@@ -10473,6 +10474,18 @@ router.post('/api/client/cards/customer', requireDb, async (req, res) => {
     if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à HeyQO.', 400, undefined, 'not_sent');
 
     const nameParts = String(client.name).trim().split(/\s+/);
+    const countryCode = cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase();
+    const phone = normalizeHeyQOPhone(client.phone, countryCode);
+    if (!phone) {
+      throw new HeyQOError(
+        countryCode === 'HT'
+          ? 'Le numéro de téléphone du profil doit contenir 8 chiffres haïtiens ou être au format international (+509…).'
+          : 'Le numéro de téléphone du profil doit être au format international (+…).',
+        400,
+        undefined,
+        'not_sent',
+      );
+    }
     const documentFront = validateKycImage(kyc.documentFrontBase64, 'Le recto de la pièce');
     const documentBack = validateKycImage(kyc.documentBackBase64, 'Le verso de la pièce', false);
     const proofOfAddress = validateKycImage(kyc.proofOfAddressBase64, 'Le justificatif d’adresse');
@@ -10480,8 +10493,8 @@ router.post('/api/client/cards/customer', requireDb, async (req, res) => {
       first_name: nameParts.shift() || 'Client',
       last_name: nameParts.join(' ') || 'Solutionpam',
       email: String(client.email).trim(),
-      phone: String(client.phone).trim(),
-      country_code: cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase(),
+      phone,
+      country_code: countryCode,
       date_of_birth: dateOfBirth,
       gender,
       document_type: documentType,
@@ -10493,7 +10506,7 @@ router.post('/api/client/cards/customer', requireDb, async (req, res) => {
       address_city: cleanKycText(kyc.addressCity, 80),
       address_state: cleanKycText(kyc.addressState, 80),
       address_postal_code: cleanKycText(kyc.addressPostalCode, 24),
-      address_country: cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase(),
+      address_country: countryCode,
       proof_of_address_base64: proofOfAddress,
       pof_employment_status: employmentStatus,
       pof_occupation: cleanKycText(kyc.occupation, 40),

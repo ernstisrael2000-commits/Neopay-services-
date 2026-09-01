@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { extractCard, extractCardList, extractCustomer, sanitizeHeyQOCard } from '../src/api/heyqo.ts';
+import {
+  extractCard,
+  extractCardList,
+  extractCustomer,
+  normalizeHeyQOPhone,
+  providerMessage,
+  sanitizeHeyQOCard,
+} from '../src/api/heyqo.ts';
 
 test('sanitizes every sensitive card field before browser serialization', () => {
   const card = sanitizeHeyQOCard({
@@ -67,4 +74,31 @@ test('normalizes safe card details from the official nested card info response',
 test('extracts a customer from the official response envelope', () => {
   const customer = extractCustomer({ data: { customer: { id: 'uuid', local_id: 42, kyc_status: 'approved' } } });
   assert.deepEqual(customer, { id: 'uuid', local_id: 42, kyc_status: 'approved' });
+});
+
+test('surfaces nested HeyQO validation errors without exposing the raw payload', () => {
+  assert.equal(
+    providerMessage({
+      message: {
+        code: 422,
+        error: [
+          { phone: ['The phone must be in E.164 format.'] },
+          'The document number is invalid.',
+        ],
+      },
+    }, 422),
+    'phone : The phone must be in E.164 format. · The document number is invalid.',
+  );
+  assert.equal(
+    providerMessage({ message: { error: [{ field: 'phone', message: 'Use E.164 format.' }] } }, 422),
+    'phone : Use E.164 format.',
+  );
+});
+
+test('normalizes Haitian profile phone numbers to E.164', () => {
+  assert.equal(normalizeHeyQOPhone('49 32 49 32'), '+50949324932');
+  assert.equal(normalizeHeyQOPhone('049324932'), '+50949324932');
+  assert.equal(normalizeHeyQOPhone('00509 4932-4932'), '+50949324932');
+  assert.equal(normalizeHeyQOPhone('+50949324932'), '+50949324932');
+  assert.equal(normalizeHeyQOPhone('1234'), '');
 });
