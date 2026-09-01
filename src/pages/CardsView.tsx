@@ -120,7 +120,12 @@ function CardVisual({ card, clientName }: { card: HeyQOCard; clientName: string 
               <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[.12em] text-white/55">Carte virtuelle</p>
             </div>
           </div>
-          <div className="text-right">
+           <div className="flex flex-col items-end gap-2 text-right">
+             {card.status === 'frozen' || card.status === 'blocked' ? (
+               <span data-testid="icon-card-frozen" aria-label="Carte gelée" title="Carte gelée" className="inline-flex items-center gap-1.5 rounded-full border border-red-300/35 bg-red-950/45 px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-red-100 shadow-[0_4px_14px_rgba(127,29,29,.28)]">
+                 <LockKeyhole className="h-3.5 w-3.5 text-red-300" strokeWidth={2.2} /> Gelée
+               </span>
+             ) : null}
             <p className="text-[9px] font-semibold uppercase tracking-[.1em] text-white/55">Carte</p>
             <p className="text-lg font-black italic tracking-[-.09em]">VISA</p>
           </div>
@@ -398,8 +403,8 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
         <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="pt-3">
           <div className="flex items-center gap-2">
             <p className="text-[11px] font-bold uppercase tracking-[.18em] text-sky-200/70">Espace cartes</p>
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black ${status === 'active' ? 'bg-emerald-400/15 text-emerald-300' : status === 'frozen' ? 'bg-amber-400/15 text-amber-200' : 'bg-white/10 text-white/65'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${status === 'active' ? 'bg-emerald-300' : status === 'frozen' ? 'bg-amber-300' : 'bg-white/50'}`} /> {cardStatusLabel(status)}
+             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black ${status === 'active' ? 'bg-emerald-400/15 text-emerald-300' : status === 'frozen' ? 'bg-rose-400/15 text-rose-200' : 'bg-white/10 text-white/65'}`}>
+               <span className={`h-1.5 w-1.5 rounded-full ${status === 'active' ? 'bg-emerald-300' : status === 'frozen' ? 'bg-rose-300' : 'bg-white/50'}`} /> {cardStatusLabel(status)}
             </span>
           </div>
            <h1 data-testid="heading-cards" className="mt-2 text-[2rem] font-black tracking-[-.045em] text-[#f1f8ff] sm:text-4xl">Ma carte</h1>
@@ -517,7 +522,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
         {card && isUsable && (
           <section className="mt-2.5 grid grid-cols-4 gap-2">
             <QuickAction label="Recharger" icon={ArrowDownToLine} tone="blue" testId="button-open-deposit" onClick={() => setAmountMode('deposit')} />
-            <QuickAction label={status === 'frozen' ? 'Réactiver' : 'Geler'} icon={status === 'frozen' ? UnlockKeyhole : Snowflake} tone={status === 'frozen' ? 'blue' : 'red'} testId={status === 'frozen' ? 'button-unfreeze-card' : 'button-freeze-card'} onClick={() => void doCardAction(status === 'frozen' ? 'unfreeze' : 'freeze')} disabled={busy} />
+             <QuickAction label={status === 'frozen' ? 'Dégeler' : 'Geler'} icon={status === 'frozen' ? UnlockKeyhole : Snowflake} tone={status === 'frozen' ? 'blue' : 'red'} testId={status === 'frozen' ? 'button-unfreeze-card' : 'button-freeze-card'} onClick={() => void doCardAction(status === 'frozen' ? 'unfreeze' : 'freeze')} disabled={busy} />
             <QuickAction label={secureDetailsOpen ? 'Masquer' : 'Détails'} icon={Eye} tone="violet" testId="button-quick-secure-view" onClick={() => { setSecureDetailsOpen((open) => !open); setDetailsError(null); }} disabled={busy} />
             <QuickAction label="Clôturer" icon={LockKeyhole} tone="red" testId="button-terminate-card" onClick={() => void doCardAction('terminate')} disabled={busy} />
           </section>
