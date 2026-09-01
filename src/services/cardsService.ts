@@ -10,17 +10,30 @@ export interface CardsSnapshot {
   stale?: boolean;
 }
 
-async function post(path: string, body: object = {}, idempotencyKey: string = crypto.randomUUID()) {
+export interface CreateCardResult {
+  success: boolean;
+  processing?: boolean;
+  fundingStatus?: 'completed' | 'refunded' | 'reconciliation_required';
+  existing?: boolean;
+  card?: HeyQOCard;
+}
+
+async function post<T = any>(
+  path: string,
+  body: object = {},
+  idempotencyKey: string = crypto.randomUUID(),
+  timeoutMs = 20_000,
+): Promise<T> {
   return apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(body),
-  });
+  }, timeoutMs);
 }
 
 export const getCards = () => apiFetch<CardsSnapshot>('/api/client/cards');
 export const createHeyQOCard = (brand: 'visa' | 'mastercard', kyc: Record<string, string>, idempotencyKey?: string) =>
-  post('/api/client/cards', { brand, kyc }, idempotencyKey);
+  post<CreateCardResult>('/api/client/cards', { brand, kyc }, idempotencyKey, 60_000);
 export const getSecureView = (cardId: string) => post(`/api/client/cards/${encodeURIComponent(cardId)}/secure-view`);
 export const depositToCard = (cardId: string, amount: number, idempotencyKey?: string) =>
   post(`/api/client/cards/${encodeURIComponent(cardId)}/deposit`, { amount }, idempotencyKey);
@@ -52,11 +65,19 @@ export function useClientCards(clientId: string | null) {
     }
   }, [clientId]);
 
+  const adoptCard = useCallback((card: HeyQOCard) => {
+    setSnapshot((current) => {
+      if (!current) return current;
+      const cards = [card, ...current.cards.filter((item) => item.id !== card.id)];
+      return { ...current, cards };
+    });
+  }, []);
+
   useEffect(() => {
     void refresh();
     const interval = clientId ? window.setInterval(() => void refresh(), 30_000) : undefined;
     return () => { if (interval) window.clearInterval(interval); };
   }, [clientId, refresh]);
 
-  return { snapshot, loading, error, refresh };
+  return { snapshot, loading, error, refresh, adoptCard };
 }
