@@ -10704,6 +10704,7 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
   let customerIds = heyqoCustomerIds(initialClient);
   if (customerIds.length === 0) return res.status(409).json({ error: 'Soumettez d’abord votre dossier KYC HeyQO.' });
   let issuanceLockRef: FirebaseFirestore.DocumentReference | null = null;
+  let providerMutationStarted = false;
   try {
     issuanceLockRef = await acquireCardIssuanceLock(clientId);
     const customerPayload = await heyqoRequest(`/customers/${encodeURIComponent(customerIds[0])}`);
@@ -10740,6 +10741,7 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
     });
 
     try {
+      providerMutationStarted = true;
       const issuePayload = await heyqoRequest('/cards', {
         method: 'POST',
         headers: { 'Idempotency-Key': operationId },
@@ -10806,7 +10808,7 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
       if (lock?.data()?.status === 'in_progress') {
         await finishCardIssuanceLock(
           issuanceLockRef,
-          heyqoDefinitelyDidNotApply(error) ? 'failed' : 'reconciliation_required',
+          providerMutationStarted && !heyqoDefinitelyDidNotApply(error) ? 'reconciliation_required' : 'failed',
           { error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
         ).catch(() => {});
       }

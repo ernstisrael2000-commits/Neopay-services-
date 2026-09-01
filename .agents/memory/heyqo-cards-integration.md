@@ -8,3 +8,9 @@ HeyQO Business exposes partner-branded virtual Visa/Mastercard cards through `ht
 **Why:** Card PAN/CVV must not pass through or be stored by Solutionpam. HeyQO provides a one-time secure-view iframe (about 90 seconds) for PCI-safe display, while normal card reads return only masked PAN and last four digits.
 
 **How to apply:** Keep HeyQO credentials and all money-moving calls on the server, verify signed HMAC-SHA256 webhooks using the raw request body, treat HeyQO as authoritative for card balances, and implement wallet debit plus issuer-failure compensation transactionally before enabling production card issuance.
+
+Card issuance locks must distinguish pre-provider failures (for example, insufficient wallet balance or failed KYC/status checks) from uncertain failures after the HeyQO card mutation starts. Only the latter should become `reconciliation_required`; pre-provider failures must remain retryable.
+
+**Why:** A preflight wallet error was incorrectly classified as an uncertain provider outcome, blocking a valid retry even though HeyQO had created no card and no funds had been reserved.
+
+**How to apply:** Set a provider-mutation flag immediately before the HeyQO card POST and use it when finalizing the issuance lock; keep wallet/idempotency safeguards for retries.

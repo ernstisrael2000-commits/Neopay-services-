@@ -96,7 +96,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       setNotice(result?.processing
         ? 'Votre carte est en cours de création. Son statut sera actualisé automatiquement.'
         : 'Votre carte a bien été créée.');
-    } catch (cause: any) { setActionError(cause?.message || 'La demande n’a pas pu être envoyée.'); } finally { setBusy(false); }
+    } catch (cause: any) { delete intentKeys.current.issue; setActionError(cause?.message || 'La demande n’a pas pu être envoyée.'); } finally { setBusy(false); }
   };
   const submitKyc = async (value: HeyQOKycValue) => {
     setBusy(true); setActionError(null);
@@ -112,7 +112,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       } else {
         setNotice(`Dossier KYC transmis à HeyQO. Statut : ${kycStatus || 'pending'}.`);
       }
-    } catch (cause: any) { setActionError(cause?.message || 'Le dossier KYC n’a pas pu être envoyé.'); } finally { setBusy(false); }
+    } catch (cause: any) { delete intentKeys.current.kyc; setActionError(cause?.message || 'Le dossier KYC n’a pas pu être envoyé.'); } finally { setBusy(false); }
   };
   const doCardAction = async (action: 'freeze' | 'unfreeze' | 'terminate') => {
     if (!card) return;
@@ -126,7 +126,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     if (!window.confirm(amountMode === 'deposit' ? `Confirmer la recharge de ${formatAmount(value)} depuis Wallet ?` : `Confirmer le retrait de ${formatAmount(value)} vers Wallet ?`)) return;
     setBusy(true); setActionError(null);
     const intent = `${amountMode}:${card.id}`;
-    try { const key = intentKey(intent); if (amountMode === 'deposit') await depositToCard(card.id, value, key); else await withdrawFromCard(card.id, value, key); delete intentKeys.current[intent]; setNotice(amountMode === 'deposit' ? 'Recharge envoyée vers HeyQO.' : 'Retrait envoyé vers Wallet.'); setAmount(''); setAmountMode(null); await refresh(); } catch (cause: any) { setActionError(cause?.message || 'Cette opération n’a pas pu être effectuée.'); } finally { setBusy(false); }
+    try { const key = intentKey(intent); if (amountMode === 'deposit') await depositToCard(card.id, value, key); else await withdrawFromCard(card.id, value, key); delete intentKeys.current[intent]; setNotice(amountMode === 'deposit' ? 'Recharge envoyée vers HeyQO.' : 'Retrait envoyé vers Wallet.'); setAmount(''); setAmountMode(null); await refresh(); } catch (cause: any) { delete intentKeys.current[intent]; setActionError(cause?.message || 'Cette opération n’a pas pu être effectuée.'); } finally { setBusy(false); }
   };
   const openSecureView = async () => {
     if (!card) return;
