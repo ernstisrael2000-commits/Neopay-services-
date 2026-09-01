@@ -3,8 +3,9 @@ export type TwoFARole = 'admin' | 'agent' | 'affiliate';
 
 export const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@solutionpam.com';
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || FROM_EMAIL;
+const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim();
 
-console.log(`[Email] Mode Resend via connexion Replit activé — FROM: ${FROM_EMAIL}`);
+console.log(`[Email] Resend activé via ${RESEND_API_KEY ? 'API directe' : 'connexion Replit'} — FROM: ${FROM_EMAIL}`);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -113,16 +114,22 @@ export async function send(
   }
 
   try {
-    const response = await new ReplitConnectors().proxy('resend', '/emails', {
+    const request = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(RESEND_API_KEY ? { Authorization: `Bearer ${RESEND_API_KEY}` } : {}),
+      },
       body: JSON.stringify({
         from: `Solutionpam <${FROM_EMAIL}>`,
         to: validTo,
         subject,
         html,
       }),
-    });
+    };
+    const response = RESEND_API_KEY
+      ? await fetch('https://api.resend.com/emails', request)
+      : await new ReplitConnectors().proxy('resend', '/emails', request);
     const data: any = await response.json().catch(() => null);
     if (!response.ok) {
       const error = data?.message || data?.error?.message || `Resend returned HTTP ${response.status}`;
