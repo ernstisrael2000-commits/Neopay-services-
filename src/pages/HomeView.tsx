@@ -6,7 +6,7 @@ import {
   MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp, Loader2,
   Star, BookOpen, Award, Clock,
   ArrowDownToLine, ArrowUpFromLine, Send, Eye, EyeOff, CheckCircle2, Copy,
-  Play, Gamepad2, WalletCards, Share2, Music2,
+  Play, Gamepad2, CreditCard,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -53,11 +53,10 @@ interface HomeViewProps {
 }
 
 const QUICK_LINKS = [
-  { key: 'streaming', label: 'Streaming', icon: Play, iconClass: 'text-violet-600', tileClass: 'bg-violet-50 border-violet-100', tab: 'products' as const },
-  { key: 'games', label: 'Jeux', icon: Gamepad2, iconClass: 'text-emerald-600', tileClass: 'bg-emerald-50 border-emerald-100', tab: 'games' as const },
-  { key: 'payment', label: 'Paiement', icon: WalletCards, iconClass: 'text-blue-600', tileClass: 'bg-blue-50 border-blue-100', tab: 'cards' as const },
-  { key: 'social', label: 'Réseaux', icon: Share2, iconClass: 'text-pink-600', tileClass: 'bg-pink-50 border-pink-100', tab: 'products' as const },
-  { key: 'music', label: 'Musique', icon: Music2, iconClass: 'text-orange-500', tileClass: 'bg-orange-50 border-orange-100', tab: 'products' as const },
+  { key: 'streaming', label: 'Streaming', icon: Play, iconClass: 'text-violet-600', tileClass: 'bg-violet-50 border-violet-100', destination: { type: 'catalog', tab: 'products' as const } },
+  { key: 'games', label: 'Jeux', icon: Gamepad2, iconClass: 'text-emerald-600', tileClass: 'bg-emerald-50 border-emerald-100', destination: { type: 'catalog', tab: 'games' as const } },
+  { key: 'cards', label: 'Cartes', icon: CreditCard, iconClass: 'text-blue-600', tileClass: 'bg-blue-50 border-blue-100', destination: { type: 'catalog', tab: 'cards' as const } },
+  { key: 'courses', label: 'Cours', icon: GraduationCap, iconClass: 'text-orange-500', tileClass: 'bg-orange-50 border-orange-100', destination: { type: 'view', view: 'formations' } },
 ] as const;
 
 const SECTION_CARDS = [
@@ -437,12 +436,14 @@ export default function HomeView({ onTrackingClick, onViewChange, onCatalogShort
       </div>
 
       {/* ── Raccourcis par univers ── */}
-      <nav className="grid grid-cols-5 gap-2 px-1" aria-label="Accès rapide aux services">
-        {QUICK_LINKS.map(({ key, label, icon: Icon, iconClass, tileClass, tab }) => (
+      <nav className="grid grid-cols-4 gap-2 px-1" aria-label="Accès rapide aux services">
+        {QUICK_LINKS.map(({ key, label, icon: Icon, iconClass, tileClass, destination }) => (
           <button
             key={key}
             type="button"
-            onClick={() => onCatalogShortcut ? onCatalogShortcut(tab) : onViewChange('products')}
+            onClick={() => destination.type === 'catalog'
+              ? onCatalogShortcut ? onCatalogShortcut(destination.tab) : onViewChange('products')
+              : onViewChange(destination.view)}
             className="group flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-1.5 text-center transition-transform active:scale-95"
             aria-label={`Ouvrir ${label}`}
           >
