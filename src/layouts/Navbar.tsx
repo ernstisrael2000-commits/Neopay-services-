@@ -331,7 +331,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             {/* Right side */}
             <div className="flex items-center gap-2 shrink-0">
               {/* Mobile quick access keeps the top bar useful without opening the menu */}
-              <div className="flex md:hidden items-center gap-1">
+              <div className="hidden md:flex items-center gap-1">
                 {CATALOG_SHORTCUTS.slice(0, 2).map(shortcut => {
                   const ShortcutIcon = shortcut.icon;
                   return (
@@ -354,7 +354,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 <>
                   <button
                     onClick={() => setShowNotifPanel(true)}
-                    className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+                    className="relative hidden md:flex p-2 rounded-xl hover:bg-gray-100 transition-colors"
                     aria-label="Notifications"
                   >
                     <Bell className={`h-5 w-5 ${clientUnreadCount > 0 ? 'text-primary' : 'text-gray-400'}`} />
@@ -454,10 +454,40 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </>
               )}
 
+              {/* Mobile notifications — same compact header pattern on every public page */}
+              <button
+                type="button"
+                onClick={() => loggedClient ? setShowNotifPanel(true) : setShowAuthModal(true)}
+                aria-label="Notifications"
+                className="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-50 md:hidden"
+              >
+                <Bell className={`h-5 w-5 ${loggedClient && clientUnreadCount > 0 ? 'text-primary' : 'text-slate-700'}`} />
+                {loggedClient && clientUnreadCount > 0 && (
+                  <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[8px] font-black text-white">
+                    {clientUnreadCount > 9 ? '9+' : clientUnreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Mobile header actions — kept deliberately compact like the app navigation */}
+              <button
+                type="button"
+                onClick={loggedClient ? onOpenWallet : () => setShowAuthModal(true)}
+                aria-label={loggedClient ? 'Ouvrir mon Wallet' : 'Se connecter'}
+                className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-black text-white shadow-sm md:hidden"
+              >
+                {user?.photoURL ? (
+                  <img src={user.photoURL} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  (loggedClient?.name || user?.displayName || 'E').charAt(0).toUpperCase()
+                )}
+                {loggedClient && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />}
+              </button>
+
               {/* Client wallet */}
               {loggedClient ? (
                 <button onClick={onOpenWallet}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-all">
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 transition-all">
                   <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center text-white font-black text-[10px]">
                     {loggedClient.name.charAt(0).toUpperCase()}
                   </div>
@@ -476,7 +506,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </div>
               ) : (
                 <button onClick={() => setShowAuthModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white text-sm font-bold shadow-md shadow-primary/25 hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
+                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white text-sm font-bold shadow-md shadow-primary/25 hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
                   <LogIn className="h-4 w-4 shrink-0" />
                   <span>Se connecter</span>
                 </button>
