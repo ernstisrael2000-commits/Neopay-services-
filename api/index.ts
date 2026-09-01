@@ -3,7 +3,22 @@ import apiRouter from '../src/api/router.ts';
 
 const app = express();
 
-app.use(express.json({ limit: '2mb' }));
+// Vercel must not consume the request before Express sees it: HeyQO signs the
+// exact webhook bytes. Express then parses the JSON and keeps a private copy
+// for HMAC verification. The same 18 MiB limit is used by the Replit server
+// because a KYC submission can contain several temporary base64 images.
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+app.use(express.json({
+  limit: '18mb',
+  verify: (req, _res, buffer) => {
+    (req as any).rawBody = Buffer.from(buffer);
+  },
+}));
 
 app.use((req, res, next) => {
   const allowedOrigins = new Set(
@@ -32,7 +47,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Credentials', 'true');
   }
   res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key');
   res.header('X-Content-Type-Options', 'nosniff');
   res.header('X-Frame-Options', 'DENY');
   res.header('Referrer-Policy', 'strict-origin-when-cross-origin');

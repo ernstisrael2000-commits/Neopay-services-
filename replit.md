@@ -55,6 +55,40 @@ Le workflow Replit **Start application** utilise `npm run dev` et sert l’aper�
 | `PORT` | `5000` | Port du serveur Express |
 | `HEYQO_BASE_URL` | Sandbox en développement | URL de base HeyQO, à surcharger uniquement pour un environnement validé |
 
+## Déploiement Vercel
+
+Le dépôt est préparé pour un déploiement Vercel avec :
+
+- **Build command** : `npm run build`
+- **Output directory** : `dist`
+- **Install command** : `npm install --ignore-scripts`
+- **Fonction API** : `api/index.ts`
+- **Routes API** : toutes les routes `/api/*` sont réécrites vers cette fonction
+- **SPA** : les routes non-API sont réécrites vers `dist/index.html`
+
+Dans le projet Vercel, ajouter les secrets backend suivants dans les environnements
+utilisés (Preview et Production séparément si les identifiants diffèrent) :
+
+`FIREBASE_SERVICE_ACCOUNT`, `ADMIN_SECRET`, `RESEND_API_KEY`,
+`NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET`, `FAZERCARDS_API_KEY`,
+`GROQ_API_KEY`, `PLOPPLOP_CLIENT_ID`, `SESSION_SECRET`,
+`HEYQO_CLIENT_ID`, `HEYQO_SECRET_ID`, `HEYQO_WEBHOOK_SECRET`,
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`.
+
+Ajouter aussi les variables non-secrètes `FIRESTORE_DB_ID`, `FROM_EMAIL`,
+`APP_URL` et, si nécessaire, `HEYQO_BASE_URL`. En développement, HeyQO utilise
+automatiquement le Sandbox ; ne configurez l’URL de production qu’après validation.
+Vercel injecte automatiquement `VERCEL_URL`,
+`VERCEL_BRANCH_URL` et `VERCEL_PROJECT_PRODUCTION_URL` pour le CORS.
+
+L’URL à déclarer dans HeyQO pour le webhook est :
+`https://<domaine-vercel>/api/webhooks/heyqo`
+
+L’API conserve les octets bruts des requêtes signées et le serveur Vercel ne doit
+pas pré-parser le body. Le secret `HEYQO_WEBHOOK_SECRET` doit donc être présent
+dans l’environnement Vercel correspondant à l’URL de webhook. Le webhook
+NowPayments est `https://<domaine-vercel>/api/crypto/ipn`.
+
 ## Firestore
 
 - **Base de données nommée** : `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`
