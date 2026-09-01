@@ -67,14 +67,18 @@ function ServiceIllustration({ target, icon, compact = false }: { target?: strin
   if (target === 'tracking') {
     return (
       <div className={`relative shrink-0 overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 ${size}`}>
-        <div className="absolute left-4 top-6 h-16 w-16 rounded-full border-2 border-dashed border-blue-200" />
-        <div className="absolute left-10 top-9 flex h-12 w-12 rotate-[-8deg] items-center justify-center rounded-lg bg-gradient-to-br from-amber-300 to-orange-400 shadow-lg shadow-orange-200/60">
-          <Package className="h-7 w-7 text-white" strokeWidth={1.7} />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative h-16 w-16">
+            <div className="absolute left-0 top-1 h-14 w-14 rounded-full border-2 border-dashed border-blue-200" />
+            <div className="absolute bottom-0 left-3 flex h-10 w-10 rotate-[-8deg] items-center justify-center rounded-lg bg-gradient-to-br from-amber-300 to-orange-400 shadow-lg shadow-orange-200/60">
+              <Package className="h-6 w-6 text-white" strokeWidth={1.7} />
+            </div>
+            <div className="absolute right-0 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg shadow-blue-300/50">
+              <MapPin className="h-4 w-4" fill="currentColor" strokeWidth={1.5} />
+            </div>
+          </div>
         </div>
-        <div className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-full bg-blue-500 text-white shadow-lg shadow-blue-300/50">
-          <MapPin className="h-6 w-6" fill="currentColor" strokeWidth={1.5} />
-        </div>
-        <div className="absolute bottom-3 right-4 h-2 w-10 rounded-full bg-blue-200/70" />
+        <div className="absolute bottom-2 left-1/2 h-1.5 w-8 -translate-x-1/2 rounded-full bg-blue-200/70" />
       </div>
     );
   }
@@ -82,11 +86,15 @@ function ServiceIllustration({ target, icon, compact = false }: { target?: strin
   if (target === 'shipping') {
     return (
       <div className={`relative shrink-0 overflow-hidden bg-gradient-to-br from-emerald-50 to-cyan-50 ${size}`}>
-        <div className="absolute left-3 top-2 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-teal-500 shadow-lg shadow-emerald-200/60">
-          <Globe2 className="h-16 w-16 text-white/90" strokeWidth={1.1} />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="relative h-16 w-16">
+            <div className="absolute left-0 top-1 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-teal-500 shadow-lg shadow-emerald-200/60">
+              <Globe2 className="h-12 w-12 text-white/90" strokeWidth={1.1} />
+            </div>
+            <Plane className="absolute right-0 top-0 h-7 w-7 rotate-[-18deg] text-white drop-shadow-md" fill="currentColor" strokeWidth={1.5} />
+          </div>
         </div>
-        <Plane className="absolute right-4 top-4 h-10 w-10 rotate-[-18deg] text-white drop-shadow-md" fill="currentColor" strokeWidth={1.5} />
-        <div className="absolute bottom-3 right-4 h-2 w-14 rounded-full bg-emerald-200/80" />
+        <div className="absolute bottom-2 left-1/2 h-1.5 w-9 -translate-x-1/2 rounded-full bg-emerald-200/80" />
       </div>
     );
   }
@@ -94,13 +102,15 @@ function ServiceIllustration({ target, icon, compact = false }: { target?: strin
   if (target === 'cards') {
     return (
       <div className={`relative shrink-0 overflow-hidden bg-gradient-to-br from-violet-50 to-indigo-50 ${size}`}>
-        <div className="absolute right-4 top-5 h-16 w-28 rotate-[7deg] rounded-xl bg-gradient-to-br from-violet-500 to-indigo-700 p-3 shadow-xl shadow-violet-300/50">
-          <div className="h-4 w-7 rounded bg-amber-200/90" />
-          <div className="mt-7 flex items-center gap-1">
-            <span className="h-1 w-1 rounded-full bg-white" />
-            <span className="h-1 w-1 rounded-full bg-white" />
-            <span className="h-1 w-1 rounded-full bg-white" />
-            <span className="ml-auto h-1 w-7 rounded-full bg-white/80" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-11 w-16 rotate-[7deg] rounded-xl bg-gradient-to-br from-violet-500 to-indigo-700 p-2 shadow-xl shadow-violet-300/50">
+            <div className="h-3 w-5 rounded bg-amber-200/90" />
+            <div className="mt-4 flex items-center gap-0.5">
+              <span className="h-1 w-1 rounded-full bg-white" />
+              <span className="h-1 w-1 rounded-full bg-white" />
+              <span className="h-1 w-1 rounded-full bg-white" />
+              <span className="ml-auto h-1 w-5 rounded-full bg-white/80" />
+            </div>
           </div>
         </div>
       </div>
