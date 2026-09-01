@@ -63,7 +63,7 @@ const DEFAULT_SERVICES = [
 ];
 
 function ServiceIllustration({ target, icon, compact = false }: { target?: string; icon?: string; compact?: boolean }) {
-  const size = compact ? 'h-24 w-24 rounded-[1.4rem]' : 'h-28 w-36 rounded-[2rem]';
+  const size = compact ? 'h-20 w-20 rounded-[1.2rem]' : 'h-24 w-32 rounded-[1.6rem]';
   if (target === 'tracking') {
     return (
       <div className={`relative shrink-0 overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 ${size}`}>
@@ -123,8 +123,8 @@ function ServiceIcon({ svc }: { svc: any }) {
       ? 'bg-violet-50 text-violet-600'
       : 'bg-blue-50 text-blue-600';
   return (
-    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${iconTone}`}>
-      <IconComp className="h-7 w-7" strokeWidth={1.8} />
+    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${iconTone}`}>
+      <IconComp className="h-6 w-6" strokeWidth={1.8} />
     </div>
   );
 }
@@ -144,7 +144,7 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
     ...activeServices,
     ...DEFAULT_SERVICES.filter(def => !activeServices.some(svc => svc.target === def.target)),
   ].sort((a, b) => {
-    const order: Record<string, number> = { tracking: 1, shipping: 2, cards: 3 };
+    const order: Record<string, number> = { cards: 1, tracking: 2, shipping: 3 };
     return (order[a.target] || 4) - (order[b.target] || 4) || (a.order || 0) - (b.order || 0);
   });
 
@@ -188,13 +188,13 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
 
       <div className="mx-auto flex max-w-3xl flex-col gap-4 px-5 sm:px-8">
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-          <section data-testid="service-help-card" className="rounded-[1.6rem] bg-[#101d34] p-5 text-white shadow-[0_18px_35px_rgba(15,29,52,.18)] sm:p-6">
+            <section data-testid="service-help-card" className="rounded-[1.45rem] bg-[#101d34] p-4 text-white shadow-[0_14px_28px_rgba(15,29,52,.16)] sm:p-5">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#08bf77] shadow-lg shadow-emerald-900/30"><MessageCircle className="h-6 w-6" fill="white" strokeWidth={1.6} /></div>
-              <div className="min-w-0 flex-1"><h2 className="text-lg font-black">Besoin d’aide ?</h2><p className="mt-0.5 text-xs text-white/60">Notre équipe est là pour vous accompagner.</p></div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#08bf77] shadow-lg shadow-emerald-900/30"><MessageCircle className="h-5 w-5" fill="white" strokeWidth={1.6} /></div>
+              <div className="min-w-0 flex-1"><h2 className="text-base font-black text-white">Besoin d’aide ?</h2><p className="mt-0.5 text-[11px] text-white/60">Notre équipe est là pour vous accompagner.</p></div>
               <ChevronRightIcon />
             </div>
-            <button type="button" data-testid="button-contact-whatsapp" onClick={openWhatsApp} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#08bf77] text-sm font-black text-white shadow-lg shadow-emerald-950/20 transition hover:bg-[#08aa6b] active:scale-[.99]"><MessageCircle className="h-5 w-5" fill="white" strokeWidth={1.6} /> Nous contacter</button>
+            <button type="button" data-testid="button-contact-whatsapp" onClick={openWhatsApp} className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-[#08bf77] text-xs font-black text-white shadow-lg shadow-emerald-950/20 transition hover:bg-[#08aa6b] active:scale-[.99]"><MessageCircle className="h-4 w-4" fill="white" strokeWidth={1.6} /> Nous contacter</button>
           </section>
         </motion.div>
 
@@ -207,16 +207,16 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
                 type="button"
                 data-testid={isCards ? 'service-card-heyqo' : `service-card-${svc.target || svc.id}`}
                 onClick={() => handleServiceClick(svc)}
-                className="group flex min-h-[145px] w-full items-center gap-4 rounded-[1.6rem] border border-slate-100 bg-white p-4 text-left shadow-[0_5px_16px_rgba(15,23,42,.06)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,.1)] sm:p-5"
+                className="group flex min-h-[112px] w-full items-center gap-3 rounded-[1.45rem] border border-slate-100 bg-white p-3 text-left shadow-[0_5px_16px_rgba(15,23,42,.06)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,.1)] sm:min-h-[120px] sm:gap-4 sm:p-4"
               >
                 <ServiceIcon svc={svc} />
-                <div className="min-w-0 flex-1 self-stretch py-1">
+                <div className="min-w-0 flex-1 self-stretch py-0.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-[1.05rem] font-black leading-tight text-[#101b35]">{svc.label}</h2>
-                    {svc.badge && <span className={`rounded-full px-2 py-1 text-[9px] font-black ${isCards ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>{svc.badge}</span>}
+                    <h2 className="text-[.95rem] font-black leading-tight text-[#101b35]">{svc.label}</h2>
+                    {svc.badge && <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${isCards ? 'bg-violet-50 text-violet-700' : 'bg-blue-50 text-blue-700'}`}>{svc.badge}</span>}
                   </div>
-                  <p className="mt-2 max-w-[255px] text-sm leading-5 text-slate-500">{svc.description || 'Accédez à ce service rapidement et en toute sécurité.'}</p>
-                  <span className={`mt-3 inline-flex items-center gap-1 text-sm font-black ${isCards ? 'text-violet-700' : svc.target === 'shipping' ? 'text-emerald-600' : 'text-blue-700'}`}>{serviceCta(svc.target, isExternal)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+                  <p className="mt-1.5 max-w-[255px] text-xs leading-4.5 text-slate-500">{svc.description || 'Accédez à ce service rapidement et en toute sécurité.'}</p>
+                  <span className={`mt-2 inline-flex items-center gap-1 text-xs font-black ${isCards ? 'text-violet-700' : svc.target === 'shipping' ? 'text-emerald-600' : 'text-blue-700'}`}>{serviceCta(svc.target, isExternal)} <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" /></span>
                 </div>
                 <ServiceIllustration target={svc.target} icon={svc.icon} compact />
               </button>
