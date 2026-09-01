@@ -531,6 +531,7 @@ function AppInner() {
                     <HomeView
                       onTrackingClick={() => handleViewChange('tracking')}
                       onViewChange={handleViewChange}
+                      onCatalogShortcut={handleCatalogShortcut}
                       loggedClient={loggedClient}
                       onOpenWallet={() => handleViewChange('wallet')}
                       onRequestAuth={() => setShowAuthModal(true)}

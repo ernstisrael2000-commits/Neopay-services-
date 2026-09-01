@@ -6,6 +6,7 @@ import {
   MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp, Loader2,
   Star, BookOpen, Award, Clock,
   ArrowDownToLine, ArrowUpFromLine, Send, Eye, EyeOff, CheckCircle2, Copy,
+  Play, Gamepad2, WalletCards, Share2, Music2,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -45,10 +46,19 @@ const LucideIcon = ({ name, className, color }: { name: string; className?: stri
 interface HomeViewProps {
   onTrackingClick: () => void;
   onViewChange: (view: any) => void;
+  onCatalogShortcut?: (tab: 'products' | 'games' | 'giftcards' | 'cards') => void;
   loggedClient?: Client | null;
   onOpenWallet?: () => void;
   onRequestAuth?: () => void;
 }
+
+const QUICK_LINKS = [
+  { key: 'streaming', label: 'Streaming', icon: Play, iconClass: 'text-violet-600', tileClass: 'bg-violet-50 border-violet-100', tab: 'products' as const },
+  { key: 'games', label: 'Jeux', icon: Gamepad2, iconClass: 'text-emerald-600', tileClass: 'bg-emerald-50 border-emerald-100', tab: 'games' as const },
+  { key: 'payment', label: 'Paiement', icon: WalletCards, iconClass: 'text-blue-600', tileClass: 'bg-blue-50 border-blue-100', tab: 'cards' as const },
+  { key: 'social', label: 'Réseaux', icon: Share2, iconClass: 'text-pink-600', tileClass: 'bg-pink-50 border-pink-100', tab: 'products' as const },
+  { key: 'music', label: 'Musique', icon: Music2, iconClass: 'text-orange-500', tileClass: 'bg-orange-50 border-orange-100', tab: 'products' as const },
+] as const;
 
 const SECTION_CARDS = [
   {
@@ -77,7 +87,7 @@ const SECTION_CARDS = [
   },
 ];
 
-export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: HomeViewProps) {
+export default function HomeView({ onTrackingClick, onViewChange, onCatalogShortcut, loggedClient, onOpenWallet, onRequestAuth }: HomeViewProps) {
   const { sliderImages } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings } = useSettingsCtx();
@@ -425,6 +435,24 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           )}
         </div>
       </div>
+
+      {/* ── Raccourcis par univers ── */}
+      <nav className="grid grid-cols-5 gap-2 px-1" aria-label="Accès rapide aux services">
+        {QUICK_LINKS.map(({ key, label, icon: Icon, iconClass, tileClass, tab }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onCatalogShortcut ? onCatalogShortcut(tab) : onViewChange('products')}
+            className="group flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-1.5 text-center transition-transform active:scale-95"
+            aria-label={`Ouvrir ${label}`}
+          >
+            <span className={`flex h-14 w-full max-w-[70px] items-center justify-center rounded-2xl border transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-sm ${tileClass}`}>
+              <Icon className={`h-7 w-7 ${iconClass}`} strokeWidth={2.1} />
+            </span>
+            <span className="truncate text-[11px] font-bold text-slate-600 sm:text-xs">{label}</span>
+          </button>
+        ))}
+      </nav>
 
       {/* ── Nos Produits — real catalog preview ── */}
       <section className="space-y-3">
