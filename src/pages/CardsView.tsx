@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowDownToLine,
@@ -18,15 +18,18 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import HeyQOKycWizard, { type HeyQOKycValue } from '../components/cards/HeyQOKycWizard';
+import CardsSecurityGate from '../components/cards/CardsSecurityGate';
 import {
   createHeyQOCard,
   depositToCard,
+  getCardsSecurity,
   freezeCard,
   getSecureView,
   submitHeyQOCustomerKyc,
   terminateCard,
   unfreezeCard,
   useClientCards,
+  type CardsSecuritySnapshot,
   withdrawFromCard,
 } from '../services/cardsService';
 import type { HeyQOCard, HeyQOCardTransaction } from '../types';
@@ -178,7 +181,11 @@ function QuickAction({ label, icon: Icon, onClick, testId, tone = 'blue', disabl
 }
 
 export default function CardsView({ clientId, clientName, clientPhone = '', onBack }: CardsViewProps) {
-  const { snapshot, loading, error, refresh, adoptCard } = useClientCards(clientId);
+  const [security, setSecurity] = useState<CardsSecuritySnapshot | null>(null);
+  const [securityLoading, setSecurityLoading] = useState(true);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const securityUnlocked = security?.unlocked === true;
+  const { snapshot, loading, error, refresh, adoptCard } = useClientCards(clientId, securityUnlocked);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -187,6 +194,31 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
   const [kycOpen, setKycOpen] = useState(false);
   const [secureUrl, setSecureUrl] = useState<string | null>(null);
   const intentKeys = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    let firstCheck = true;
+    setSecurityError(null);
+    const checkSecurity = async () => {
+      try {
+        const result = await getCardsSecurity();
+        if (active) {
+          setSecurity(result.security);
+          setSecurityError(null);
+        }
+      } catch (cause: any) {
+        if (active) setSecurityError(cause?.message || 'Impossible de vérifier la protection Cartes.');
+      } finally {
+        if (active && firstCheck) {
+          firstCheck = false;
+          setSecurityLoading(false);
+        }
+      }
+    };
+    void checkSecurity();
+    const interval = window.setInterval(() => void checkSecurity(), 30_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [clientId]);
   const card = snapshot?.cards?.[0];
   const customerKycStatus = String(snapshot?.customer?.kycStatus || snapshot?.customer?.status || '').toLowerCase();
   const customerApproved = ['approved', 'verified', 'active', 'completed'].includes(customerKycStatus);
@@ -286,6 +318,33 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       setActionError(cause?.message || 'La vue sécurisée est indisponible.');
     } finally { setBusy(false); }
   };
+
+  if (securityLoading || !security || !securityUnlocked) {
+    return (
+      <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#061d33] px-4 pb-12 text-white sm:px-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#174d6c_0%,transparent_42%),linear-gradient(180deg,#071e34_0%,#0b2a45_65%,#0a2740_100%)]" />
+        <div className="relative mx-auto max-w-xl">
+          <header className="py-4 sm:py-6">
+            <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[.04] px-3.5 py-2 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white">
+              <ArrowLeft className="h-4 w-4" /> Retour à l’accueil
+            </button>
+          </header>
+          {securityLoading ? (
+            <div className="mt-16 rounded-[1.75rem] border border-white/10 bg-white/[.05] p-8 text-center">
+              <ShieldCheck className="mx-auto h-9 w-9 animate-pulse text-sky-300" />
+              <p className="mt-4 text-sm font-bold">Vérification de sécurité…</p>
+            </div>
+          ) : security ? (
+            <CardsSecurityGate security={security} onSecurityChange={setSecurity} externalError={securityError} />
+          ) : (
+            <div role="alert" className="mt-16 rounded-2xl border border-red-300/20 bg-red-400/10 p-5 text-sm text-red-100">
+              {securityError || 'La protection Cartes est indisponible.'}
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#061d33] px-4 pb-12 text-white sm:px-6">

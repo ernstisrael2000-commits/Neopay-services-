@@ -245,6 +245,132 @@ function verifyPin(pin: string, stored: string): boolean {
   }
 }
 
+type CardsAccessSession = { role: 'cards'; clientId: string; exp: number };
+
+type CardSecurityData = Record<string, any>;
+
+function cardSecurityStatus(client: Record<string, any>, req: express.Request, clientId: string, security: CardSecurityData = {}) {
+  return {
+    pinConfigured: typeof security.pinHash === 'string' && security.pinHash.length > 0,
+    emailTwoFactorEnabled: security.emailTwoFactorEnabled === true,
+    unlocked: readCardsAccessSession(req, clientId),
+    maskedEmail: client.email ? maskEmail(String(client.email)) : '',
+  };
+}
+
+async function getClientCardSecurity(clientId: string, client: Record<string, any>) {
+  const ref = adminDb.collection('client_card_security').doc(clientId);
+  const snap = await ref.get();
+  if (snap.exists) return { ref, data: snap.data() || {} };
+
+  // Migrate the short-lived first version without forcing existing clients to
+  // recreate their protection. The hash is removed from the browser-readable
+  // client document immediately after the server-only copy is created.
+  const legacyPinHash = typeof client.cardSecurityPinHash === 'string' ? client.cardSecurityPinHash : '';
+  const legacyEmail2fa = client.cardEmailTwoFactorEnabled === true;
+  if (legacyPinHash || legacyEmail2fa) {
+    const data = {
+      ...(legacyPinHash ? { pinHash: legacyPinHash } : {}),
+      ...(legacyEmail2fa ? { emailTwoFactorEnabled: true, emailTwoFactorEnabledAt: client.cardEmailTwoFactorEnabledAt } : {}),
+      migratedAt: FieldValue.serverTimestamp(),
+    };
+    await ref.set(data, { merge: true });
+    await adminDb.collection('clients').doc(clientId).update({
+      cardSecurityPinHash: FieldValue.delete(),
+      cardSecurityPinCreatedAt: FieldValue.delete(),
+      cardEmailTwoFactorEnabled: FieldValue.delete(),
+      cardEmailTwoFactorEnabledAt: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }).catch(() => {});
+    return { ref, data: { ...data, pinHash: legacyPinHash, emailTwoFactorEnabled: legacyEmail2fa } };
+  }
+  return { ref, data: {} };
+}
+
+function setCardsAccessSession(res: express.Response, clientId: string): void {
+  const secret = sessionSecret();
+  if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir la zone Cartes.');
+  const session: CardsAccessSession = { role: 'cards', clientId, exp: Date.now() + 15 * 60 * 1000 };
+  const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
+  res.cookie('rena_cards_access', `${payload}.${signSession(payload, secret)}`, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 15 * 60 * 1000,
+    path: '/',
+  });
+}
+
+function readCardsAccessSession(req: express.Request, clientId: string): boolean {
+  const secret = sessionSecret();
+  const token = parseCookies(req.headers.cookie).rena_cards_access;
+  if (!secret || !token) return false;
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return false;
+  const expected = signSession(payload, secret);
+  const provided = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (provided.length !== expectedBuffer.length || !timingSafeEqual(provided, expectedBuffer)) return false;
+  try {
+    const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as CardsAccessSession;
+    return session.role === 'cards' && session.clientId === clientId && Number.isFinite(session.exp) && session.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+async function createCardSecurityOtp(clientId: string, email: string, purpose: 'setup' | 'unlock') {
+  const otpPlain = String(randomInt(100000, 999999));
+  const ref = adminDb.collection('card_security_otps').doc();
+  await ref.create({
+    clientId,
+    email,
+    purpose,
+    otpHash: createHash('sha256').update(otpPlain).digest('hex'),
+    attempts: 0,
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { ref, otpPlain };
+}
+
+async function verifyCardSecurityOtp(
+  sessionId: string,
+  clientId: string,
+  expectedPurpose: 'setup' | 'unlock',
+  code: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const ref = adminDb.collection('card_security_otps').doc(sessionId);
+  return adminDb.runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists) return { ok: false, error: 'Code expiré ou session introuvable. Demandez un nouveau code.' };
+    const data = snap.data() || {};
+    if (data.clientId !== clientId || data.purpose !== expectedPurpose) {
+      return { ok: false, error: 'Session de vérification invalide.' };
+    }
+    const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
+    if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+      txn.delete(ref);
+      return { ok: false, error: 'Code expiré. Demandez un nouveau code.' };
+    }
+    const attempts = Number(data.attempts || 0);
+    if (attempts >= 5) {
+      txn.delete(ref);
+      return { ok: false, error: 'Trop de tentatives. Demandez un nouveau code.' };
+    }
+    const suppliedHash = createHash('sha256').update(code).digest('hex');
+    const expectedHash = Buffer.from(String(data.otpHash || ''), 'hex');
+    const suppliedBuffer = Buffer.from(suppliedHash, 'hex');
+    if (expectedHash.length !== suppliedBuffer.length || !timingSafeEqual(expectedHash, suppliedBuffer)) {
+      txn.update(ref, { attempts: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
+      const remaining = 4 - attempts;
+      return { ok: false, error: `Code incorrect. ${remaining} tentative${remaining !== 1 ? 's' : ''} restante${remaining !== 1 ? 's' : ''}.` };
+    }
+    txn.delete(ref);
+    return { ok: true };
+  });
+}
+
 // ── Password and server session helpers ───────────────────────────────────────
 // Password hashes use the same memory-hard primitive as PINs. Existing plaintext
 // passwords are upgraded only after a successful login, never returned to callers.
@@ -630,6 +756,33 @@ async function requireClientSession(req: express.Request, res: express.Response,
   }
 }
 
+async function requireClientCardsAccess(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const clientId = res.locals.clientSession?.clientId as string | undefined;
+  const client = res.locals.clientRecord?.data() || {};
+  if (!clientId) return res.status(401).json({ error: 'Session client requise.' });
+  try {
+    const { data } = await getClientCardSecurity(clientId, client);
+    const security = cardSecurityStatus(client, req, clientId, data);
+    if (!security.pinConfigured || !security.emailTwoFactorEnabled) {
+      return res.status(423).json({
+        error: 'La protection obligatoire de l’espace Cartes doit être configurée.',
+        code: 'CARDS_SECURITY_SETUP_REQUIRED',
+        security,
+      });
+    }
+    if (!security.unlocked) {
+      return res.status(423).json({
+        error: 'Déverrouillez l’espace Cartes avec votre PIN et le code envoyé par e-mail.',
+        code: 'CARDS_SECURITY_UNLOCK_REQUIRED',
+        security,
+      });
+    }
+  } catch {
+    return res.status(503).json({ error: 'Vérification de la protection Cartes temporairement indisponible.' });
+  }
+  next();
+}
+
 async function requireAgentSession(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (res.locals.agentSession && res.locals.agentRecord) return next();
   const session = readAgentSession(req);
@@ -827,6 +980,10 @@ for (const path of [
   '/api/agent/verify-2fa',
   '/api/affiliate/verify-2fa',
   '/api/admin/verify-2fa',
+  '/api/client/cards/security/pin',
+  '/api/client/cards/security/email-2fa/request',
+  '/api/client/cards/security/email-2fa/verify',
+  '/api/client/cards/security/unlock',
 ]) router.use(path, twoFactorRateLimiter);
 for (const path of [
   '/api/client/deposit', '/api/client/withdrawal', '/api/client/transfer',
@@ -5066,6 +5223,7 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
 
 router.post('/api/client/logout', (_req, res) => {
   res.clearCookie('rena_client_session', { path: '/' });
+  res.clearCookie('rena_cards_access', { path: '/' });
   res.json({ success: true });
 });
 
@@ -10445,7 +10603,111 @@ function validateKycImage(value: unknown, label: string, required = true): strin
   return encoded;
 }
 
-router.post('/api/client/cards/customer', requireDb, async (req, res) => {
+router.get('/api/client/cards/security', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const { data } = await getClientCardSecurity(clientId, res.locals.clientRecord.data() || {});
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ security: cardSecurityStatus(res.locals.clientRecord.data() || {}, req, clientId, data) });
+});
+
+router.post('/api/client/cards/security/pin', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const { ref: securityRef, data: existingSecurity } = await getClientCardSecurity(clientId, client);
+  const pin = String(req.body?.pin || '');
+  const confirmPin = String(req.body?.confirmPin || '');
+  if (!/^\d{6}$/.test(pin)) return res.status(400).json({ error: 'Le code Cartes doit comporter exactement 6 chiffres.' });
+  if (pin !== confirmPin) return res.status(400).json({ error: 'Les deux codes Cartes ne correspondent pas.' });
+  const pinHash = hashPin(pin);
+  const configured = await adminDb.runTransaction(async (txn) => {
+    const current = await txn.get(securityRef);
+    if (current.exists && current.data()?.pinHash) return false;
+    const values = {
+      pinHash,
+      cardSecurityPinCreatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (current.exists) txn.update(securityRef, values);
+    else txn.create(securityRef, values);
+    return true;
+  });
+  if (!configured) return res.status(409).json({ error: 'Le code Cartes est déjà configuré.' });
+  res.status(201).json({
+    success: true,
+    security: cardSecurityStatus(client, req, clientId, { ...existingSecurity, pinHash: 'configured' }),
+  });
+});
+
+router.post('/api/client/cards/security/email-2fa/request', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const { data: security } = await getClientCardSecurity(clientId, client);
+  const email = String(client.email || '').trim().toLowerCase();
+  if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(422).json({ error: 'Aucune adresse e-mail valide n’est configurée sur votre profil.' });
+  const purpose = security.emailTwoFactorEnabled === true ? 'unlock' : 'setup';
+  const { ref, otpPlain } = await createCardSecurityOtp(clientId, email, purpose);
+  try {
+    await send2FAOtp({ email, name: String(client.name || 'Client'), role: 'cards', otpCode: otpPlain, expiresMinutes: 5 });
+  } catch (error: any) {
+    await ref.delete().catch(() => {});
+    throw error;
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ success: true, sessionId: ref.id, maskedEmail: maskEmail(email), purpose, expiresInSeconds: 300 });
+});
+
+router.post('/api/client/cards/security/email-2fa/verify', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const { ref: securityRef, data: security } = await getClientCardSecurity(clientId, client);
+  const sessionId = String(req.body?.sessionId || '');
+  const code = String(req.body?.code || '').trim();
+  if (!/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
+  if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
+  const result = await verifyCardSecurityOtp(sessionId, clientId, 'setup', code);
+  if (!result.ok) return res.status(401).json({ error: result.error });
+  await securityRef.update({
+    emailTwoFactorEnabled: true,
+    emailTwoFactorEnabledAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  setCardsAccessSession(res, clientId);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    security: {
+      ...cardSecurityStatus(client, req, clientId, { ...security, emailTwoFactorEnabled: true, pinHash: 'configured' }),
+      unlocked: true,
+    },
+  });
+});
+
+router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const { data: security } = await getClientCardSecurity(clientId, client);
+  const pin = String(req.body?.pin || '');
+  const sessionId = String(req.body?.sessionId || '');
+  const code = String(req.body?.code || '').trim();
+  if (!/^\d{6}$/.test(pin) || !/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: 'PIN, session ou code de vérification invalide.' });
+  }
+  if (!security.pinHash || !security.emailTwoFactorEnabled) {
+    return res.status(423).json({ error: 'La protection Cartes doit d’abord être configurée.' });
+  }
+  if (!verifyPin(pin, security.pinHash)) return res.status(401).json({ error: 'Code Cartes incorrect.' });
+  const result = await verifyCardSecurityOtp(sessionId, clientId, 'unlock', code);
+  if (!result.ok) return res.status(401).json({ error: result.error });
+  setCardsAccessSession(res, clientId);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    success: true,
+    security: { ...cardSecurityStatus(client, req, clientId), unlocked: true },
+  });
+});
+
+router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const clientRef = adminDb.collection('clients').doc(clientId);
   const client = res.locals.clientRecord.data() || {};
@@ -10609,7 +10871,7 @@ router.post('/api/client/cards/customer', requireDb, async (req, res) => {
   }
 });
 
-router.get('/api/client/cards', requireDb, async (_req, res) => {
+router.get('/api/client/cards', requireDb, requireClientCardsAccess, async (_req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   if (!isHeyQOConfigured()) {
@@ -10694,7 +10956,7 @@ router.get('/api/client/cards', requireDb, async (_req, res) => {
   }
 });
 
-router.post('/api/client/cards', requireDb, async (req, res) => {
+router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const clientRef = adminDb.collection('clients').doc(clientId);
   const initialClient = res.locals.clientRecord.data() || {};
@@ -10818,7 +11080,7 @@ router.post('/api/client/cards', requireDb, async (req, res) => {
   }
 });
 
-router.post('/api/client/cards/:cardId/secure-view', requireDb, async (req, res) => {
+router.post('/api/client/cards/:cardId/secure-view', requireDb, requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   try {
@@ -10846,7 +11108,7 @@ router.post('/api/client/cards/:cardId/secure-view', requireDb, async (req, res)
   }
 });
 
-router.post('/api/client/cards/:cardId/deposit', requireDb, async (req, res) => {
+router.post('/api/client/cards/:cardId/deposit', requireDb, requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   const amount = finiteMoney(req.body?.amount);
@@ -10910,7 +11172,7 @@ router.post('/api/client/cards/:cardId/deposit', requireDb, async (req, res) => 
   }
 });
 
-router.post('/api/client/cards/:cardId/withdraw', requireDb, async (req, res) => {
+router.post('/api/client/cards/:cardId/withdraw', requireDb, requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   const amount = finiteMoney(req.body?.amount);
@@ -11011,9 +11273,9 @@ async function changeCardState(req: express.Request, res: express.Response, acti
   }
 }
 
-router.post('/api/client/cards/:cardId/freeze', requireDb, (req, res) => changeCardState(req, res, 'freeze'));
-router.post('/api/client/cards/:cardId/unfreeze', requireDb, (req, res) => changeCardState(req, res, 'unfreeze'));
-router.post('/api/client/cards/:cardId/terminate', requireDb, (req, res) => changeCardState(req, res, 'terminate'));
+router.post('/api/client/cards/:cardId/freeze', requireDb, requireClientCardsAccess, (req, res) => changeCardState(req, res, 'freeze'));
+router.post('/api/client/cards/:cardId/unfreeze', requireDb, requireClientCardsAccess, (req, res) => changeCardState(req, res, 'unfreeze'));
+router.post('/api/client/cards/:cardId/terminate', requireDb, requireClientCardsAccess, (req, res) => changeCardState(req, res, 'terminate'));
 
 router.post('/api/webhooks/heyqo', requireDb, async (req, res) => {
   const rawBody = (req as any).rawBody as Buffer | undefined;

@@ -14,6 +14,13 @@ export interface CardsSnapshot {
   stale?: boolean;
 }
 
+export interface CardsSecuritySnapshot {
+  pinConfigured: boolean;
+  emailTwoFactorEnabled: boolean;
+  unlocked: boolean;
+  maskedEmail: string;
+}
+
 export interface CreateCardResult {
   success: boolean;
   processing?: boolean;
@@ -36,6 +43,23 @@ async function post<T = any>(
 }
 
 export const getCards = () => apiFetch<CardsSnapshot>('/api/client/cards');
+export const getCardsSecurity = () => apiFetch<{ security: CardsSecuritySnapshot }>('/api/client/cards/security');
+export const setCardsSecurityPin = (pin: string, confirmPin: string) =>
+  post<{ success: boolean; security: CardsSecuritySnapshot }>('/api/client/cards/security/pin', { pin, confirmPin });
+export const requestCardsEmailTwoFactor = () =>
+  post<{ success: boolean; sessionId: string; maskedEmail: string; purpose: 'setup' | 'unlock'; expiresInSeconds: number }>(
+    '/api/client/cards/security/email-2fa/request',
+  );
+export const verifyCardsEmailTwoFactor = (sessionId: string, code: string) =>
+  post<{ success: boolean; security: CardsSecuritySnapshot }>(
+    '/api/client/cards/security/email-2fa/verify',
+    { sessionId, code },
+  );
+export const unlockCards = (sessionId: string, pin: string, code: string) =>
+  post<{ success: boolean; security: CardsSecuritySnapshot }>(
+    '/api/client/cards/security/unlock',
+    { sessionId, pin, code },
+  );
 export const createHeyQOCard = (brand: 'visa' | 'mastercard', idempotencyKey?: string) =>
   post<CreateCardResult>('/api/client/cards', { brand }, idempotencyKey, 60_000);
 
@@ -74,15 +98,16 @@ export const freezeCard = (cardId: string, idempotencyKey?: string) => post(`/ap
 export const unfreezeCard = (cardId: string, idempotencyKey?: string) => post(`/api/client/cards/${encodeURIComponent(cardId)}/unfreeze`, {}, idempotencyKey);
 export const terminateCard = (cardId: string, idempotencyKey?: string) => post(`/api/client/cards/${encodeURIComponent(cardId)}/terminate`, {}, idempotencyKey);
 
-export function useClientCards(clientId: string | null) {
+export function useClientCards(clientId: string | null, enabled = true) {
   const [snapshot, setSnapshot] = useState<CardsSnapshot | null>(null);
-  const [loading, setLoading] = useState(Boolean(clientId));
+  const [loading, setLoading] = useState(Boolean(clientId && enabled));
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!clientId) {
+    if (!clientId || !enabled) {
       setSnapshot(null);
       setLoading(false);
+      setError(null);
       return;
     }
     setLoading(true);
@@ -94,7 +119,7 @@ export function useClientCards(clientId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, enabled]);
 
   const adoptCard = useCallback((card: HeyQOCard) => {
     setSnapshot((current) => {
@@ -106,9 +131,9 @@ export function useClientCards(clientId: string | null) {
 
   useEffect(() => {
     void refresh();
-    const interval = clientId ? window.setInterval(() => void refresh(), 30_000) : undefined;
+    const interval = clientId && enabled ? window.setInterval(() => void refresh(), 30_000) : undefined;
     return () => { if (interval) window.clearInterval(interval); };
-  }, [clientId, refresh]);
+  }, [clientId, enabled, refresh]);
 
   return { snapshot, loading, error, refresh, adoptCard };
 }

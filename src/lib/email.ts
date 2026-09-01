@@ -1,5 +1,5 @@
 import { ReplitConnectors } from '@replit/connectors-sdk';
-export type TwoFARole = 'admin' | 'agent' | 'affiliate';
+export type TwoFARole = 'admin' | 'agent' | 'affiliate' | 'cards';
 
 export const FROM_EMAIL  = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@solutionpam.com';
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || FROM_EMAIL;
@@ -798,8 +798,8 @@ export async function send2FAOtp(opts: {
   expiresMinutes: number;
 }): Promise<void> {
   const { email, name, role, otpCode, expiresMinutes } = opts;
-  const roleLabel = role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : 'Affilié';
-  const accentColor = role === 'admin' ? '#1e40af' : role === 'agent' ? '#0f172a' : '#7c3aed';
+  const roleLabel = role === 'admin' ? 'Administrateur' : role === 'agent' ? 'Agent' : role === 'affiliate' ? 'Affilié' : 'Cartes';
+  const accentColor = role === 'admin' ? '#1e40af' : role === 'agent' ? '#0f172a' : role === 'affiliate' ? '#7c3aed' : '#075985';
 
   const html = baseHtml(`Code de vérification — ${roleLabel}`, accentColor, `
     <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
