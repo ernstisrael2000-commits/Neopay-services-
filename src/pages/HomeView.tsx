@@ -55,7 +55,7 @@ interface HomeViewProps {
 const QUICK_LINKS = [
   { key: 'streaming', label: 'Streaming', icon: Play, iconClass: 'text-violet-600', tileClass: 'bg-violet-50 border-violet-100', destination: { type: 'catalog', tab: 'products' as const } },
   { key: 'games', label: 'Jeux', icon: Gamepad2, iconClass: 'text-emerald-600', tileClass: 'bg-emerald-50 border-emerald-100', destination: { type: 'catalog', tab: 'games' as const } },
-  { key: 'cards', label: 'Cartes', icon: CreditCard, iconClass: 'text-blue-600', tileClass: 'bg-blue-50 border-blue-100', destination: { type: 'catalog', tab: 'cards' as const } },
+  { key: 'debit-card', label: 'Carte de débit', icon: CreditCard, iconClass: 'text-blue-600', tileClass: 'bg-blue-50 border-blue-100', destination: { type: 'view', view: 'cards' } },
   { key: 'courses', label: 'Cours', icon: GraduationCap, iconClass: 'text-orange-500', tileClass: 'bg-orange-50 border-orange-100', destination: { type: 'view', view: 'formations' } },
 ] as const;
 
