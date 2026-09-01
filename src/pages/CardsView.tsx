@@ -99,7 +99,7 @@ function transactionMeta(tx: HeyQOCardTransaction) {
 
 function CardLogo({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <img data-testid="img-card-logo" src="/solution-pam-logo-transparent.png" alt="Logo Solution PAM" className={`shrink-0 object-contain ${className}`} />
+    <img data-testid="img-card-logo" src="/solution-pam-logo-transparent.png" alt="Logo Solution PAM" className={`shrink-0 object-cover ${className}`} />
   );
 }
 
@@ -110,7 +110,7 @@ function CardVisual({ card, clientName, expiry }: { card: HeyQOCard; clientName:
   return (
     <div
       data-testid="card-visual"
-      className="relative aspect-[1.58/1] w-full overflow-hidden rounded-[1.35rem] border-2 border-[#53c8f6]/75 p-[6%] text-white shadow-[0_22px_48px_rgba(1,13,28,.48)] sm:rounded-[1.6rem]"
+      className="relative aspect-[1.58/1] w-full overflow-hidden rounded-[1.15rem] border-2 border-[#53c8f6]/75 p-[6%] text-white shadow-[0_22px_48px_rgba(1,13,28,.48)] sm:rounded-[1.3rem]"
       style={{ background: 'radial-gradient(circle at 7% 108%, #0d6f9d 0%, transparent 34%), radial-gradient(circle at 88% 4%, #147ca4 0%, transparent 32%), linear-gradient(143deg, #103f5d 0%, #07527b 42%, #062542 100%)' }}
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(148deg,transparent_0%,transparent_35%,rgba(65,190,231,.18)_35.2%,rgba(65,190,231,.05)_59%,transparent_59.2%),linear-gradient(33deg,transparent_0%,transparent_57%,rgba(2,28,55,.5)_57.2%,rgba(2,28,55,.15)_83%,transparent_83.2%)]" />
@@ -118,8 +118,8 @@ function CardVisual({ card, clientName, expiry }: { card: HeyQOCard; clientName:
       <div className="pointer-events-none absolute inset-[1.5%] rounded-[1.1rem] border border-white/[.08]" />
 
       <div className="relative h-full">
-        <div className="absolute left-[5.5%] top-[4%] flex items-center gap-3 sm:gap-4">
-          <CardLogo className="h-[clamp(2.7rem,10vw,4.7rem)] w-[clamp(2.7rem,10vw,4.7rem)]" />
+        <div className="absolute left-[5.5%] top-[4%] flex items-center gap-1 sm:gap-2">
+          <CardLogo className="h-[clamp(3.5rem,10vw,4.7rem)] w-[clamp(3.5rem,10vw,4.7rem)]" />
           <div>
             <p data-testid="text-card-brand" className="text-[clamp(.62rem,2.1vw,1.05rem)] font-bold tracking-[.24em]">SOLUTION PAM</p>
             <p className="mt-1 text-[clamp(.48rem,1.7vw,.78rem)] font-medium uppercase tracking-[.2em] text-[#54d5fa]/85">Carte virtuelle</p>
@@ -158,7 +158,7 @@ function CardVisual({ card, clientName, expiry }: { card: HeyQOCard; clientName:
 
         <div data-testid={isFrozen ? 'icon-card-frozen' : 'card-secure-mark'} aria-label={isFrozen ? 'Carte gelée' : 'Carte sécurisée'} title={isFrozen ? 'Carte gelée' : 'Carte sécurisée'} className={`absolute bottom-[6%] right-[5.5%] flex items-center gap-2 ${isFrozen ? 'text-red-300' : 'text-[#55e3ff]'}`}>
           {isFrozen ? <LockKeyhole className="h-[clamp(1.7rem,6vw,3rem)] w-[clamp(1.7rem,6vw,3rem)]" strokeWidth={1.8} /> : <ShieldCheck className="h-[clamp(1.7rem,6vw,3rem)] w-[clamp(1.7rem,6vw,3rem)]" strokeWidth={1.8} />}
-          <div className="hidden text-left sm:block">
+          <div className="whitespace-nowrap text-left">
             <p className="text-[clamp(.5rem,1.8vw,.9rem)] font-medium uppercase tracking-[.12em]">{isFrozen ? 'Carte gelée' : 'Sécurisée'}</p>
             <p className={`mt-1 text-[clamp(.38rem,1.25vw,.65rem)] uppercase tracking-[.08em] ${isFrozen ? 'text-red-200/75' : 'text-[#54d5fa]/75'}`}>{isFrozen ? 'Paiements suspendus' : 'Vos données protégées'}</p>
           </div>
