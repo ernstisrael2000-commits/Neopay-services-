@@ -12,6 +12,7 @@ export type HeyQOKycFormValue = HeyQOKycValue;
 
 export interface HeyQOKycValue {
   dateOfBirth: string;
+  phone: string;
   gender: HeyQOGender;
   documentType: HeyQODocumentType;
   documentNumber: string;
@@ -45,7 +46,7 @@ export interface HeyQOKycWizardProps {
 }
 
 const blankValue: HeyQOKycValue = {
-  dateOfBirth: '', gender: '', documentType: '', documentNumber: '', taxIdNumber: '',
+  dateOfBirth: '', phone: '', gender: '', documentType: '', documentNumber: '', taxIdNumber: '',
   documentFrontFile: null, documentBackFile: null, addressStreet: '', addressCity: '',
   addressState: '', addressPostalCode: '', addressCountry: 'HT', proofOfAddressFile: null,
   employmentStatus: '', occupation: '', primaryPurpose: '', sourceOfFunds: '',
@@ -121,7 +122,7 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
   const current = steps[step];
   const progress = ((step + 1) / steps.length) * 100;
   const validateStep = (stepToValidate: number) => {
-    if (stepToValidate === 0 && (!value.dateOfBirth || !value.gender || !value.documentType || !value.documentNumber || !value.taxIdNumber)) return 'Complétez tous les champs d’identité pour continuer.';
+    if (stepToValidate === 0 && (!value.dateOfBirth || !value.phone || !value.gender || !value.documentType || !value.documentNumber || !value.taxIdNumber)) return 'Complétez tous les champs d’identité pour continuer.';
     if (stepToValidate === 1 && !value.documentFrontFile) return 'Ajoutez le recto de votre pièce d’identité pour continuer.';
     if (stepToValidate === 2 && (!value.addressStreet || !value.addressCity || !value.addressState || !value.addressPostalCode || !value.addressCountry || !value.proofOfAddressFile)) return 'Complétez votre adresse et ajoutez un justificatif.';
     if (stepToValidate === 3 && (!value.employmentStatus || !value.occupation || !value.primaryPurpose || !value.sourceOfFunds || !value.expectedMonthlyPay)) return 'Complétez votre profil financier pour continuer.';
@@ -154,6 +155,7 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
   const content = [
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Date de naissance"><input data-testid="input-dateOfBirth" className={inputClass} type="date" value={value.dateOfBirth} onChange={(event) => valueFor(event, setValue, 'dateOfBirth')} /></Field>
+      <Field label="Téléphone" hint="Vous pouvez corriger le numéro du profil. Ex. +50949324932"><input data-testid="input-phone" className={inputClass} type="tel" inputMode="tel" autoComplete="tel" value={value.phone} onChange={(event) => update('phone', event.target.value)} placeholder="+509 49 32 49 32" /></Field>
       <Field label="Genre"><select data-testid="select-gender" className={inputClass} value={value.gender} onChange={(event) => valueFor(event, setValue, 'gender')}><option value="">Sélectionner</option>{selectOptions.gender.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
       <Field label="Type de document"><select data-testid="select-documentType" className={inputClass} value={value.documentType} onChange={(event) => valueFor(event, setValue, 'documentType')}><option value="">Sélectionner</option>{selectOptions.documentType.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
       <Field label="Numéro du document"><input data-testid="input-documentNumber" className={inputClass} value={value.documentNumber} onChange={(event) => update('documentNumber', event.target.value)} placeholder="Ex. 123456789" /></Field>

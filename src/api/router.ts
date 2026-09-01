@@ -10470,12 +10470,13 @@ router.post('/api/client/cards/customer', requireDb, async (req, res) => {
     if (!HEYQO_KYC_ENUMS.primaryPurpose.has(primaryPurpose)) throw new HeyQOError('Le motif principal est invalide.', 400, undefined, 'not_sent');
     if (!HEYQO_KYC_ENUMS.sourceOfFunds.has(sourceOfFunds)) throw new HeyQOError('La source des fonds est invalide.', 400, undefined, 'not_sent');
     if (!HEYQO_KYC_ENUMS.expectedMonthlyPay.has(expectedMonthlyPay)) throw new HeyQOError('La tranche mensuelle est invalide.', 400, undefined, 'not_sent');
-    if (!client.email || !client.phone || !client.name) throw new HeyQOError('Le nom, l’adresse e-mail et le téléphone du profil client sont requis.', 400, undefined, 'not_sent');
+    if (!client.email || !client.name) throw new HeyQOError('Le nom et l’adresse e-mail du profil client sont requis.', 400, undefined, 'not_sent');
     if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à HeyQO.', 400, undefined, 'not_sent');
 
     const nameParts = String(client.name).trim().split(/\s+/);
     const countryCode = cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase();
-    const phone = normalizeHeyQOPhone(client.phone, countryCode);
+    const submittedPhone = cleanKycText(kyc.phone, 40);
+    const phone = normalizeHeyQOPhone(submittedPhone, countryCode);
     if (!phone) {
       throw new HeyQOError(
         countryCode === 'HT'

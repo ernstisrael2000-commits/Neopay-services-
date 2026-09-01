@@ -562,6 +562,7 @@ function AppInner() {
                       <CardsView
                         clientId={loggedClient.id!}
                         clientName={loggedClient.name}
+                        clientPhone={loggedClient.phone}
                         onBack={handleBack}
                         onRequestAuth={() => setShowAuthModal(true)}
                       />
