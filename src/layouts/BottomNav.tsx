@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  House, PackageOpen, Compass, GraduationCap, Wallet, UserRound,
+  House, PackageOpen, Compass, GraduationCap, Wallet, Lock,
 } from 'lucide-react';
 import { Client } from '../types';
 import { useSettingsCtx } from '../contexts/SettingsContext';
@@ -18,7 +18,7 @@ export interface BottomNavProps {
 }
 
 /* ─── Constants ──────────────────────────────────────────────── */
-const BAR_H = 82;
+const BAR_H = 66;
 
 /* ─── Main nav items + wallet handled separately ──────────────── */
 const NAV_ITEMS = [
@@ -56,15 +56,15 @@ export default function BottomNav({
   return (
     <nav
       aria-label="Navigation principale"
-      className="fixed bottom-2 left-3 right-3 z-[300] rounded-[26px] border border-[#edf0f7]"
+      className="fixed bottom-0 left-0 right-0 z-[300] border-t border-slate-200/80"
       style={{
-        background: 'rgba(255,255,255,0.96)',
-        paddingBottom: 'max(8px, env(safe-area-inset-bottom, 0px))',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 14px 35px rgba(39,44,73,0.14)',
+        background: 'rgba(255,255,255,0.97)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        backdropFilter: 'blur(18px)',
+        boxShadow: '0 -8px 26px rgba(15,23,42,0.08)',
       }}
     >
-      <div className="mx-auto flex max-w-[540px] items-stretch px-2 pt-2" style={{ height: BAR_H }}>
+      <div className="mx-auto flex max-w-2xl items-stretch" style={{ height: BAR_H }}>
         {NAV_ITEMS.map((item) => {
           const active = activeKey === item.key;
           const Icon = item.icon;
@@ -88,7 +88,7 @@ export default function BottomNav({
         >
           {isLoggedIn
             ? <Wallet style={{ width: 20, height: 20 }} strokeWidth={currentView === 'wallet' ? 2.2 : 1.8} />
-            : <UserRound style={{ width: 20, height: 20 }} strokeWidth={1.9} />
+            : <Lock style={{ width: 18, height: 18 }} strokeWidth={2} />
           }
           {isLoggedIn && balanceHTG > 0 && (
             <span
@@ -121,10 +121,10 @@ function TabButton({ label, active, onClick, children }: TabButtonProps) {
       className="relative flex flex-1 select-none flex-col items-center justify-center gap-1 px-1 focus:outline-none focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-primary/40"
       style={{ WebkitTapHighlightColor: 'transparent' }}
     >
-      <span className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-colors duration-200 ${active ? 'bg-[#f0eaff] text-[#7042d3]' : 'text-[#566174] hover:bg-[#f7f8fc]'}`}>
+      <span className={`relative flex h-9 w-12 items-center justify-center rounded-xl transition-colors duration-200 ${active ? 'bg-[linear-gradient(135deg,#1d4ed8_0%,#2563eb_58%,#38bdf8_100%)] text-white shadow-[0_5px_14px_rgba(37,99,235,.24)]' : 'text-slate-600 hover:bg-slate-100'}`}>
         {children}
       </span>
-      <span className={`text-[9.5px] font-black leading-none tracking-[0.01em] transition-colors duration-200 ${active ? 'text-[#7042d3]' : 'text-[#566174]'}`}>
+      <span className={`text-[9.5px] font-black leading-none tracking-[0.01em] transition-colors duration-200 ${active ? 'text-blue-600' : 'text-slate-500'}`}>
         {label}
       </span>
     </button>
