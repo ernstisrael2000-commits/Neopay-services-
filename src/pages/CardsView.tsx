@@ -102,14 +102,20 @@ function CardLogo({ className = 'h-9 w-9' }: { className?: string }) {
   );
 }
 
-function CardVisual({ card, clientName }: { card: HeyQOCard; clientName: string }) {
+function CardVisual({ card, clientName, frozen }: { card: HeyQOCard; clientName: string; frozen?: boolean }) {
   const last4 = card.last4 ? `••••   ••••   ••••   ${card.last4}` : '••••   ••••   ••••   ••••';
+  const isFrozen = frozen ?? (card.status === 'frozen' || card.status === 'blocked');
   return (
     <div data-testid="card-visual" className="relative aspect-[1.58/1] w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-[radial-gradient(circle_at_12%_115%,#0e6e9c_0%,transparent_38%),radial-gradient(circle_at_90%_5%,#1d7098_0%,transparent_33%),linear-gradient(135deg,#0d5579_0%,#073553_52%,#061f3a_100%)] p-5 text-white shadow-[0_22px_48px_rgba(1,13,28,.45)] sm:rounded-[1.6rem] sm:p-6">
       <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full border border-white/[.07]" />
       <div className="pointer-events-none absolute -right-4 -top-10 h-40 w-40 rounded-full border border-white/[.06]" />
       <div className="pointer-events-none absolute -bottom-24 left-16 h-64 w-64 rounded-full border border-white/[.05]" />
       <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(125deg,transparent_30%,rgba(255,255,255,.16)_31%,transparent_32%),linear-gradient(165deg,transparent_48%,rgba(255,255,255,.12)_49%,transparent_50%)] [background-size:24px_24px]" />
+      {isFrozen && (
+        <div data-testid="card-frozen-indicator" aria-label="Carte gelée" title="Carte gelée" className="absolute right-[5%] top-[31%] z-10 inline-flex items-center gap-1.5 rounded-full border border-red-200/80 bg-red-600/90 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[.1em] text-white shadow-[0_5px_18px_rgba(127,29,29,.48)]">
+          <LockKeyhole className="h-3.5 w-3.5" strokeWidth={2.4} /> Gelée
+        </div>
+      )}
 
       <div className="relative flex h-full flex-col justify-between">
         <div className="flex items-start justify-between gap-3">
@@ -121,11 +127,6 @@ function CardVisual({ card, clientName }: { card: HeyQOCard; clientName: string 
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 text-right">
-            {card.status === 'frozen' || card.status === 'blocked' ? (
-              <span data-testid="icon-card-frozen" aria-label="Carte gelée" title="Carte gelée" className="inline-flex items-center gap-1.5 rounded-full border border-red-300/35 bg-red-950/45 px-2.5 py-1 text-[9px] font-black uppercase tracking-[.12em] text-red-100 shadow-[0_4px_14px_rgba(127,29,29,.28)]">
-                <LockKeyhole className="h-3.5 w-3.5 text-red-300" strokeWidth={2.2} /> Gelée
-              </span>
-            ) : null}
             <p className="text-[9px] font-semibold uppercase tracking-[.1em] text-white/55">Carte</p>
             <p className="text-lg font-black italic tracking-[-.09em]">VISA</p>
           </div>
@@ -415,7 +416,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
           {loading ? (
             <div data-testid="loading-card" className="aspect-[1.58/1] animate-pulse rounded-[1.35rem] border border-white/10 bg-white/10" />
           ) : card ? (
-            <CardVisual card={card} clientName={clientName} />
+            <CardVisual card={card} clientName={clientName} frozen={status === 'frozen'} />
           ) : (
             <div data-testid="empty-card" className="flex aspect-[1.58/1] flex-col items-center justify-center rounded-[1.35rem] border border-dashed border-sky-200/25 bg-white/[.06] px-8 text-center">
               <CardLogo className="mb-3 h-12 w-[74px]" />
