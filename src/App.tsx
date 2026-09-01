@@ -573,7 +573,7 @@ function AppInner() {
                           <CreditCard className="mb-5 h-10 w-10 text-[#1979a8]" />
                           <h1 className="text-3xl font-black">Votre espace Cartes</h1>
                           <p className="mt-3 text-sm leading-6 text-[#60798a]">
-                            Connectez-vous pour créer et gérer votre carte virtuelle HeyQO en toute sécurité.
+                            Connectez-vous pour créer et gérer votre carte virtuelle Solution PAM en toute sécurité.
                           </p>
                           <Button
                             data-testid="button-login-cards"

@@ -10214,6 +10214,11 @@ function publicHeyQOCustomer(customer: any, fallback: any = {}): Record<string, 
   };
 }
 
+function publicCardsError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return (message || fallback).replace(/hey[\s_-]*qo/gi, 'Solution PAM').slice(0, 240);
+}
+
 function normalizedKycStatus(customer: any): string {
   return String(customer?.kyc_status || customer?.kycStatus || customer?.status || '').toLowerCase();
 }
@@ -10249,11 +10254,11 @@ async function cacheHeyQOCard(clientId: string, rawCard: any): Promise<void> {
 
 async function loadOwnedHeyQOCard(clientId: string, cardId: string, client: any): Promise<any> {
   const customerIds = heyqoCustomerIds(client);
-  if (customerIds.length === 0) throw new HeyQOError('Aucun profil HeyQO n’est associé à ce compte.', 404);
+  if (customerIds.length === 0) throw new HeyQOError('Aucun profil Solution PAM n’est associé à ce compte.', 404);
   const payload = await heyqoRequest(`/cards/${encodeURIComponent(cardId)}`);
   const card = extractCard(payload);
   const actualId = providerCardId(card);
-  if (!actualId || actualId !== cardId) throw new HeyQOError('Carte HeyQO introuvable.', 404);
+  if (!actualId || actualId !== cardId) throw new HeyQOError('Carte Solution PAM introuvable.', 404);
 
   const cardCustomerId = String(card?.customer_id || card?.customer?.id || card?.customer?.local_id || '');
   if (cardCustomerId && !customerIds.includes(cardCustomerId)) {
@@ -10284,7 +10289,7 @@ async function createHeyQOSecureView(cardId: string) {
   const data = unwrapHeyQO<any>(payload);
   const url = data?.url || data?.secure_view_url || data?.iframe_url;
   if (typeof url !== 'string' || !url.startsWith('https://heyqo.cash/')) {
-    throw new HeyQOError('HeyQO n’a pas renvoyé de vue sécurisée valide.', 502);
+    throw new HeyQOError('Solution PAM n’a pas renvoyé de vue sécurisée valide.', 502);
   }
   return { url, expiresAt: data?.expires_at || new Date(Date.now() + 90_000).toISOString(), data };
 }
@@ -10458,7 +10463,7 @@ async function reserveCardWalletDebit(options: {
       type: options.type,
       amount: options.amount,
       status: 'pending',
-      method: 'HeyQO',
+      method: 'Solution PAM',
       description: options.description,
       source: 'heyqo_card',
       operationId: options.operationId,
@@ -10512,8 +10517,8 @@ async function reserveCardIssuanceWalletDebits(options: {
       ...common,
       type: 'card_issue',
       amount: options.issueFee,
-      method: 'HeyQO',
-      description: `Frais de création carte ${options.brand.toUpperCase()} HeyQO`,
+       method: 'Solution PAM',
+       description: `Frais de création carte ${options.brand.toUpperCase()} Solution PAM`,
       source: 'heyqo_card',
       operationId: options.operationId,
     });
@@ -10521,8 +10526,8 @@ async function reserveCardIssuanceWalletDebits(options: {
       ...common,
       type: 'card_initial_deposit',
       amount: options.initialDeposit,
-      method: 'HeyQO',
-      description: 'Dépôt initial sur la carte HeyQO',
+       method: 'Solution PAM',
+       description: 'Dépôt initial sur la carte Solution PAM',
       source: 'heyqo_card',
       operationId: fundingId,
     });
@@ -10596,7 +10601,7 @@ async function markCardOperationForReconciliation(
   });
   batch.update(transactionRef, {
     status: 'pending',
-    description: 'Opération HeyQO en vérification',
+    description: 'Opération Solution PAM en vérification',
     updatedAt: FieldValue.serverTimestamp(),
   });
   await batch.commit();
@@ -10773,7 +10778,7 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
   const operationRef = adminDb.collection('heyqo_kyc_operations').doc(operationId);
   let lockRef: FirebaseFirestore.DocumentReference | null = null;
   let providerMutationStarted = false;
-  if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le Sandbox HeyQO n’est pas configuré.' });
+  if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Solution PAM n’est pas encore configuré.' });
   try {
     const kyc = req.body?.kyc || {};
     const dateOfBirth = cleanKycText(kyc.dateOfBirth, 10);
@@ -10791,7 +10796,7 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
     if (!HEYQO_KYC_ENUMS.sourceOfFunds.has(sourceOfFunds)) throw new HeyQOError('La source des fonds est invalide.', 400, undefined, 'not_sent');
     if (!HEYQO_KYC_ENUMS.expectedMonthlyPay.has(expectedMonthlyPay)) throw new HeyQOError('La tranche mensuelle est invalide.', 400, undefined, 'not_sent');
     if (!client.email || !client.name) throw new HeyQOError('Le nom et l’adresse e-mail du profil client sont requis.', 400, undefined, 'not_sent');
-    if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à HeyQO.', 400, undefined, 'not_sent');
+    if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à Solution PAM.', 400, undefined, 'not_sent');
 
     const nameParts = String(client.name).trim().split(/\s+/);
     const countryCode = cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase();
@@ -10863,7 +10868,7 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
     const customer = extractCustomer(customerPayload);
     const customerId = String(customer?.id || client.heyqoCustomerId || '');
     const localId = String(customer?.local_id ?? customer?.localId ?? client.heyqoCustomerLocalId ?? customerId);
-    if (!localId) throw new HeyQOError('HeyQO n’a pas renvoyé de local_id client.', 502);
+     if (!localId) throw new HeyQOError('Solution PAM n’a pas renvoyé de local_id client.', 502);
     const status = String(customer?.status || 'processing').toLowerCase();
     const kycStatus = String(customer?.kyc_status || customer?.kycStatus || status || 'pending').toLowerCase();
     await clientRef.update({
@@ -10902,7 +10907,7 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
       const uncertain = !heyqoDefinitelyDidNotApply(error);
       await operationRef.set({
         status: uncertain ? 'reconciliation_required' : 'failed',
-        error: String(error?.message || 'Erreur HeyQO').slice(0, 240),
+        error: String(error?.message || 'Erreur Solution PAM').slice(0, 240),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true }).catch(() => {});
       if (uncertain) {
@@ -10915,17 +10920,17 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
         await finishHeyQOKycLock(
           lockRef,
           uncertain ? 'reconciliation_required' : 'failed',
-          { operationId, error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+          { operationId, error: String(error?.message || 'Erreur Solution PAM').slice(0, 240) },
         ).catch(() => {});
       }
     } else if (lockRef) {
       await finishHeyQOKycLock(lockRef, 'failed', {
         operationId,
-        error: String(error?.message || 'Erreur avant appel HeyQO').slice(0, 240),
+        error: String(error?.message || 'Erreur avant appel Solution PAM').slice(0, 240),
       }).catch(() => {});
     }
     console.error('[HeyQO customer KYC]', error?.message || error);
-    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Impossible de soumettre le dossier KYC.' });
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: publicCardsError(error, 'Impossible de soumettre le dossier KYC.') });
   }
 });
 
@@ -10940,7 +10945,7 @@ router.get('/api/client/cards', requireDb, requireClientCardsAccess, async (_req
       customer: null,
       cards: [],
       cardTransactions: [],
-      diagnostics: [safeDiagnostic('configuration', 'error', 'Identifiants HeyQO absents')],
+      diagnostics: [safeDiagnostic('configuration', 'error', 'Configuration Solution PAM incomplète')],
     });
   }
   try {
@@ -11010,7 +11015,7 @@ router.get('/api/client/cards', requireDb, requireClientCardsAccess, async (_req
         diagnostics: [safeDiagnostic('sync', 'stale', 'Données locales affichées')],
       });
     }
-    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Impossible de charger les cartes HeyQO.' });
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: publicCardsError(error, 'Impossible de charger les cartes Solution PAM.') });
   }
 });
 
@@ -11020,9 +11025,9 @@ router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req
   const initialClient = res.locals.clientRecord.data() || {};
   const brand = String(req.body?.brand || 'visa').toLowerCase();
   if (!['visa', 'mastercard'].includes(brand)) return res.status(400).json({ error: 'Marque de carte invalide.' });
-  if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Cartes est en attente de configuration HeyQO.' });
+  if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Cartes est en attente de configuration Solution PAM.' });
   let customerIds = heyqoCustomerIds(initialClient);
-  if (customerIds.length === 0) return res.status(409).json({ error: 'Soumettez d’abord votre dossier KYC HeyQO.' });
+  if (customerIds.length === 0) return res.status(409).json({ error: 'Soumettez d’abord votre dossier KYC à Solution PAM.' });
   let issuanceLockRef: FirebaseFirestore.DocumentReference | null = null;
   let providerMutationStarted = false;
   try {
@@ -11111,11 +11116,11 @@ router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req
         await finishCardIssuanceLock(issuanceLockRef, 'failed', { operationId });
       } else {
         await Promise.all([
-          markCardOperationForReconciliation(reservations.issue.operationRef, reservations.issue.transactionRef, error?.message || 'Réponse HeyQO incertaine.'),
+            markCardOperationForReconciliation(reservations.issue.operationRef, reservations.issue.transactionRef, error?.message || 'Réponse Solution PAM incertaine.'),
           markCardOperationForReconciliation(
             reservations.funding.operationRef,
             reservations.funding.transactionRef,
-            'Financement initial inclus dans une émission HeyQO incertaine.',
+            'Financement initial inclus dans une émission Solution PAM incertaine.',
           ),
         ]);
         await finishCardIssuanceLock(issuanceLockRef, 'reconciliation_required', { operationId });
@@ -11129,12 +11134,12 @@ router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req
         await finishCardIssuanceLock(
           issuanceLockRef,
           providerMutationStarted && !heyqoDefinitelyDidNotApply(error) ? 'reconciliation_required' : 'failed',
-          { error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+          { error: String(error?.message || 'Erreur Solution PAM').slice(0, 240) },
         ).catch(() => {});
       }
     }
     console.error('[HeyQO card issue]', error?.message || error);
-    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: error?.message || 'Impossible de créer la carte.' });
+    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: publicCardsError(error, 'Impossible de créer la carte.') });
   }
 });
 
@@ -11164,7 +11169,7 @@ router.post('/api/client/cards/:cardId/secure-details', requireDb, requireClient
     res.setHeader('Cache-Control', 'no-store');
     res.json({ success: true, details, secureViewUrl: secureView.url, expiresAt: secureView.expiresAt });
   } catch (error: any) {
-    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Affichage sécurisé indisponible.' });
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: publicCardsError(error, 'Affichage sécurisé indisponible.') });
   }
 });
 
@@ -11177,7 +11182,7 @@ router.post('/api/client/cards/:cardId/secure-view', requireDb, requireClientCar
     res.setHeader('Cache-Control', 'no-store');
     res.json({ url: secureView.url, expiresAt: secureView.expiresAt });
   } catch (error: any) {
-    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Affichage sécurisé indisponible.' });
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: publicCardsError(error, 'Affichage sécurisé indisponible.') });
   }
 });
 
@@ -11199,7 +11204,7 @@ router.post('/api/client/cards/:cardId/deposit', requireDb, requireClientCardsAc
       cardId: req.params.cardId,
       amount,
       type: 'card_deposit',
-      description: 'Recharge carte HeyQO depuis le Wallet',
+      description: 'Recharge carte Solution PAM depuis le Wallet',
     });
     providerMutationStarted = true;
     const payload = await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}/deposit`, {
@@ -11228,20 +11233,20 @@ router.post('/api/client/cards/:cardId/deposit', requireDb, requireClientCardsAc
         await refundCardWalletDebit(reservation.operationRef, reservation.transactionRef, clientId, amount, error.message);
         if (movementLockRef) await finishCardMovementLock(movementLockRef, 'failed', { error: error.message }).catch(() => {});
       } else {
-        await markCardOperationForReconciliation(reservation.operationRef, reservation.transactionRef, error?.message || 'Réponse HeyQO incertaine.');
+        await markCardOperationForReconciliation(reservation.operationRef, reservation.transactionRef, error?.message || 'Réponse Solution PAM incertaine.');
         if (movementLockRef) await finishCardMovementLock(movementLockRef, 'reconciliation_required', {
           operationId,
-          error: String(error?.message || 'Réponse HeyQO incertaine.').slice(0, 240),
+          error: String(error?.message || 'Réponse Solution PAM incertaine.').slice(0, 240),
         }).catch(() => {});
       }
     } else if (movementLockRef) {
       await finishCardMovementLock(
         movementLockRef,
         providerMutationStarted ? 'reconciliation_required' : 'failed',
-        { error: String(error?.message || 'Erreur avant appel HeyQO').slice(0, 240) },
+        { error: String(error?.message || 'Erreur avant appel Solution PAM').slice(0, 240) },
       ).catch(() => {});
     }
-    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: error?.message || 'Recharge impossible.' });
+    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: publicCardsError(error, 'Recharge impossible.') });
   }
 });
 
@@ -11289,7 +11294,7 @@ router.post('/api/client/cards/:cardId/withdraw', requireDb, requireClientCardsA
       });
       txn.set(transactionRef, {
         clientId, type: 'card_withdrawal', amount, status: 'completed',
-        method: 'HeyQO', source: 'heyqo_card', operationId,
+         method: 'Solution PAM', source: 'heyqo_card', operationId,
         description: 'Retrait de la carte vers le Wallet',
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       });
@@ -11311,24 +11316,24 @@ router.post('/api/client/cards/:cardId/withdraw', requireDb, requireClientCardsA
       const reconciliationRequired = providerMutationStarted && !heyqoDefinitelyDidNotApply(error);
       await operationRef.update({
         status: reconciliationRequired ? 'reconciliation_required' : 'failed',
-        error: String(error?.message || 'Erreur HeyQO').slice(0, 240),
+        error: String(error?.message || 'Erreur Solution PAM').slice(0, 240),
         updatedAt: FieldValue.serverTimestamp(),
       }).catch(() => {});
       if (movementLockRef) {
         await finishCardMovementLock(
           movementLockRef,
           reconciliationRequired ? 'reconciliation_required' : 'failed',
-          { operationId, error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+          { operationId, error: String(error?.message || 'Erreur Solution PAM').slice(0, 240) },
         ).catch(() => {});
       }
     } else if (movementLockRef) {
       await finishCardMovementLock(
         movementLockRef,
         providerMutationStarted ? 'reconciliation_required' : 'failed',
-        { operationId, error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+        { operationId, error: String(error?.message || 'Erreur Solution PAM').slice(0, 240) },
       ).catch(() => {});
     }
-    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: error?.message || 'Retrait impossible.' });
+    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: publicCardsError(error, 'Retrait impossible.') });
   }
 });
 
@@ -11342,7 +11347,7 @@ async function changeCardState(req: express.Request, res: express.Response, acti
     await cacheHeyQOCard(clientId, card);
     res.json({ success: true, card: publicHeyQOCard(card) });
   } catch (error: any) {
-    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Action de carte impossible.' });
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: publicCardsError(error, 'Action de carte impossible.') });
   }
 }
 
@@ -11354,12 +11359,12 @@ router.post('/api/webhooks/heyqo', requireDb, async (req, res) => {
   const rawBody = (req as any).rawBody as Buffer | undefined;
   const secret = process.env.HEYQO_WEBHOOK_SECRET;
   const received = String(req.get('X-HeyQo-Signature') || req.get('X-HeyQO-Signature') || '').replace(/^sha256=/i, '');
-  if (!secret || !rawBody || !received) return res.status(401).json({ error: 'Signature HeyQO manquante.' });
+  if (!secret || !rawBody || !received) return res.status(401).json({ error: 'Signature Solution PAM manquante.' });
   const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
   const expectedBuffer = Buffer.from(expected, 'hex');
   const receivedBuffer = /^[a-f0-9]{64}$/i.test(received) ? Buffer.from(received, 'hex') : Buffer.alloc(0);
   if (receivedBuffer.length !== expectedBuffer.length || !timingSafeEqual(receivedBuffer, expectedBuffer)) {
-    return res.status(401).json({ error: 'Signature HeyQO invalide.' });
+    return res.status(401).json({ error: 'Signature Solution PAM invalide.' });
   }
 
   const event = req.body || {};
@@ -11401,7 +11406,7 @@ router.post('/api/webhooks/heyqo', requireDb, async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true }).catch(() => {});
     console.error('[HeyQO webhook]', error?.message || error);
-    res.status(500).json({ error: 'Traitement du webhook HeyQO impossible.' });
+    res.status(500).json({ error: 'Traitement de la notification Solution PAM impossible.' });
   }
 });
 

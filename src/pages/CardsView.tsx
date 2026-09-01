@@ -236,7 +236,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
   const customerApproved = ['approved', 'verified', 'active', 'completed'].includes(customerKycStatus);
   const status = mapStatus(card?.status, customerKycStatus);
   const meta = snapshot?.configured === false
-    ? { label: 'Service en configuration', detail: 'L’espace est prêt. L’administration doit encore connecter les identifiants HeyQO.' }
+    ? { label: 'Service en configuration', detail: 'L’espace est prêt. L’administration doit encore finaliser la configuration Solution PAM.' }
     : statusCopy[status];
   const limit = card?.monthlyLimit || 0;
   const spent = card?.monthlySpent || 0;
@@ -274,7 +274,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
         setNotice('KYC approuvé. Émission de votre carte en cours.');
         await issueCard();
       } else {
-        setNotice(`Dossier KYC transmis à HeyQO. Statut : ${kycStatus || 'pending'}.`);
+        setNotice(`Dossier KYC transmis à Solution PAM. Statut : ${kycStatus || 'pending'}.`);
       }
     } catch (cause: any) {
       delete intentKeys.current.kyc;
@@ -310,7 +310,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       if (amountMode === 'deposit') await depositToCard(card.id, value, key);
       else await withdrawFromCard(card.id, value, key);
       delete intentKeys.current[intent];
-      setNotice(amountMode === 'deposit' ? 'Recharge envoyée vers HeyQO.' : 'Retrait envoyé vers Wallet.');
+      setNotice(amountMode === 'deposit' ? 'Recharge envoyée vers Solution PAM.' : 'Retrait envoyé vers Wallet.');
       setAmount(''); setAmountMode(null); await refresh();
     } catch (cause: any) {
       delete intentKeys.current[intent];
@@ -592,7 +592,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {(snapshot?.diagnostics || []).map((item) => <div key={item.step} className="rounded-xl border border-[#e3edf1] bg-[#f8fbfd] p-3"><p className="text-[9px] font-bold uppercase tracking-[.12em] text-[#8196a3]">{item.step.replaceAll('_', ' ')}</p><p className={`mt-1.5 text-xs font-bold ${['success', 'approved', 'active'].includes(item.status) ? 'text-[#16805a]' : item.status === 'error' || item.status === 'rejected' ? 'text-[#c43d35]' : 'text-[#a97720]'}`}>{item.status}</p>{item.detail && <p className="mt-1 break-words text-[10px] leading-4 text-[#8196a3]">{item.detail}</p>}</div>)}
           </div>
-          {!snapshot?.webhookConfigured && <p data-testid="warning-heyqo-webhook" className="mt-3 flex gap-2 rounded-xl border border-[#f2d9a0] bg-[#fff8e8] p-3 text-[10px] leading-4 text-[#8a6517]"><TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />Le secret webhook HeyQO n’est pas encore configuré. Actualisez le statut pour relire les données Sandbox.</p>}
+          {!snapshot?.webhookConfigured && <p data-testid="warning-heyqo-webhook" className="mt-3 flex gap-2 rounded-xl border border-[#f2d9a0] bg-[#fff8e8] p-3 text-[10px] leading-4 text-[#8a6517]"><TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />La configuration de sécurité Solution PAM n’est pas encore finalisée. Actualisez le statut pour relire les données Sandbox.</p>}
         </details>
       </div>
 
