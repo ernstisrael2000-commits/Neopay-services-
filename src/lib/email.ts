@@ -822,5 +822,8 @@ export async function send2FAOtp(opts: {
     </div>
   `);
 
-  await send(email, `🔐 Code de vérification — Connexion ${roleLabel}`, html, '2fa_otp');
+  const result = await send(email, `🔐 Code de vérification — Connexion ${roleLabel}`, html, '2fa_otp');
+  if (!result.success) {
+    throw new Error(result.error || 'L’envoi du code 2FA a échoué.');
+  }
 }
