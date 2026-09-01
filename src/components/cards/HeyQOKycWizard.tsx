@@ -41,6 +41,7 @@ export interface HeyQOKycWizardProps {
   busy?: boolean;
   error?: string | null;
   initialValue?: Partial<HeyQOKycValue>;
+  sandboxPreview?: boolean;
 }
 
 const blankValue: HeyQOKycValue = {
@@ -86,7 +87,7 @@ function valueFor(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>, setV
   setValue((current) => ({ ...current, [key]: event.target.value }));
 }
 
-export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error = null, initialValue }: HeyQOKycWizardProps) {
+export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error = null, initialValue, sandboxPreview = false }: HeyQOKycWizardProps) {
   const [value, setValue] = useState<HeyQOKycValue>({ ...blankValue, ...initialValue });
   const [step, setStep] = useState(0);
   const [validation, setValidation] = useState('');
@@ -119,15 +120,24 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
   };
   const current = steps[step];
   const progress = ((step + 1) / steps.length) * 100;
-  const validate = () => {
-    if (step === 0 && (!value.dateOfBirth || !value.gender || !value.documentType || !value.documentNumber || !value.taxIdNumber)) return 'Complétez tous les champs d’identité pour continuer.';
-    if (step === 1 && !value.documentFrontFile) return 'Ajoutez le recto de votre pièce d’identité pour continuer.';
-    if (step === 2 && (!value.addressStreet || !value.addressCity || !value.addressState || !value.addressPostalCode || !value.addressCountry || !value.proofOfAddressFile)) return 'Complétez votre adresse et ajoutez un justificatif.';
-    if (step === 3 && (!value.employmentStatus || !value.occupation || !value.primaryPurpose || !value.sourceOfFunds || !value.expectedMonthlyPay)) return 'Complétez votre profil financier pour continuer.';
-    if (step === 4 && !value.consent) return 'Votre consentement est nécessaire pour envoyer la demande.';
+  const validateStep = (stepToValidate: number) => {
+    if (stepToValidate === 0 && (!value.dateOfBirth || !value.gender || !value.documentType || !value.documentNumber || !value.taxIdNumber)) return 'Complétez tous les champs d’identité pour continuer.';
+    if (stepToValidate === 1 && !value.documentFrontFile) return 'Ajoutez le recto de votre pièce d’identité pour continuer.';
+    if (stepToValidate === 2 && (!value.addressStreet || !value.addressCity || !value.addressState || !value.addressPostalCode || !value.addressCountry || !value.proofOfAddressFile)) return 'Complétez votre adresse et ajoutez un justificatif.';
+    if (stepToValidate === 3 && (!value.employmentStatus || !value.occupation || !value.primaryPurpose || !value.sourceOfFunds || !value.expectedMonthlyPay)) return 'Complétez votre profil financier pour continuer.';
+    if (stepToValidate === 4 && !value.consent) return 'Votre consentement est nécessaire pour envoyer la demande.';
     return '';
   };
+  const validate = () => validateStep(step);
   const next = () => {
+    if (step === 4) {
+      const firstInvalidStep = [0, 1, 2, 3, 4].findIndex((stepToValidate) => Boolean(validateStep(stepToValidate)));
+      if (firstInvalidStep !== -1) {
+        setStep(firstInvalidStep);
+        setValidation(validateStep(firstInvalidStep));
+        return;
+      }
+    }
     const issue = validate();
     if (issue) return setValidation(issue);
     setValidation('');
@@ -160,7 +170,7 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
       <div className="flex items-center justify-between border-b border-[#f8edd5]/8 px-5 py-4 sm:px-7"><div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.2em] text-[#d7b879]"><LockKeyhole className="h-3.5 w-3.5" /> Vérification sécurisée</div><button type="button" data-testid="button-close-kyc-wizard" aria-label="Fermer la vérification" onClick={onClose} className="rounded-xl p-2 text-[#f8edd5]/50 transition-colors hover:bg-[#f8edd5]/8 hover:text-[#f8edd5]"><X className="h-5 w-5" /></button></div>
       <div className="px-5 pb-5 pt-6 sm:px-7"><div className="mb-5 flex items-center justify-between"><span data-testid="text-kyc-step" className="text-xs font-semibold text-[#f8edd5]/45">{current.eyebrow} <span className="text-[#f8edd5]/20">/</span> 05</span><span className="text-xs font-mono text-[#d7b879]">{Math.round(progress)}%</span></div><div className="h-1 overflow-hidden rounded-full bg-[#f8edd5]/10"><motion.div className="h-full rounded-full bg-[#d7b879]" animate={{ width: `${progress}%` }} transition={{ duration: .35 }} /></div><div className="mt-7"><h2 id="heyqo-wizard-title" data-testid="heading-kyc-step" className="text-[29px] font-semibold leading-tight tracking-[-.04em]">{current.title}</h2><p className="mt-2 text-sm text-[#f8edd5]/48">{current.detail}</p></div></div>
       <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-6 sm:px-7"><AnimatePresence mode="wait"><motion.div key={step} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: .2 }}>{content}</motion.div></AnimatePresence>{(validation || fileError || error) && <div data-testid="error-kyc-wizard" role="alert" className="mt-5 rounded-2xl border border-red-300/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">{validation || fileError || error}</div>}</div>
-      <div className="flex gap-3 border-t border-[#f8edd5]/8 bg-[#211d22] px-5 py-4 sm:px-7"><button type="button" data-testid="button-kyc-back" onClick={back} disabled={step === 0 || busy} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#f8edd5]/12 px-4 text-sm font-semibold text-[#f8edd5]/65 transition-colors hover:border-[#f8edd5]/30 hover:text-[#f8edd5] disabled:invisible"><ArrowLeft className="h-4 w-4" /> Retour</button><button type="button" data-testid={step === 4 ? 'button-submit-kyc-wizard' : 'button-kyc-next'} onClick={next} disabled={busy} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#d7b879] px-5 text-sm font-bold text-[#17151a] transition-all hover:bg-[#e4c78d] active:scale-[.985] disabled:cursor-wait disabled:opacity-60">{busy ? 'Envoi sécurisé…' : step === 4 ? <><Check className="h-4 w-4" /> Envoyer ma demande</> : <>Continuer <ArrowRight className="h-4 w-4" /></>}</button></div>
+      <div className="border-t border-[#f8edd5]/8 bg-[#211d22] px-5 py-4 sm:px-7"><div className="flex gap-3"><button type="button" data-testid="button-kyc-back" onClick={back} disabled={step === 0 || busy} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-[#f8edd5]/12 px-4 text-sm font-semibold text-[#f8edd5]/65 transition-colors hover:border-[#f8edd5]/30 hover:text-[#f8edd5] disabled:invisible"><ArrowLeft className="h-4 w-4" /> Retour</button><button type="button" data-testid={step === 4 ? 'button-submit-kyc-wizard' : 'button-kyc-next'} onClick={next} disabled={busy} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#d7b879] px-5 text-sm font-bold text-[#17151a] transition-all hover:bg-[#e4c78d] active:scale-[.985] disabled:cursor-wait disabled:opacity-60">{busy ? 'Envoi sécurisé…' : step === 4 ? <><Check className="h-4 w-4" /> Envoyer ma demande</> : <>Continuer <ArrowRight className="h-4 w-4" /></>}</button></div>{sandboxPreview && step === 2 && <button type="button" data-testid="button-sandbox-preview-step-4" onClick={() => { setValidation(''); setStep(3); }} disabled={busy} className="mt-3 w-full text-center text-xs font-semibold text-[#d7b879]/80 underline decoration-[#d7b879]/30 underline-offset-4 transition-colors hover:text-[#d7b879]">Voir la section 4 pour le test Sandbox sans justificatif</button>}</div>
     </motion.div>
   </div>, document.body);
 }
