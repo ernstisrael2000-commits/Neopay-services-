@@ -7,4 +7,4 @@ Every financial approval, rejection, refund, debit, or credit must read its auth
 
 **Why:** Concurrent callers can use different idempotency keys or reach different processes. Any check performed before the transaction can become stale and allow duplicate credits, debits, refunds, logs, or notifications.
 
-**How to apply:** For every money-moving route, transactionally re-read the pending record and balances, reject any non-pending state or insufficient balance, then write the terminal state, balance changes, and dependent audit records together.
+**How to apply:** For every money-moving route, transactionally re-read the pending record and balances, reject any non-pending state or insufficient balance, then write the terminal state, balance changes, and dependent audit records together. When an external provider can time out after accepting a mutation, keep a durable lock for that account/card and operation type in `reconciliation_required`; never allow a new provider call with a different idempotency key until the uncertain operation is resolved.

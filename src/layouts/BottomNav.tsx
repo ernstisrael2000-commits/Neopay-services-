@@ -23,7 +23,7 @@ const BAR_H   = 58;   // visible bar height in px (reduced)
 const RISE    = 20;   // px the active circle rises above bar top
 const RING_SZ = 46;   // diameter of active circle in px
 
-/* ─── Main nav items (4) + wallet handled separately ─────────── */
+/* ─── Main nav items + wallet handled separately ──────────────── */
 const NAV_ITEMS = [
   { key: 'home',       icon: House,         label: 'Accueil'    },
   { key: 'products',   icon: PackageOpen,   label: 'Produits'   },

@@ -272,6 +272,10 @@ export interface AppSettings {
   commissionPurchaseGpPct?: number;
   // Custom exchange rates per payment method (methodId → HTG/USD rate)
   cardRates?: Record<string, number>;
+  // HeyQO virtual cards (server remains authoritative for charged amounts)
+  heyqoCardFeeUSD?: number;
+  heyqoCardInitialDepositUSD?: number;
+  heyqoMonthlyLimitUSD?: number;
 }
 
 export interface Game {
@@ -471,6 +475,49 @@ export interface Client {
   photoUrl?: string;
   createdAt: any;
   updatedAt: any;
+}
+
+// ─── HeyQO virtual cards ──────────────────────────────────────────────────────
+
+export type HeyQOCardStatus =
+  | 'pending'
+  | 'processing'
+  | 'active'
+  | 'frozen'
+  | 'blocked'
+  | 'terminated'
+  | 'failed';
+
+export interface HeyQOCustomer {
+  id?: string;
+  localId?: string;
+  status?: string;
+  kycStatus?: string;
+}
+
+export interface HeyQOCard {
+  id: string;
+  status: HeyQOCardStatus | string;
+  brand: 'visa' | 'mastercard' | string;
+  currency: string;
+  last4?: string;
+  maskedNumber?: string;
+  cardholderName?: string;
+  balance: number;
+  monthlyLimit?: number;
+  monthlySpent?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HeyQOCardTransaction {
+  id: string;
+  type: 'deposit' | 'withdrawal' | 'charge' | 'refund' | string;
+  amount: number;
+  currency: string;
+  status: string;
+  description?: string;
+  createdAt?: string;
 }
 
 export interface NavButton {

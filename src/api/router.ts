@@ -21,6 +21,16 @@ import {
 import { getEventBus } from './realtime.ts';
 import { createPlopPlopPayment, verifyPlopPlopPayment, PLOPPLOP_METHODS, type PlopPlopMethod } from './plopplop.ts';
 import {
+  extractCard,
+  extractCardList,
+  heyqoRequest,
+  HeyQOError,
+  isHeyQOConfigured,
+  sanitizeHeyQOCard,
+  unwrapHeyQO,
+  webhookDigest,
+} from './heyqo.ts';
+import {
   aiRateLimiter,
   authRateLimiter,
   financialRateLimiter,
@@ -838,6 +848,7 @@ for (const path of [
   '/api/admin/teacher-withdrawals', '/api/admin/card-topup',
   '/api/formations/purchases', '/api/formations/payment-request',
   '/api/client/crypto-orders', '/api/client/crypto-market/requests',
+  '/api/client/cards',
   '/api/teacher/withdrawal', '/api/crypto/create-payment',
   '/api/fazer/topups/order', '/api/fazer/giftcards/order',
   '/api/reseller/ff/order', '/api/reseller/ff/buy-pack',
@@ -9949,6 +9960,884 @@ router.post('/api/reseller/ff/buy-pack', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[reseller/ff/buy-pack]', e.message);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ─── HeyQO virtual cards ──────────────────────────────────────────────────────
+
+function finiteMoney(value: unknown): number | null {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+function providerCardId(card: any): string {
+  return String(card?.id || card?.local_id || '');
+}
+
+function providerCardStatus(card: any): string {
+  return String(card?.status || card?.state || 'processing').toLowerCase();
+}
+
+function numberFrom(card: any, keys: string[], fallback = 0): number {
+  for (const key of keys) {
+    const value = Number(card?.[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  return fallback;
+}
+
+function publicHeyQOCard(card: any, monthlyLimit = 0): Record<string, unknown> {
+  const safe = sanitizeHeyQOCard(card);
+  return {
+    id: String(safe.id || safe.local_id || ''),
+    status: providerCardStatus(safe),
+    brand: String(safe.brand || 'visa').toLowerCase(),
+    currency: String(safe.currency || 'usd').toUpperCase(),
+    last4: String(safe.last4 || safe.last_four || '').slice(-4) || undefined,
+    maskedNumber: safe.masked_pan || safe.masked_number || undefined,
+    cardholderName: safe.cardholder_name || safe.cardholder || undefined,
+    balance: numberFrom(safe, ['available_balance', 'balance']),
+    monthlyLimit: numberFrom(safe, ['monthly_limit', 'limit'], monthlyLimit),
+    monthlySpent: numberFrom(safe, ['monthly_spent']),
+    createdAt: safe.created_at,
+    updatedAt: safe.updated_at,
+  };
+}
+
+function heyqoCustomerIds(client: any): string[] {
+  return [client?.heyqoCustomerLocalId, client?.heyqoCustomerId].filter(Boolean).map(String);
+}
+
+async function cacheHeyQOCard(clientId: string, rawCard: any): Promise<void> {
+  const safe = sanitizeHeyQOCard(rawCard);
+  const cardId = providerCardId(safe);
+  if (!cardId) return;
+  await adminDb.collection('heyqo_cards').doc(cardId).set({
+    clientId,
+    providerCardId: cardId,
+    ...safe,
+    syncedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function loadOwnedHeyQOCard(clientId: string, cardId: string, client: any): Promise<any> {
+  const customerIds = heyqoCustomerIds(client);
+  if (customerIds.length === 0) throw new HeyQOError('Aucun profil HeyQO n’est associé à ce compte.', 404);
+  const payload = await heyqoRequest(`/cards/${encodeURIComponent(cardId)}`);
+  const card = extractCard(payload);
+  const actualId = providerCardId(card);
+  if (!actualId || actualId !== cardId) throw new HeyQOError('Carte HeyQO introuvable.', 404);
+
+  const cardCustomerId = String(card?.customer_id || card?.customer?.id || card?.customer?.local_id || '');
+  if (cardCustomerId && !customerIds.includes(cardCustomerId)) {
+    throw new HeyQOError('Accès refusé à cette carte.', 403);
+  }
+  if (!cardCustomerId) {
+    const cached = await adminDb.collection('heyqo_cards').doc(cardId).get();
+    if (!cached.exists || cached.data()?.clientId !== clientId) {
+      throw new HeyQOError('Impossible de confirmer le propriétaire de cette carte.', 403);
+    }
+  }
+  await cacheHeyQOCard(clientId, card);
+  return card;
+}
+
+function cardOperationId(res: express.Response, suffix: string): string {
+  const operationId = String(res.locals.financialOperationId || '');
+  if (operationId) return operationId;
+  return createHash('sha256').update(`${suffix}:${Date.now()}:${randomBytes(8).toString('hex')}`).digest('hex');
+}
+
+function heyqoDefinitelyDidNotApply(error: unknown): boolean {
+  return error instanceof HeyQOError &&
+    (error.outcome === 'confirmed_rejected' || error.outcome === 'not_sent');
+}
+
+async function acquireCardIssuanceLock(clientId: string): Promise<FirebaseFirestore.DocumentReference> {
+  const lockRef = adminDb.collection('heyqo_card_issuance_locks').doc(clientId);
+  await adminDb.runTransaction(async (txn) => {
+    const snapshot = await txn.get(lockRef);
+    const status = snapshot.data()?.status;
+    if (snapshot.exists && ['in_progress', 'reconciliation_required'].includes(status)) {
+      throw new HeyQOError(
+        status === 'reconciliation_required'
+          ? 'Une émission précédente doit être vérifiée avant une nouvelle demande.'
+          : 'Une demande de carte est déjà en cours.',
+        409,
+        undefined,
+        'not_sent',
+      );
+    }
+    txn.set(lockRef, {
+      clientId,
+      status: 'in_progress',
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: snapshot.exists ? snapshot.data()?.createdAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+    });
+  });
+  return lockRef;
+}
+
+async function finishCardIssuanceLock(
+  lockRef: FirebaseFirestore.DocumentReference,
+  status: 'completed' | 'failed' | 'reconciliation_required',
+  detail: Record<string, unknown> = {},
+): Promise<void> {
+  await lockRef.set({
+    status,
+    ...detail,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function acquireCardMovementLock(
+  clientId: string,
+  cardId: string,
+  type: 'card_deposit' | 'card_withdrawal',
+  operationId: string,
+): Promise<FirebaseFirestore.DocumentReference> {
+  const lockId = createHash('sha256').update(`${clientId}:${cardId}:${type}`).digest('hex');
+  const lockRef = adminDb.collection('heyqo_card_movement_locks').doc(lockId);
+  await adminDb.runTransaction(async (txn) => {
+    const snapshot = await txn.get(lockRef);
+    const status = snapshot.data()?.status;
+    if (snapshot.exists && ['in_progress', 'reconciliation_required'].includes(status)) {
+      throw new HeyQOError(
+        status === 'reconciliation_required'
+          ? 'Une opération précédente sur cette carte doit être vérifiée avant une nouvelle tentative.'
+          : 'Une opération du même type est déjà en cours sur cette carte.',
+        409,
+        undefined,
+        'not_sent',
+      );
+    }
+    txn.set(lockRef, {
+      clientId,
+      cardId,
+      type,
+      operationId,
+      status: 'in_progress',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return lockRef;
+}
+
+async function finishCardMovementLock(
+  lockRef: FirebaseFirestore.DocumentReference,
+  status: 'completed' | 'failed' | 'reconciliation_required',
+  detail: Record<string, unknown> = {},
+): Promise<void> {
+  await lockRef.set({
+    status,
+    ...detail,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function reserveCardWalletDebit(options: {
+  operationId: string;
+  clientId: string;
+  cardId?: string;
+  amount: number;
+  type: string;
+  description: string;
+}): Promise<{ operationRef: FirebaseFirestore.DocumentReference; transactionRef: FirebaseFirestore.DocumentReference }> {
+  const operationRef = adminDb.collection('heyqo_card_operations').doc(options.operationId);
+  const transactionRef = adminDb.collection('client_transactions').doc(`heyqo_${options.operationId}`);
+  const clientRef = adminDb.collection('clients').doc(options.clientId);
+  await adminDb.runTransaction(async (txn) => {
+    const [clientSnap, operationSnap] = await Promise.all([txn.get(clientRef), txn.get(operationRef)]);
+    if (operationSnap.exists) throw new Error('Cette opération de carte a déjà été reçue.');
+    if (!clientSnap.exists) throw new Error('Compte client introuvable.');
+    const balance = Number(clientSnap.data()?.balance || 0);
+    if (balance < options.amount) throw new Error(`Solde Wallet insuffisant. Requis : $${options.amount.toFixed(2)}.`);
+    txn.update(clientRef, {
+      balance: FieldValue.increment(-options.amount),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    txn.set(operationRef, {
+      clientId: options.clientId,
+      cardId: options.cardId || null,
+      type: options.type,
+      amount: options.amount,
+      currency: 'USD',
+      status: 'reserved',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    txn.set(transactionRef, {
+      clientId: options.clientId,
+      type: options.type,
+      amount: options.amount,
+      status: 'pending',
+      method: 'HeyQO',
+      description: options.description,
+      source: 'heyqo_card',
+      operationId: options.operationId,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return { operationRef, transactionRef };
+}
+
+async function reserveCardIssuanceWalletDebits(options: {
+  operationId: string;
+  clientId: string;
+  issueFee: number;
+  initialDeposit: number;
+  brand: string;
+}): Promise<{
+  issue: { operationRef: FirebaseFirestore.DocumentReference; transactionRef: FirebaseFirestore.DocumentReference };
+  funding: { operationRef: FirebaseFirestore.DocumentReference; transactionRef: FirebaseFirestore.DocumentReference };
+}> {
+  const issueOperationRef = adminDb.collection('heyqo_card_operations').doc(options.operationId);
+  const issueTransactionRef = adminDb.collection('client_transactions').doc(`heyqo_${options.operationId}`);
+  const fundingId = `${options.operationId}_funding`;
+  const fundingOperationRef = adminDb.collection('heyqo_card_operations').doc(fundingId);
+  const fundingTransactionRef = adminDb.collection('client_transactions').doc(`heyqo_${fundingId}`);
+  const clientRef = adminDb.collection('clients').doc(options.clientId);
+  const total = Math.round((options.issueFee + options.initialDeposit) * 100) / 100;
+
+  await adminDb.runTransaction(async (txn) => {
+    const [clientSnap, issueSnap, fundingSnap] = await Promise.all([
+      txn.get(clientRef),
+      txn.get(issueOperationRef),
+      txn.get(fundingOperationRef),
+    ]);
+    if (issueSnap.exists || fundingSnap.exists) throw new Error('Cette émission a déjà été reçue.');
+    if (!clientSnap.exists) throw new Error('Compte client introuvable.');
+    const balance = Number(clientSnap.data()?.balance || 0);
+    if (balance < total) throw new Error(`Solde Wallet insuffisant. Requis : $${total.toFixed(2)}.`);
+    txn.update(clientRef, { balance: FieldValue.increment(-total), updatedAt: FieldValue.serverTimestamp() });
+
+    const common = {
+      clientId: options.clientId,
+      currency: 'USD',
+      status: 'reserved',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    txn.set(issueOperationRef, { ...common, type: 'card_issue', amount: options.issueFee });
+    txn.set(fundingOperationRef, { ...common, type: 'card_initial_deposit', amount: options.initialDeposit });
+    txn.set(issueTransactionRef, {
+      ...common,
+      type: 'card_issue',
+      amount: options.issueFee,
+      method: 'HeyQO',
+      description: `Frais de création carte ${options.brand.toUpperCase()} HeyQO`,
+      source: 'heyqo_card',
+      operationId: options.operationId,
+    });
+    txn.set(fundingTransactionRef, {
+      ...common,
+      type: 'card_initial_deposit',
+      amount: options.initialDeposit,
+      method: 'HeyQO',
+      description: 'Dépôt initial sur la carte HeyQO',
+      source: 'heyqo_card',
+      operationId: fundingId,
+    });
+  });
+
+  return {
+    issue: { operationRef: issueOperationRef, transactionRef: issueTransactionRef },
+    funding: { operationRef: fundingOperationRef, transactionRef: fundingTransactionRef },
+  };
+}
+
+async function settleCardWalletDebit(
+  operationRef: FirebaseFirestore.DocumentReference,
+  transactionRef: FirebaseFirestore.DocumentReference,
+  providerData: Record<string, unknown>,
+): Promise<void> {
+  const batch = adminDb.batch();
+  batch.update(operationRef, {
+    status: 'completed',
+    ...providerData,
+    completedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  batch.update(transactionRef, {
+    status: 'completed',
+    ...providerData,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+async function refundCardWalletDebit(
+  operationRef: FirebaseFirestore.DocumentReference,
+  transactionRef: FirebaseFirestore.DocumentReference,
+  clientId: string,
+  amount: number,
+  errorMessage: string,
+): Promise<void> {
+  const clientRef = adminDb.collection('clients').doc(clientId);
+  await adminDb.runTransaction(async (txn) => {
+    const operationSnap = await txn.get(operationRef);
+    if (!operationSnap.exists || operationSnap.data()?.status !== 'reserved') return;
+    txn.update(clientRef, {
+      balance: FieldValue.increment(amount),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    txn.update(operationRef, {
+      status: 'refunded',
+      error: errorMessage.slice(0, 240),
+      refundedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    txn.update(transactionRef, {
+      status: 'rejected',
+      rejectionReason: errorMessage.slice(0, 240),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function markCardOperationForReconciliation(
+  operationRef: FirebaseFirestore.DocumentReference,
+  transactionRef: FirebaseFirestore.DocumentReference,
+  errorMessage: string,
+): Promise<void> {
+  const batch = adminDb.batch();
+  batch.update(operationRef, {
+    status: 'reconciliation_required',
+    error: errorMessage.slice(0, 240),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  batch.update(transactionRef, {
+    status: 'pending',
+    description: 'Opération HeyQO en vérification',
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+async function listLocalCardActivity(clientId: string): Promise<Record<string, unknown>[]> {
+  const snapshot = await adminDb.collection('heyqo_card_operations')
+    .where('clientId', '==', clientId)
+    .limit(100)
+    .get();
+  return snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      const timestamp = data.completedAt || data.createdAt;
+      return {
+        id: doc.id,
+        type: data.type || 'card_activity',
+        amount: Number(data.amount || 0),
+        currency: data.currency || 'USD',
+        status: data.status || 'pending',
+        description:
+          data.type === 'card_deposit' ? 'Recharge de la carte' :
+          data.type === 'card_withdrawal' ? 'Retrait vers le Wallet' :
+          data.type === 'card_issue' ? 'Création de la carte' :
+          'Activité de carte',
+        createdAt: timestamp?.toDate ? timestamp.toDate().toISOString() : undefined,
+      };
+    })
+    .sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0, 20);
+}
+
+router.get('/api/client/cards', requireDb, async (_req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  if (!isHeyQOConfigured()) {
+    return res.json({ configured: false, customer: null, cards: [], cardTransactions: [] });
+  }
+  try {
+    const customerIds = heyqoCustomerIds(client);
+    if (customerIds.length === 0) {
+      return res.json({ configured: true, customer: null, cards: [], cardTransactions: [] });
+    }
+    const customerId = customerIds[0];
+    const [payload, settingsSnap, cardTransactions] = await Promise.all([
+      heyqoRequest(`/cards?customer_id=${encodeURIComponent(customerId)}`),
+      adminDb.collection('settings').doc('global').get(),
+      listLocalCardActivity(clientId),
+    ]);
+    const monthlyLimit = Number(settingsSnap.data()?.heyqoMonthlyLimitUSD || 0);
+    const rawCards = extractCardList(payload);
+    await Promise.all(rawCards.map((card) => cacheHeyQOCard(clientId, card)));
+    res.json({
+      configured: true,
+      customer: {
+        id: client.heyqoCustomerId || undefined,
+        localId: client.heyqoCustomerLocalId || undefined,
+        status: client.heyqoCustomerStatus || undefined,
+        kycStatus: client.heyqoKycStatus || undefined,
+      },
+      cards: rawCards.map((card) => publicHeyQOCard(card, monthlyLimit)),
+      cardTransactions,
+    });
+  } catch (error: any) {
+    console.error('[HeyQO cards list]', error?.message || error);
+    const cached = await adminDb.collection('heyqo_cards').where('clientId', '==', clientId).limit(10).get().catch(() => null);
+    if (cached && !cached.empty) {
+      return res.json({
+        configured: true,
+        customer: {
+          id: client.heyqoCustomerId || undefined,
+          localId: client.heyqoCustomerLocalId || undefined,
+          status: client.heyqoCustomerStatus || undefined,
+          kycStatus: client.heyqoKycStatus || undefined,
+        },
+        cards: cached.docs.map((doc) => publicHeyQOCard(doc.data())),
+        cardTransactions: await listLocalCardActivity(clientId).catch(() => []),
+        stale: true,
+      });
+    }
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Impossible de charger les cartes HeyQO.' });
+  }
+});
+
+router.post('/api/client/cards', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const clientRef = adminDb.collection('clients').doc(clientId);
+  const initialClient = res.locals.clientRecord.data() || {};
+  const brand = String(req.body?.brand || 'visa').toLowerCase();
+  if (!['visa', 'mastercard'].includes(brand)) return res.status(400).json({ error: 'Marque de carte invalide.' });
+  if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Cartes est en attente de configuration HeyQO.' });
+  const suppliedKyc = req.body?.kyc || {};
+  if (heyqoCustomerIds(initialClient).length === 0) {
+    const dateOfBirth = String(suppliedKyc.dateOfBirth || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+      return res.status(400).json({ error: 'La date de naissance est requise au format AAAA-MM-JJ.' });
+    }
+    if (!initialClient.email || !initialClient.phone || !initialClient.name) {
+      return res.status(400).json({ error: 'Le nom, l’adresse e-mail et le téléphone du profil client sont requis.' });
+    }
+  }
+
+  let customerIds = heyqoCustomerIds(initialClient);
+  let issuanceLockRef: FirebaseFirestore.DocumentReference | null = null;
+  try {
+    issuanceLockRef = await acquireCardIssuanceLock(clientId);
+    if (customerIds.length === 0) {
+      const kyc = suppliedKyc;
+      const dateOfBirth = String(kyc.dateOfBirth || '');
+      const nameParts = String(initialClient.name).trim().split(/\s+/);
+      const customerPayload = await heyqoRequest('/customers', {
+        method: 'POST',
+        body: JSON.stringify({
+          first_name: nameParts.shift() || 'Client',
+          last_name: nameParts.join(' ') || 'Solutionpam',
+          email: initialClient.email,
+          phone: initialClient.phone,
+          country_code: String(kyc.countryCode || 'HT').toUpperCase(),
+          date_of_birth: dateOfBirth,
+          external_ref: clientId,
+          ...(kyc.addressStreet && { address_street: String(kyc.addressStreet).slice(0, 160) }),
+          ...(kyc.addressCity && { address_city: String(kyc.addressCity).slice(0, 80) }),
+          ...(kyc.addressState && { address_state: String(kyc.addressState).slice(0, 80) }),
+          ...(kyc.addressPostalCode && { address_postal_code: String(kyc.addressPostalCode).slice(0, 24) }),
+          address_country: String(kyc.countryCode || 'HT').toUpperCase(),
+        }),
+      });
+      const customer = unwrapHeyQO<any>(customerPayload);
+      const customerId = String(customer?.id || '');
+      const localId = String(customer?.local_id || customer?.localId || customerId);
+      if (!localId) throw new HeyQOError('HeyQO n’a pas renvoyé d’identifiant client.', 502);
+      await clientRef.update({
+        heyqoCustomerId: customerId || localId,
+        heyqoCustomerLocalId: localId,
+        heyqoCustomerStatus: customer?.status || 'processing',
+        heyqoKycStatus: customer?.kyc_status || customer?.kycStatus || 'pending',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      customerIds = [localId, customerId].filter(Boolean);
+    }
+
+    const listPayload = await heyqoRequest(`/cards?customer_id=${encodeURIComponent(customerIds[0])}`);
+    const existing = extractCardList(listPayload).find((card) => providerCardStatus(card) !== 'terminated');
+    if (existing) {
+      await cacheHeyQOCard(clientId, existing);
+      await finishCardIssuanceLock(issuanceLockRef, 'completed', { cardId: providerCardId(existing) });
+      return res.json({ success: true, card: publicHeyQOCard(existing), existing: true });
+    }
+
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const settings = settingsSnap.data() || {};
+    const issueFee = Math.max(0, Number(settings.heyqoCardFeeUSD ?? 5));
+    const initialDeposit = Math.max(1, Number(settings.heyqoCardInitialDepositUSD ?? 1));
+    const operationId = cardOperationId(res, 'card_issue');
+    const reservations = await reserveCardIssuanceWalletDebits({
+      operationId,
+      clientId,
+      issueFee,
+      initialDeposit,
+      brand,
+    });
+
+    try {
+      const issuePayload = await heyqoRequest('/cards', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': operationId },
+        body: JSON.stringify({ customer_id: customerIds[0], currency: 'usd', brand }),
+      });
+      const card = extractCard(issuePayload);
+      const cardId = providerCardId(card);
+      if (!cardId) {
+        await markCardOperationForReconciliation(reservations.issue.operationRef, reservations.issue.transactionRef, 'Carte créée sans identifiant exploitable.');
+        await refundCardWalletDebit(
+          reservations.funding.operationRef,
+          reservations.funding.transactionRef,
+          clientId,
+          initialDeposit,
+          'Financement non envoyé : identifiant de carte indisponible.',
+        );
+        await finishCardIssuanceLock(issuanceLockRef, 'reconciliation_required', { operationId });
+        return res.status(202).json({ success: true, processing: true, card: publicHeyQOCard(card) });
+      }
+      await cacheHeyQOCard(clientId, card);
+      await settleCardWalletDebit(reservations.issue.operationRef, reservations.issue.transactionRef, {
+        cardId,
+        providerStatus: providerCardStatus(card),
+      });
+
+      const fundingOperationId = `${operationId}_funding`;
+      const fundingLockRef = await acquireCardMovementLock(clientId, cardId, 'card_deposit', fundingOperationId);
+      let fundingStatus: 'completed' | 'refunded' | 'reconciliation_required' = 'completed';
+      try {
+        const fundingPayload = await heyqoRequest(`/cards/${encodeURIComponent(cardId)}/deposit`, {
+          method: 'POST',
+          headers: { 'Idempotency-Key': fundingOperationId },
+          body: JSON.stringify({ amount: initialDeposit, currency: 'usd' }),
+        });
+        await settleCardWalletDebit(reservations.funding.operationRef, reservations.funding.transactionRef, {
+          cardId,
+          providerReference: unwrapHeyQO<any>(fundingPayload)?.id || null,
+        });
+        await finishCardMovementLock(fundingLockRef, 'completed', {
+          providerReference: unwrapHeyQO<any>(fundingPayload)?.id || null,
+        });
+      } catch (fundingError: any) {
+        if (heyqoDefinitelyDidNotApply(fundingError)) {
+          fundingStatus = 'refunded';
+          await refundCardWalletDebit(
+            reservations.funding.operationRef,
+            reservations.funding.transactionRef,
+            clientId,
+            initialDeposit,
+            fundingError.message,
+          );
+          await finishCardMovementLock(fundingLockRef, 'failed', { error: fundingError.message });
+        } else {
+          fundingStatus = 'reconciliation_required';
+          await markCardOperationForReconciliation(
+            reservations.funding.operationRef,
+            reservations.funding.transactionRef,
+            fundingError?.message || 'Financement initial HeyQO incertain.',
+          );
+          await finishCardMovementLock(fundingLockRef, 'reconciliation_required', {
+            operationId: fundingOperationId,
+            error: String(fundingError?.message || 'Financement initial HeyQO incertain.').slice(0, 240),
+          });
+        }
+      }
+      await finishCardIssuanceLock(
+        issuanceLockRef,
+        fundingStatus === 'reconciliation_required' ? 'reconciliation_required' : 'completed',
+        { operationId, cardId, fundingStatus },
+      );
+      return res.status(providerCardStatus(card) === 'processing' ? 202 : 201).json({
+        success: true,
+        processing: providerCardStatus(card) === 'processing',
+        fundingStatus,
+        card: publicHeyQOCard(card, Number(settings.heyqoMonthlyLimitUSD || 0)),
+      });
+    } catch (error: any) {
+      if (heyqoDefinitelyDidNotApply(error)) {
+        await Promise.all([
+          refundCardWalletDebit(reservations.issue.operationRef, reservations.issue.transactionRef, clientId, issueFee, error.message),
+          refundCardWalletDebit(reservations.funding.operationRef, reservations.funding.transactionRef, clientId, initialDeposit, error.message),
+        ]);
+        await finishCardIssuanceLock(issuanceLockRef, 'failed', { operationId });
+      } else {
+        await Promise.all([
+          markCardOperationForReconciliation(reservations.issue.operationRef, reservations.issue.transactionRef, error?.message || 'Réponse HeyQO incertaine.'),
+          refundCardWalletDebit(
+            reservations.funding.operationRef,
+            reservations.funding.transactionRef,
+            clientId,
+            initialDeposit,
+            'Financement non envoyé pendant la vérification de l’émission.',
+          ),
+        ]);
+        await finishCardIssuanceLock(issuanceLockRef, 'reconciliation_required', { operationId });
+      }
+      throw error;
+    }
+  } catch (error: any) {
+    if (issuanceLockRef) {
+      const lock = await issuanceLockRef.get().catch(() => null);
+      if (lock?.data()?.status === 'in_progress') {
+        await finishCardIssuanceLock(
+          issuanceLockRef,
+          heyqoDefinitelyDidNotApply(error) ? 'failed' : 'reconciliation_required',
+          { error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+        ).catch(() => {});
+      }
+    }
+    console.error('[HeyQO card issue]', error?.message || error);
+    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: error?.message || 'Impossible de créer la carte.' });
+  }
+});
+
+router.post('/api/client/cards/:cardId/secure-view', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  try {
+    await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
+    const payload = await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}/secure-view`, {
+      method: 'POST',
+      body: JSON.stringify({
+        layout: 'free',
+        background_color: '#07111F',
+        text_color: '#FFFFFF',
+        show_branding: false,
+        brand_label: 'Solutionpam',
+        fields_order: 'pan,expiry,cvv,cardholder,brand',
+      }),
+    });
+    const data = unwrapHeyQO<any>(payload);
+    const url = data?.url || data?.secure_view_url || data?.iframe_url;
+    if (typeof url !== 'string' || !url.startsWith('https://heyqo.cash/')) {
+      throw new HeyQOError('HeyQO n’a pas renvoyé de vue sécurisée valide.', 502);
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ url, expiresAt: data?.expires_at || new Date(Date.now() + 90_000).toISOString() });
+  } catch (error: any) {
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Affichage sécurisé indisponible.' });
+  }
+});
+
+router.post('/api/client/cards/:cardId/deposit', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const amount = finiteMoney(req.body?.amount);
+  if (!amount) return res.status(400).json({ error: 'Montant de recharge invalide.' });
+  const operationId = cardOperationId(res, 'card_deposit');
+  let reservation: Awaited<ReturnType<typeof reserveCardWalletDebit>> | null = null;
+  let movementLockRef: FirebaseFirestore.DocumentReference | null = null;
+  let providerMutationStarted = false;
+  try {
+    await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
+    movementLockRef = await acquireCardMovementLock(clientId, req.params.cardId, 'card_deposit', operationId);
+    reservation = await reserveCardWalletDebit({
+      operationId,
+      clientId,
+      cardId: req.params.cardId,
+      amount,
+      type: 'card_deposit',
+      description: 'Recharge carte HeyQO depuis le Wallet',
+    });
+    providerMutationStarted = true;
+    const payload = await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}/deposit`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': operationId },
+      body: JSON.stringify({ amount, currency: 'usd' }),
+    });
+    await settleCardWalletDebit(reservation.operationRef, reservation.transactionRef, {
+      cardId: req.params.cardId,
+      providerReference: unwrapHeyQO<any>(payload)?.id || null,
+    });
+    await finishCardMovementLock(movementLockRef, 'completed', {
+      providerReference: unwrapHeyQO<any>(payload)?.id || null,
+    });
+    try {
+      const card = extractCard(await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}`));
+      await cacheHeyQOCard(clientId, card);
+      return res.json({ success: true, card: publicHeyQOCard(card) });
+    } catch (refreshError: any) {
+      console.warn('[HeyQO deposit refresh]', refreshError?.message || refreshError);
+      return res.json({ success: true, stale: true });
+    }
+  } catch (error: any) {
+    if (reservation) {
+      if (heyqoDefinitelyDidNotApply(error)) {
+        await refundCardWalletDebit(reservation.operationRef, reservation.transactionRef, clientId, amount, error.message);
+        if (movementLockRef) await finishCardMovementLock(movementLockRef, 'failed', { error: error.message }).catch(() => {});
+      } else {
+        await markCardOperationForReconciliation(reservation.operationRef, reservation.transactionRef, error?.message || 'Réponse HeyQO incertaine.');
+        if (movementLockRef) await finishCardMovementLock(movementLockRef, 'reconciliation_required', {
+          operationId,
+          error: String(error?.message || 'Réponse HeyQO incertaine.').slice(0, 240),
+        }).catch(() => {});
+      }
+    } else if (movementLockRef) {
+      await finishCardMovementLock(
+        movementLockRef,
+        providerMutationStarted ? 'reconciliation_required' : 'failed',
+        { error: String(error?.message || 'Erreur avant appel HeyQO').slice(0, 240) },
+      ).catch(() => {});
+    }
+    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: error?.message || 'Recharge impossible.' });
+  }
+});
+
+router.post('/api/client/cards/:cardId/withdraw', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const amount = finiteMoney(req.body?.amount);
+  if (!amount) return res.status(400).json({ error: 'Montant de retrait invalide.' });
+  const operationId = cardOperationId(res, 'card_withdrawal');
+  const operationRef = adminDb.collection('heyqo_card_operations').doc(operationId);
+  let movementLockRef: FirebaseFirestore.DocumentReference | null = null;
+  let providerMutationStarted = false;
+  try {
+    const card = await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
+    if (numberFrom(card, ['available_balance', 'balance']) < amount) {
+      return res.status(400).json({ error: 'Solde de carte insuffisant.' });
+    }
+    movementLockRef = await acquireCardMovementLock(clientId, req.params.cardId, 'card_withdrawal', operationId);
+    await adminDb.runTransaction(async (txn) => {
+      const snap = await txn.get(operationRef);
+      if (snap.exists) throw new Error('Cette opération de carte a déjà été reçue.');
+      txn.set(operationRef, {
+        clientId, cardId: req.params.cardId, type: 'card_withdrawal', amount,
+        currency: 'USD', status: 'processing',
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    providerMutationStarted = true;
+    const payload = await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}/withdraw`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': operationId },
+      body: JSON.stringify({ amount, currency: 'usd' }),
+    });
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const transactionRef = adminDb.collection('client_transactions').doc(`heyqo_${operationId}`);
+    await adminDb.runTransaction(async (txn) => {
+      const operationSnap = await txn.get(operationRef);
+      if (operationSnap.data()?.status !== 'processing') throw new Error('État d’opération invalide.');
+      txn.update(clientRef, { balance: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(operationRef, {
+        status: 'completed',
+        providerReference: unwrapHeyQO<any>(payload)?.id || null,
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.set(transactionRef, {
+        clientId, type: 'card_withdrawal', amount, status: 'completed',
+        method: 'HeyQO', source: 'heyqo_card', operationId,
+        description: 'Retrait de la carte vers le Wallet',
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await finishCardMovementLock(movementLockRef, 'completed', {
+      providerReference: unwrapHeyQO<any>(payload)?.id || null,
+    });
+    try {
+      const refreshed = extractCard(await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}`));
+      await cacheHeyQOCard(clientId, refreshed);
+      return res.json({ success: true, card: publicHeyQOCard(refreshed) });
+    } catch (refreshError: any) {
+      console.warn('[HeyQO withdrawal refresh]', refreshError?.message || refreshError);
+      return res.json({ success: true, stale: true });
+    }
+  } catch (error: any) {
+    const operation = await operationRef.get().catch(() => null);
+    if (operation?.exists && operation.data()?.status === 'processing') {
+      const reconciliationRequired = providerMutationStarted && !heyqoDefinitelyDidNotApply(error);
+      await operationRef.update({
+        status: reconciliationRequired ? 'reconciliation_required' : 'failed',
+        error: String(error?.message || 'Erreur HeyQO').slice(0, 240),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+      if (movementLockRef) {
+        await finishCardMovementLock(
+          movementLockRef,
+          reconciliationRequired ? 'reconciliation_required' : 'failed',
+          { operationId, error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+        ).catch(() => {});
+      }
+    } else if (movementLockRef) {
+      await finishCardMovementLock(
+        movementLockRef,
+        providerMutationStarted ? 'reconciliation_required' : 'failed',
+        { operationId, error: String(error?.message || 'Erreur HeyQO').slice(0, 240) },
+      ).catch(() => {});
+    }
+    res.status(error instanceof HeyQOError ? error.status : 500).json({ error: error?.message || 'Retrait impossible.' });
+  }
+});
+
+async function changeCardState(req: express.Request, res: express.Response, action: 'freeze' | 'unfreeze' | 'terminate') {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  try {
+    await loadOwnedHeyQOCard(clientId, req.params.cardId, client);
+    await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}/${action}`, { method: 'PUT' });
+    const card = extractCard(await heyqoRequest(`/cards/${encodeURIComponent(req.params.cardId)}`));
+    await cacheHeyQOCard(clientId, card);
+    res.json({ success: true, card: publicHeyQOCard(card) });
+  } catch (error: any) {
+    res.status(error instanceof HeyQOError ? error.status : 502).json({ error: error?.message || 'Action de carte impossible.' });
+  }
+}
+
+router.post('/api/client/cards/:cardId/freeze', requireDb, (req, res) => changeCardState(req, res, 'freeze'));
+router.post('/api/client/cards/:cardId/unfreeze', requireDb, (req, res) => changeCardState(req, res, 'unfreeze'));
+router.post('/api/client/cards/:cardId/terminate', requireDb, (req, res) => changeCardState(req, res, 'terminate'));
+
+router.post('/api/webhooks/heyqo', requireDb, async (req, res) => {
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  const secret = process.env.HEYQO_WEBHOOK_SECRET;
+  const received = String(req.get('X-HeyQo-Signature') || req.get('X-HeyQO-Signature') || '').replace(/^sha256=/i, '');
+  if (!secret || !rawBody || !received) return res.status(401).json({ error: 'Signature HeyQO manquante.' });
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  const receivedBuffer = /^[a-f0-9]{64}$/i.test(received) ? Buffer.from(received, 'hex') : Buffer.alloc(0);
+  if (receivedBuffer.length !== expectedBuffer.length || !timingSafeEqual(receivedBuffer, expectedBuffer)) {
+    return res.status(401).json({ error: 'Signature HeyQO invalide.' });
+  }
+
+  const event = req.body || {};
+  const eventId = String(event.id || event.event_id || webhookDigest(rawBody));
+  const eventRef = adminDb.collection('heyqo_webhook_events').doc(eventId);
+  try {
+    const claimed = await adminDb.runTransaction(async (txn) => {
+      const snap = await txn.get(eventRef);
+      if (snap.exists) return false;
+      txn.create(eventRef, {
+        type: event.type || event.event || 'unknown',
+        status: 'received',
+        receivedAt: FieldValue.serverTimestamp(),
+      });
+      return true;
+    });
+    if (!claimed) return res.json({ received: true, duplicate: true });
+
+    const cardId = String(
+      event.data?.card_id ||
+      event.data?.card?.id ||
+      event.card_id ||
+      event.card?.id ||
+      '',
+    );
+    if (cardId) {
+      const cached = await adminDb.collection('heyqo_cards').doc(cardId).get();
+      if (cached.exists) {
+        const card = extractCard(await heyqoRequest(`/cards/${encodeURIComponent(cardId)}`));
+        await cacheHeyQOCard(String(cached.data()?.clientId || ''), card);
+      }
+    }
+    await eventRef.update({ status: 'processed', processedAt: FieldValue.serverTimestamp() });
+    res.json({ received: true });
+  } catch (error: any) {
+    await eventRef.set({
+      status: 'failed',
+      error: String(error?.message || error).slice(0, 240),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true }).catch(() => {});
+    console.error('[HeyQO webhook]', error?.message || error);
+    res.status(500).json({ error: 'Traitement du webhook HeyQO impossible.' });
   }
 });
 

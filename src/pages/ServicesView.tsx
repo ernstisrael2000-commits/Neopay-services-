@@ -51,7 +51,7 @@ const DEFAULT_SERVICES = [
     active: true,
     order: 3,
     color: 'from-indigo-500 to-blue-700',
-    badge: 'Bientôt disponible',
+    badge: 'Nouveau',
   },
 ];
 
@@ -69,19 +69,24 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
   const { settings } = useSettingsCtx();
   const activeServices = rawServices.filter(s => s.active);
   // Keep the platform services visible even when custom services are configured.
-  // The cards entry is intentionally a preview until its dedicated UX is provided.
+  // Keep the platform services visible even when custom services are configured.
   const displayServices = [
     ...activeServices,
     ...DEFAULT_SERVICES.filter(def => !activeServices.some(svc => svc.target === def.target)),
-  ];
+  ].sort((a, b) => Number(b.target === 'cards') - Number(a.target === 'cards'));
+  const cardServices = displayServices.filter((svc: any) => svc.target === 'cards');
+  const otherServices = displayServices.filter((svc: any) => svc.target !== 'cards');
 
   const handleServiceClick = (svc: any) => {
     if (svc.target === 'tracking') { onTrackingClick(); }
     else if (svc.target === 'shipping') { onViewChange('shipping'); }
     else if (svc.target === 'cards') {
-      toast.info('Le service Cartes arrive bientôt.', {
-        description: 'La création et la gestion de vos cartes seront disponibles prochainement.',
-      });
+      if (!loggedClient) {
+        toast.info('Connectez-vous pour accéder à vos cartes.');
+        onRequestAuth?.();
+        return;
+      }
+      onViewChange('cards');
     }
     else if (svc.target === 'url' && svc.url) { window.open(svc.url, '_blank'); }
   };
@@ -125,34 +130,65 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
 
       {/* Services cards — floated over header */}
       <div className="max-w-3xl mx-auto px-4 -mt-4 space-y-4">
+        {cardServices.map((svc: any, i: number) => {
+          const IconComp = (LucideIcons as any)[svc.icon] || CreditCard;
+          const colorClass = svc.color || 'from-blue-600 to-indigo-700';
+          return (
+            <motion.div
+              key={svc.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06, duration: 0.3 }}
+            >
+              <button
+                data-testid="service-card-heyqo"
+                onClick={() => handleServiceClick(svc)}
+                className="group flex w-full items-center gap-4 overflow-hidden rounded-2xl border border-blue-100 bg-white p-4 text-left shadow-md shadow-blue-900/[.06] transition-all hover:-translate-y-0.5 hover:shadow-xl sm:p-5"
+              >
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${colorClass} shadow-lg shadow-blue-900/15 transition-transform group-hover:scale-105`}>
+                  <IconComp className="h-6 w-6 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-black text-slate-900">Cartes</h2>
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-blue-700">Nouveau</span>
+                  </div>
+                  <p className="mt-1 truncate text-xs font-medium text-slate-500 sm:text-sm">{svc.description}</p>
+                </div>
+                <ArrowRight className="h-5 w-5 shrink-0 text-blue-600 transition-transform group-hover:translate-x-1" />
+              </button>
+            </motion.div>
+          );
+        })}
+
         <motion.article
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="relative min-h-48 w-full overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 text-left shadow-xl shadow-slate-950/15"
+          className="relative min-h-32 w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-left shadow-lg shadow-slate-950/15 sm:min-h-36"
         >
-          <div className="absolute inset-y-0 right-0 w-[48%] sm:w-[44%]">
+          <div className="absolute inset-y-0 right-0 w-[37%] sm:w-[32%]">
             <img src={cryptoServiceImage} alt="" className="h-full w-full object-cover object-center" />
             <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/50 to-transparent" />
           </div>
-          <div className="relative flex min-h-48 max-w-[68%] flex-col justify-between p-5 sm:p-6">
+          <div className="relative flex min-h-32 max-w-[78%] flex-col justify-center p-4 sm:min-h-36 sm:max-w-[72%] sm:p-5">
             <div>
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-400/15 text-amber-300">
-                <Coins className="h-5 w-5" />
+              <div className="mb-2 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-amber-300/20 bg-amber-400/15 text-amber-300">
+                  <Coins className="h-4 w-4" />
+                </div>
+                <h2 className="text-base font-black text-white sm:text-lg">Marché Crypto</h2>
+                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-slate-950">Bientôt</span>
               </div>
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h2 className="text-lg font-black text-white sm:text-xl">Marché Crypto</h2>
-                <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-slate-950">Bientôt disponible</span>
-              </div>
-              <p className="max-w-xs text-xs font-medium leading-relaxed text-slate-300 sm:text-sm">Le service est en préparation. Les nouvelles commandes crypto sont temporairement fermées.</p>
+              <p className="max-w-md text-[11px] font-medium leading-relaxed text-slate-300 sm:text-xs">Le service est en préparation. Les nouvelles commandes crypto sont temporairement fermées.</p>
             </div>
-            <div className="mt-5 flex items-center gap-2 text-sm font-black text-amber-300">
-              Revenez bientôt
+            <div className="mt-2 flex items-center gap-2 text-[11px] font-black text-amber-300">
+              Revenez bientôt <span aria-hidden="true">↗</span>
             </div>
           </div>
         </motion.article>
 
-        {displayServices.map((svc: any, i: number) => {
+        {otherServices.map((svc: any, i: number) => {
           const IconComp = (LucideIcons as any)[svc.icon] || Package;
           const colorClass = svc.color || SERVICE_COLORS[i % SERVICE_COLORS.length];
           const isExternal = svc.target === 'url';
@@ -166,36 +202,36 @@ export default function ServicesView({ onTrackingClick, onViewChange, loggedClie
             >
               <button
                 onClick={() => handleServiceClick(svc)}
-                className="w-full text-left group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
+              className="group w-full overflow-hidden rounded-2xl border border-gray-100 bg-white text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
               >
                 {/* Top gradient strip */}
                 <div className={`h-1.5 w-full bg-gradient-to-r ${colorClass}`} />
 
-                <div className="p-5">
-                  <div className="flex items-start gap-4">
+                <div className="p-4 sm:p-5">
+                  <div className="flex items-start gap-3">
                     {/* Icon */}
-                    <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                      <IconComp className="h-7 w-7 text-white" />
+                    <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                      <IconComp className="h-5 w-5 text-white" />
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-black text-dark text-base leading-tight">{svc.label}</h3>
+                        <h3 className="font-black text-dark text-sm leading-tight">{svc.label}</h3>
                         {(svc.badge || i < DEFAULT_SERVICES.length) && (
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r ${colorClass} text-white`}>
                             {svc.badge || (i === 0 ? 'En direct' : i === 1 ? 'International' : 'Nouveau')}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
+                      <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
                         {svc.description || 'Accédez à ce service rapidement et en toute sécurité.'}
                       </p>
                     </div>
                   </div>
 
                   {/* Footer row */}
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
+                  <div className="mt-3 flex items-center justify-between border-t border-gray-50 pt-3">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-semibold">
                         <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />

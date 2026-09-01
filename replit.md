@@ -40,6 +40,9 @@ Le workflow Replit **Start application** utilise `npm run dev` et sert l’aper�
 | `FAZERCARDS_API_KEY` | ✅ | Clé API FazerCards |
 | `GROQ_API_KEY` | ✅ | Clé API Groq (IA) |
 | `PLOPPLOP_CLIENT_ID` | ✅ | Identifiant marchand Paym Plop Plop |
+| `HEYQO_CLIENT_ID` | Pour Cartes | Identifiant partenaire HeyQO |
+| `HEYQO_SECRET_ID` | Pour Cartes | Secret d’authentification HeyQO |
+| `HEYQO_WEBHOOK_SECRET` | Pour Cartes | Secret HMAC des webhooks HeyQO |
 | `VAPID_PUBLIC_KEY` | ✅ | Clé publique VAPID (push) |
 | `VAPID_PRIVATE_KEY` | ✅ | Clé privée VAPID (push) |
 
@@ -50,6 +53,7 @@ Le workflow Replit **Start application** utilise `npm run dev` et sert l’aper�
 | `FIRESTORE_DB_ID` | `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2` | ID de la base Firestore nommée |
 | `FROM_EMAIL` | `noreply@solutionpam.com` | Adresse expéditeur emails |
 | `PORT` | `5000` | Port du serveur Express |
+| `HEYQO_BASE_URL` | Sandbox en développement | URL de base HeyQO, à surcharger uniquement pour un environnement validé |
 
 ## Firestore
 

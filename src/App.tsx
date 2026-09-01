@@ -17,6 +17,7 @@ const ShippingView = lazy(() => import('./pages/ShippingView'));
 const FormationsView = lazy(() => import('./pages/FormationsView'));
 const ProductsView = lazy(() => import('./pages/ProductsView'));
 const ServicesView = lazy(() => import('./pages/ServicesView'));
+const CardsView = lazy(() => import('./pages/CardsView'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AffiliateDashboard = lazy(() => import('./pages/AffiliateDashboard'));
 const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
@@ -35,7 +36,7 @@ import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
 import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
+import { Package, ChevronLeft, Bell, X, WifiOff, CreditCard } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Client, Teacher, Agent } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,7 +46,7 @@ import { auth, db } from './lib/firebase';
 import { toast } from 'sonner';
 import { logoutClient } from './services/clientService';
 
-type AppView = 'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'wallet' | 'seo';
+type AppView = 'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'cards' | 'wallet' | 'seo';
 type CatalogTab = 'products' | 'games' | 'giftcards' | 'cards';
 
 const PUBLIC_VIEW_PATHS: Partial<Record<AppView, string>> = {
@@ -55,6 +56,7 @@ const PUBLIC_VIEW_PATHS: Partial<Record<AppView, string>> = {
   tracking: '/suivi-colis',
   shipping: '/expedition',
   formations: '/formations',
+  cards: '/cartes',
 };
 
 function routeFromPathname(pathname: string): { view: AppView; seoPath: SeoLandingPath | null } {
@@ -307,7 +309,7 @@ function AppInner() {
     setLoggedClient(null);
     localStorage.removeItem('rena_client');
     void logoutClient();
-    if (view === 'wallet') setView('home');
+    if (view === 'wallet' || view === 'cards') setView('home');
   };
 
   // Sync loggedClient with Firestore in real-time so balance stays up-to-date
@@ -334,7 +336,7 @@ function AppInner() {
       <div className="min-h-screen bg-background font-sans selection:bg-accent-light selection:text-dark flex flex-col">
         <SeoHead
           pathname={view === 'seo' && seoPath ? seoPath : PUBLIC_VIEW_PATHS[view] || window.location.pathname}
-          indexable={view === 'seo' || Boolean(PUBLIC_VIEW_PATHS[view])}
+          indexable={view === 'seo' || (view !== 'cards' && Boolean(PUBLIC_VIEW_PATHS[view]))}
         />
         {view !== 'formations' && (
           <Navbar 
@@ -476,7 +478,7 @@ function AppInner() {
           className={`${
             view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'
           } flex-grow relative ${
-            !['admin', 'affiliate', 'formations', 'wallet'].includes(view)
+            !['admin', 'affiliate', 'formations', 'wallet', 'cards'].includes(view)
               ? 'pb-[64px]'
               : view === 'formations' && !formationsInPlayer && !formationsDetailOpen
               ? 'pb-[64px]'
@@ -555,6 +557,34 @@ function AppInner() {
                     />
                   )}
 
+                  {view === 'cards' && (
+                    loggedClient ? (
+                      <CardsView
+                        clientId={loggedClient.id!}
+                        clientName={loggedClient.name}
+                        onBack={handleBack}
+                        onRequestAuth={() => setShowAuthModal(true)}
+                      />
+                    ) : (
+                      <section className="min-h-[calc(100dvh-3.5rem)] bg-slate-950 px-5 py-16 text-white">
+                        <div className="mx-auto flex max-w-md flex-col items-center rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl">
+                          <CreditCard className="mb-5 h-10 w-10 text-blue-300" />
+                          <h1 className="text-3xl font-black">Votre espace Cartes</h1>
+                          <p className="mt-3 text-sm leading-6 text-slate-300">
+                            Connectez-vous pour créer et gérer votre carte virtuelle HeyQO en toute sécurité.
+                          </p>
+                          <Button
+                            data-testid="button-login-cards"
+                            onClick={() => setShowAuthModal(true)}
+                            className="mt-7 w-full rounded-2xl bg-blue-600 py-6 font-black text-white hover:bg-blue-500"
+                          >
+                            Se connecter
+                          </Button>
+                        </div>
+                      </section>
+                    )
+                  )}
+
                   {view === 'tracking' && <TrackingView />}
 
                   {view === 'shipping' && <ShippingView />}
@@ -613,7 +643,7 @@ function AppInner() {
           </Suspense>
         </main>
 
-        {!['admin', 'affiliate', 'teacher', 'formations', 'wallet'].includes(view) && (
+        {!['admin', 'affiliate', 'teacher', 'formations', 'wallet', 'cards'].includes(view) && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
