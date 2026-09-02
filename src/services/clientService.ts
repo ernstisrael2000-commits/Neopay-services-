@@ -28,7 +28,8 @@ function fromApi<T>(doc: any): T {
 // ─── Register / Login ───────────────────────────────────────────────────────
 
 export const registerClient = async (data: {
-  name: string;
+  firstName: string;
+  lastName: string;
   phone: string;
   email: string;
   password: string;
@@ -46,6 +47,8 @@ export const registerClient = async (data: {
 };
 
 export const registerClientWithGoogle = async (data: {
+  firstName: string;
+  lastName: string;
   phone: string;
   sponsorCode?: string;
   googleUser: { uid: string; email: string; name: string; photoUrl?: string };
@@ -56,7 +59,13 @@ export const registerClientWithGoogle = async (data: {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone: data.phone, sponsorCode: data.sponsorCode, idToken })
+    body: JSON.stringify({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: data.phone,
+      sponsorCode: data.sponsorCode,
+      idToken,
+    })
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `Erreur inscription Google (${res.status})`);
@@ -84,6 +93,21 @@ export const restoreClientSession = async (firebaseIdToken?: string): Promise<Cl
   if (res.status === 401 || res.status === 404) return null;
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || `Erreur session (${res.status})`);
+  return json.client as Client;
+};
+
+export const completeClientIdentityName = async (
+  firstName: string,
+  lastName: string,
+): Promise<Client> => {
+  const res = await fetch('/api/client/identity-name', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ firstName, lastName }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Impossible d’enregistrer votre identité (${res.status})`);
   return json.client as Client;
 };
 

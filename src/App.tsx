@@ -30,6 +30,7 @@ const AgentLogin = lazy(() => import('./components/AgentLogin'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const TeacherLogin = lazy(() => import('./components/TeacherLogin'));
 const UserAuthModal = lazy(() => import('./components/UserAuthModal'));
+const IdentityNameGate = lazy(() => import('./components/IdentityNameGate'));
 const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
@@ -767,6 +768,18 @@ function AppInner() {
               onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
               onAffiliateAccess={() => handleViewChange('affiliate')}
               onTeacherAccess={() => { handleViewChange('teacher'); setShowAuthModal(false); }}
+            />
+          </Suspense>
+        )}
+
+        {loggedClient?.uid && loggedClient.identityNameCompleted !== true && (
+          <Suspense fallback={null}>
+            <IdentityNameGate
+              client={loggedClient}
+              onCompleted={(client) => {
+                setLoggedClient(client);
+                localStorage.setItem('rena_client', JSON.stringify(client));
+              }}
             />
           </Suspense>
         )}

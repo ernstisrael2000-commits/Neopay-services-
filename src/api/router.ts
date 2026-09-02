@@ -532,6 +532,30 @@ function identityNameFingerprint(value: unknown): string | null {
   return createHmac('sha256', secret).update(normalized).digest('hex');
 }
 
+function validatedIdentityNamePart(value: unknown, label: string): string {
+  const cleaned = String(value || '').normalize('NFC').trim().replace(/\s+/g, ' ');
+  if (cleaned.length < 2 || cleaned.length > 80 || !/^[\p{L}\p{M}][\p{L}\p{M}'’ -]*$/u.test(cleaned)) {
+    throw new Error(`${label} est invalide.`);
+  }
+  return cleaned;
+}
+
+function clientIdentityNameFields(firstNameValue: unknown, lastNameValue: unknown) {
+  const firstName = validatedIdentityNamePart(firstNameValue, 'Le prénom');
+  const lastName = validatedIdentityNamePart(lastNameValue, 'Le nom');
+  const name = `${firstName} ${lastName}`;
+  const fingerprint = identityNameFingerprint(name);
+  if (!fingerprint) throw new Error('La protection du nom est momentanément indisponible.');
+  return {
+    firstName,
+    lastName,
+    name,
+    identityNameFingerprint: fingerprint,
+    identityNameCompleted: true,
+    identityNameSource: 'self_declared' as const,
+  };
+}
+
 interface DiditDecisionResult {
   status: DiditVerificationStatus;
   verifiedName?: string;
@@ -895,6 +919,7 @@ async function confirmDiditIdentityForClient(
   challengeId: string,
   clientId: string,
   expectedCardholderName: string,
+  identitySource: 'heyqo_cardholder' | 'official_profile' = 'heyqo_cardholder',
 ): Promise<boolean> {
   const approved = await requireApprovedDidit(challengeId, 'cards_entry', clientId, expectedCardholderName);
   if (!approved) return false;
@@ -902,8 +927,8 @@ async function confirmDiditIdentityForClient(
   if (!fingerprint) return false;
   await adminDb.collection('clients').doc(clientId).update({
     diditIdentityNameFingerprint: fingerprint,
-    heyqoCardholderNameFingerprint: fingerprint,
-    diditIdentityNameSource: 'heyqo_cardholder',
+    ...(identitySource === 'heyqo_cardholder' ? { heyqoCardholderNameFingerprint: fingerprint } : {}),
+    diditIdentityNameSource: identitySource,
     diditIdentityVerifiedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -5836,9 +5861,10 @@ router.get('/api/client/session', requireDb, async (req, res) => {
 
 router.post('/api/client/register', requireDb, async (req, res) => {
   try {
-    const { name, phone, email, password, sponsorCode } = req.body;
-    if (!name || !phone || !email || !password)
+    const { firstName, lastName, phone, email, password, sponsorCode } = req.body;
+    if (!firstName || !lastName || !phone || !email || !password)
       return res.status(400).json({ error: 'Paramètres manquants.' });
+    const identityName = clientIdentityNameFields(firstName, lastName);
 
     const existing = await adminDb.collection('clients').where('email', '==', email).get();
     if (!existing.empty) return res.status(409).json({ error: 'Un compte avec cet email existe déjà.' });
@@ -5861,7 +5887,7 @@ router.post('/api/client/register', requireDb, async (req, res) => {
     }
 
     const clientData: any = {
-      name, phone, email: String(email).trim().toLowerCase(), password: hashPassword(String(password)), balance: 0, walletId, status: 'active',
+      ...identityName, phone, email: String(email).trim().toLowerCase(), password: hashPassword(String(password)), balance: 0, walletId, status: 'active',
       ...(directSponsorId && { directSponsorId }),
       ...(indirectSponsorId && { indirectSponsorId }),
       createdAt: FieldValue.serverTimestamp(),
@@ -5952,8 +5978,9 @@ router.post('/api/client/login-google', requireDb, async (req, res) => {
 
 router.post('/api/client/register-google', requireDb, async (req, res) => {
   try {
-    const { phone, sponsorCode, idToken } = req.body;
+    const { firstName, lastName, phone, sponsorCode, idToken } = req.body;
     if (!idToken) return res.status(400).json({ error: 'Jeton Google manquant.' });
+    const identityName = clientIdentityNameFields(firstName, lastName);
     const decoded = await getAuth().verifyIdToken(String(idToken));
     const googleUser = {
       email: String(decoded.email || '').trim().toLowerCase(),
@@ -5984,7 +6011,7 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
     }
 
     const clientData: any = {
-      name: googleUser.name, phone: phone || '',
+      ...identityName, phone: phone || '',
       email: googleUser.email, uid: googleUser.uid,
       photoUrl: googleUser.photoUrl || '',
       balance: 0, walletId, status: 'active',
@@ -6013,6 +6040,25 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[register-google]', e);
     res.status(500).json({ error: e.message || "Erreur lors de l'inscription Google." });
+  }
+});
+
+router.post('/api/client/identity-name', requireDb, async (req, res) => {
+  try {
+    const clientId = String(res.locals.clientSession.clientId);
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const identityName = clientIdentityNameFields(req.body?.firstName, req.body?.lastName);
+    await clientRef.update({
+      ...identityName,
+      identityNameCompletedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const updated = await clientRef.get();
+    const client = serializeDoc(updated);
+    delete client.password;
+    return res.json({ success: true, client });
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || 'Impossible d’enregistrer votre identité.' });
   }
 });
 
@@ -11147,6 +11193,35 @@ async function resolveHeyQOCardholderName(clientId: string, client: any): Promis
   );
 }
 
+function clientOfficialIdentityName(client: any): string {
+  if (client?.identityNameCompleted !== true) return '';
+  const firstName = String(client?.firstName || '').trim();
+  const lastName = String(client?.lastName || '').trim();
+  return firstName && lastName ? `${firstName} ${lastName}` : '';
+}
+
+async function resolveCardsIdentityName(clientId: string, client: any): Promise<{
+  name: string;
+  source: 'heyqo_cardholder' | 'official_profile';
+}> {
+  try {
+    return {
+      name: await resolveHeyQOCardholderName(clientId, client),
+      source: 'heyqo_cardholder',
+    };
+  } catch (error: any) {
+    // Before the first card exists, HeyQO cannot return a cardholder. The
+    // server-validated official profile name is the expected identity until
+    // the issued card provides its authoritative holder value.
+    const officialName = clientOfficialIdentityName(client);
+    if (error instanceof HeyQOError && error.status === 409 && officialName) {
+      console.info('[Cards identity] official profile used before first card');
+      return { name: officialName, source: 'official_profile' };
+    }
+    throw error;
+  }
+}
+
 async function cacheHeyQOCard(clientId: string, rawCard: any): Promise<void> {
   const safe = sanitizeHeyQOCard(rawCard);
   const cardId = providerCardId(safe);
@@ -11596,11 +11671,13 @@ router.post('/api/client/cards/security/didit/confirm', requireDb, async (req, r
   const challengeId = String(req.body?.challengeId || '').trim();
   if (!challengeId) return res.status(400).json({ error: 'Session Didit manquante.' });
   try {
-    const cardholderName = await resolveHeyQOCardholderName(clientId, client);
-    const matched = await confirmDiditIdentityForClient(challengeId, clientId, cardholderName);
+    const identity = await resolveCardsIdentityName(clientId, client);
+    const matched = await confirmDiditIdentityForClient(challengeId, clientId, identity.name, identity.source);
     if (!matched) {
       return res.status(409).json({
-        error: 'Le nom vérifié par Didit ne correspond pas au nom du titulaire enregistré sur votre carte.',
+        error: identity.source === 'official_profile'
+          ? 'Le nom vérifié par Didit ne correspond pas au prénom et au nom officiels enregistrés sur votre profil.'
+          : 'Le nom vérifié par Didit ne correspond pas au nom du titulaire enregistré sur votre carte.',
       });
     }
     res.setHeader('Cache-Control', 'no-store');
@@ -11678,7 +11755,7 @@ router.post('/api/client/cards/security/email-2fa/verify', requireDb, async (req
   if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
   let cardholderName = '';
   try {
-    cardholderName = await resolveHeyQOCardholderName(clientId, client);
+    cardholderName = (await resolveCardsIdentityName(clientId, client)).name;
   } catch (error: any) {
     return res.status(error instanceof HeyQOError ? error.status : 503).json({
       error: publicCardsError(error, 'Impossible de confirmer le titulaire de la carte.'),
@@ -11724,7 +11801,7 @@ router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => 
   }
   let cardholderName = '';
   try {
-    cardholderName = await resolveHeyQOCardholderName(clientId, client);
+    cardholderName = (await resolveCardsIdentityName(clientId, client)).name;
   } catch (error: any) {
     return res.status(error instanceof HeyQOError ? error.status : 503).json({
       error: publicCardsError(error, 'Impossible de confirmer le titulaire de la carte.'),
@@ -11772,10 +11849,11 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
     if (!HEYQO_KYC_ENUMS.primaryPurpose.has(primaryPurpose)) throw new HeyQOError('Le motif principal est invalide.', 400, undefined, 'not_sent');
     if (!HEYQO_KYC_ENUMS.sourceOfFunds.has(sourceOfFunds)) throw new HeyQOError('La source des fonds est invalide.', 400, undefined, 'not_sent');
     if (!HEYQO_KYC_ENUMS.expectedMonthlyPay.has(expectedMonthlyPay)) throw new HeyQOError('La tranche mensuelle est invalide.', 400, undefined, 'not_sent');
-    if (!client.email || !client.name) throw new HeyQOError('Le nom et l’adresse e-mail du profil client sont requis.', 400, undefined, 'not_sent');
+    if (!client.email || !client.firstName || !client.lastName || client.identityNameCompleted !== true) {
+      throw new HeyQOError('Confirmez d’abord votre prénom et votre nom officiels.', 400, undefined, 'not_sent');
+    }
     if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à Solution PAM.', 400, undefined, 'not_sent');
 
-    const nameParts = String(client.name).trim().split(/\s+/);
     const countryCode = cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase();
     const submittedPhone = cleanKycText(kyc.phone, 40);
     const phone = normalizeHeyQOPhone(submittedPhone, countryCode);
@@ -11793,8 +11871,8 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
     const documentBack = validateKycImage(kyc.documentBackBase64, 'Le verso de la pièce', false);
     const proofOfAddress = validateKycImage(kyc.proofOfAddressBase64, 'Le justificatif d’adresse');
     const customerBody = {
-      first_name: nameParts.shift() || 'Client',
-      last_name: nameParts.join(' ') || 'Solutionpam',
+      first_name: String(client.firstName),
+      last_name: String(client.lastName),
       email: String(client.email).trim(),
       phone,
       country_code: countryCode,
@@ -12002,8 +12080,8 @@ router.post('/api/client/cards', requireDb, financialRateLimiter, idempotencyGua
   const initialClient = res.locals.clientRecord.data() || {};
   let expectedIdentityFingerprint: string | null = null;
   try {
-    const cardholderName = await resolveHeyQOCardholderName(clientId, initialClient);
-    expectedIdentityFingerprint = identityNameFingerprint(cardholderName);
+    const identity = await resolveCardsIdentityName(clientId, initialClient);
+    expectedIdentityFingerprint = identityNameFingerprint(identity.name);
   } catch (error: any) {
     return res.status(error instanceof HeyQOError ? error.status : 503).json({
       error: publicCardsError(error, 'Impossible de confirmer le titulaire avant l’émission.'),

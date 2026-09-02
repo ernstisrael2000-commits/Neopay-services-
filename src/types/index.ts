@@ -465,6 +465,10 @@ export interface Client {
   uid?: string;
   email?: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
+  identityNameCompleted?: boolean;
+  identityNameSource?: 'self_declared';
   phone: string;
   password?: string;
   balance: number;

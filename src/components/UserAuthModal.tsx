@@ -103,7 +103,8 @@ export default function UserAuthModal({
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  const [regName, setRegName] = useState('');
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regLastName, setRegLastName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -114,6 +115,8 @@ export default function UserAuthModal({
   } | null>(null);
   const [googleRegPhone, setGoogleRegPhone] = useState('');
   const [googleRegSponsor, setGoogleRegSponsor] = useState('');
+  const [googleRegFirstName, setGoogleRegFirstName] = useState('');
+  const [googleRegLastName, setGoogleRegLastName] = useState('');
 
   // Stores pending google result when dialog is closed during auth
   const pendingGoogleResult = useRef<any>(null);
@@ -134,8 +137,8 @@ export default function UserAuthModal({
 
   const resetForms = () => {
     setLoginEmail(''); setLoginPassword('');
-    setRegName(''); setRegPhone(''); setRegEmail(''); setRegPassword(''); setRegSponsor('');
-    setGoogleUser(null); setGoogleRegPhone(''); setGoogleRegSponsor('');
+    setRegFirstName(''); setRegLastName(''); setRegPhone(''); setRegEmail(''); setRegPassword(''); setRegSponsor('');
+    setGoogleUser(null); setGoogleRegPhone(''); setGoogleRegSponsor(''); setGoogleRegFirstName(''); setGoogleRegLastName('');
     setShowPassword(false); setGoogleError(null);
     setPendingGoogleEmail(''); setPendingGoogleUid('');
     setLinkFullName(''); setLinkPassword(''); setLinkCode(''); setShowLinkPassword(false);
@@ -172,12 +175,12 @@ export default function UserAuthModal({
   // ── Email/password register ──────────────────────────────────────────────
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regName || !regPhone || !regEmail || !regPassword) { toast.error("Veuillez remplir tous les champs obligatoires."); return; }
+    if (!regFirstName || !regLastName || !regPhone || !regEmail || !regPassword) { toast.error("Veuillez remplir tous les champs obligatoires."); return; }
     if (regPassword.length < 6) { toast.error("Le mot de passe doit contenir au moins 6 caractères."); return; }
     setLoading(true);
     try {
       const client = await registerClient({
-        name: regName.trim(), phone: regPhone.trim(),
+        firstName: regFirstName.trim(), lastName: regLastName.trim(), phone: regPhone.trim(),
         email: regEmail.trim().toLowerCase(), password: regPassword,
         sponsorCode: regSponsor.trim() || undefined
       });
@@ -224,6 +227,9 @@ export default function UserAuthModal({
             name: result.googleName!,
             photoUrl: result.googlePhotoUrl
           });
+          const googleNameParts = String(result.googleName || '').trim().split(/\s+/).filter(Boolean);
+          setGoogleRegFirstName(googleNameParts.shift() || '');
+          setGoogleRegLastName(googleNameParts.join(' '));
           setLoading(false);
           setView('google-register');
           onOpenChange(true);
@@ -248,10 +254,15 @@ export default function UserAuthModal({
   const handleGoogleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!googleUser) return;
-    if (!googleRegPhone.trim()) { toast.error("Le numéro de téléphone est requis."); return; }
+    if (!googleRegFirstName.trim() || !googleRegLastName.trim() || !googleRegPhone.trim()) {
+      toast.error("Le prénom, le nom et le numéro de téléphone sont requis.");
+      return;
+    }
     setLoading(true);
     try {
       const client = await registerClientWithGoogle({
+        firstName: googleRegFirstName.trim(),
+        lastName: googleRegLastName.trim(),
         phone: googleRegPhone.trim(),
         sponsorCode: googleRegSponsor.trim() || undefined,
         googleUser
@@ -629,14 +640,18 @@ export default function UserAuthModal({
               <IframeGoogleWarning />
               <Divider label="ou manuellement" />
               <form onSubmit={handleRegister} className="space-y-3 max-h-[45vh] overflow-y-auto no-scrollbar">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nom complet *</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input value={regName} onChange={e => setRegName(e.target.value)}
-                      placeholder="Jean Dupont" className="pl-10 h-11 rounded-xl border-gray-200" required />
-                  </div>
-                </div>
+                 <div className="grid grid-cols-2 gap-2">
+                   <div className="space-y-1.5">
+                     <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Prénom *</Label>
+                     <Input value={regFirstName} onChange={e => setRegFirstName(e.target.value)}
+                       placeholder="Jean" className="h-11 rounded-xl border-gray-200" autoComplete="given-name" required />
+                   </div>
+                   <div className="space-y-1.5">
+                     <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nom *</Label>
+                     <Input value={regLastName} onChange={e => setRegLastName(e.target.value)}
+                       placeholder="Dupont" className="h-11 rounded-xl border-gray-200" autoComplete="family-name" required />
+                   </div>
+                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Téléphone *</Label>
                   <div className="relative">
@@ -710,6 +725,18 @@ export default function UserAuthModal({
                   <p className="text-xs text-gray-500 truncate">{googleUser.email}</p>
                 </div>
                 <GoogleIcon />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Prénom officiel *</Label>
+                  <Input value={googleRegFirstName} onChange={e => setGoogleRegFirstName(e.target.value)}
+                    placeholder="Jean" className="h-11 rounded-xl border-gray-200" autoComplete="given-name" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nom officiel *</Label>
+                  <Input value={googleRegLastName} onChange={e => setGoogleRegLastName(e.target.value)}
+                    placeholder="Dupont" className="h-11 rounded-xl border-gray-200" autoComplete="family-name" required />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Téléphone *</Label>
