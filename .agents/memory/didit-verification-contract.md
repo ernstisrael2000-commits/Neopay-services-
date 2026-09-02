@@ -32,3 +32,9 @@ Didit's v3 decision response places extracted legal-name fields in entries of th
 **Why:** Reading only the older direct containers returns no verified name even when Didit reports `Approved`, causing a false account-name mismatch.
 
 **How to apply:** Prefer the verified document entries from `id_verifications` (including their direct or nested document fields), then apply the established normalized full-name comparison.
+
+Each new biometric-authentication session consumes Didit provider capacity; an existing verified profile does not make a new face/liveness session free or valid to skip.
+
+**Why:** When provider credits are exhausted, Didit rejects session creation before returning an iframe. Falling back to a previous verification would weaken the fresh liveness and face-match requirement for card access.
+
+**How to apply:** Keep the server-side failure explicit, offer a retry after provider capacity is restored, and never silently bypass the biometric step.
