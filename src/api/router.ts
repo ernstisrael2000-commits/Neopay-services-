@@ -250,14 +250,13 @@ type CardsAccessSession = { role: 'cards'; clientId: string; exp: number };
 type CardSecurityData = Record<string, any>;
 
 function cardSecurityStatus(client: Record<string, any>, req: express.Request, clientId: string, security: CardSecurityData = {}) {
-  const currentNameFingerprint = identityNameFingerprint(client.name);
   return {
     pinConfigured: typeof security.pinHash === 'string' && security.pinHash.length > 0,
     emailTwoFactorEnabled: security.emailTwoFactorEnabled === true,
     unlocked: readCardsAccessSession(req, clientId),
     identityMatched: Boolean(
-      currentNameFingerprint
-      && client.diditIdentityNameFingerprint === currentNameFingerprint,
+      client.heyqoCardholderNameFingerprint
+      && client.diditIdentityNameFingerprint === client.heyqoCardholderNameFingerprint,
     ),
     maskedEmail: client.email ? maskEmail(String(client.email)) : '',
   };
@@ -633,14 +632,16 @@ async function requireApprovedDidit(
 async function confirmDiditIdentityForClient(
   challengeId: string,
   clientId: string,
-  clientName: string,
+  expectedCardholderName: string,
 ): Promise<boolean> {
-  const approved = await requireApprovedDidit(challengeId, 'cards_entry', clientId, clientName);
+  const approved = await requireApprovedDidit(challengeId, 'cards_entry', clientId, expectedCardholderName);
   if (!approved) return false;
-  const fingerprint = identityNameFingerprint(clientName);
+  const fingerprint = identityNameFingerprint(expectedCardholderName);
   if (!fingerprint) return false;
   await adminDb.collection('clients').doc(clientId).update({
     diditIdentityNameFingerprint: fingerprint,
+    heyqoCardholderNameFingerprint: fingerprint,
+    diditIdentityNameSource: 'heyqo_cardholder',
     diditIdentityVerifiedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -10718,6 +10719,50 @@ function heyqoCustomerIds(client: any): string[] {
   return [client?.heyqoCustomerLocalId, client?.heyqoCustomerId].filter(Boolean).map(String);
 }
 
+function explicitHeyQOCardholderName(card: any): string {
+  const safe = sanitizeHeyQOCard(card);
+  const value = safe.name_on_card || safe.cardholder_name || safe.cardholder;
+  return typeof value === 'string' ? value.trim().slice(0, 120) : '';
+}
+
+async function resolveHeyQOCardholderName(clientId: string, client: any): Promise<string> {
+  if (!isHeyQOConfigured()) {
+    throw new HeyQOError('Le service Cartes est momentanément indisponible.', 503, undefined, 'not_sent');
+  }
+  const customerIds = heyqoCustomerIds(client);
+  if (customerIds.length === 0) {
+    throw new HeyQOError('Aucun titulaire HeyQO n’est associé à ce compte.', 409, undefined, 'not_sent');
+  }
+
+  const payload = await heyqoRequest(`/cards?customer_id=${encodeURIComponent(customerIds[0])}`);
+  const cards = extractCardList(payload).filter((card) => providerCardStatus(card) !== 'terminated');
+  if (cards.length === 0) {
+    throw new HeyQOError(
+      'Aucune carte HeyQO active ne permet de confirmer le nom du titulaire.',
+      409,
+      undefined,
+      'not_sent',
+    );
+  }
+
+  for (const card of cards) {
+    const listedName = explicitHeyQOCardholderName(card);
+    if (listedName) return listedName;
+    const cardId = providerCardId(card);
+    if (!cardId) continue;
+    const detailedCard = await loadOwnedHeyQOCard(clientId, cardId, client);
+    const detailedName = explicitHeyQOCardholderName(detailedCard);
+    if (detailedName) return detailedName;
+  }
+
+  throw new HeyQOError(
+    'HeyQO n’a pas renvoyé de nom titulaire pour cette carte. Contactez le support avant de réessayer.',
+    422,
+    undefined,
+    'not_sent',
+  );
+}
+
 async function cacheHeyQOCard(clientId: string, rawCard: any): Promise<void> {
   const safe = sanitizeHeyQOCard(rawCard);
   const cardId = providerCardId(safe);
@@ -11167,17 +11212,20 @@ router.post('/api/client/cards/security/didit/confirm', requireDb, async (req, r
   const challengeId = String(req.body?.challengeId || '').trim();
   if (!challengeId) return res.status(400).json({ error: 'Session Didit manquante.' });
   try {
-    const matched = await confirmDiditIdentityForClient(challengeId, clientId, String(client.name || ''));
+    const cardholderName = await resolveHeyQOCardholderName(clientId, client);
+    const matched = await confirmDiditIdentityForClient(challengeId, clientId, cardholderName);
     if (!matched) {
       return res.status(409).json({
-        error: 'Le nom vérifié par Didit ne correspond pas au nom légal de votre compte Solution PAM.',
+        error: 'Le nom vérifié par Didit ne correspond pas au nom du titulaire enregistré sur votre carte.',
       });
     }
     res.setHeader('Cache-Control', 'no-store');
     return res.json({ success: true });
   } catch (error: any) {
     console.error('[client/cards/didit/confirm]', error);
-    return res.status(503).json({ error: 'La comparaison d’identité est momentanément indisponible.' });
+    return res.status(error instanceof HeyQOError ? error.status : 503).json({
+      error: publicCardsError(error, 'La comparaison avec le titulaire de la carte est momentanément indisponible.'),
+    });
   }
 });
 
@@ -11244,7 +11292,15 @@ router.post('/api/client/cards/security/email-2fa/verify', requireDb, async (req
   const diditChallengeId = String(req.body?.diditChallengeId || '').trim();
   if (!/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
   if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
-  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId, String(client.name || '')))) {
+  let cardholderName = '';
+  try {
+    cardholderName = await resolveHeyQOCardholderName(clientId, client);
+  } catch (error: any) {
+    return res.status(error instanceof HeyQOError ? error.status : 503).json({
+      error: publicCardsError(error, 'Impossible de confirmer le titulaire de la carte.'),
+    });
+  }
+  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId, cardholderName))) {
     return res.status(401).json({ error: 'La vérification faciale est requise avant d’ouvrir l’espace Cartes.' });
   }
   const result = await verifyCardSecurityOtp(sessionId, clientId, 'setup', code);
@@ -11282,7 +11338,15 @@ router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => 
   if (!security.pinHash || !security.emailTwoFactorEnabled) {
     return res.status(423).json({ error: 'La protection Cartes doit d’abord être configurée.' });
   }
-  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId, String(client.name || '')))) {
+  let cardholderName = '';
+  try {
+    cardholderName = await resolveHeyQOCardholderName(clientId, client);
+  } catch (error: any) {
+    return res.status(error instanceof HeyQOError ? error.status : 503).json({
+      error: publicCardsError(error, 'Impossible de confirmer le titulaire de la carte.'),
+    });
+  }
+  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId, cardholderName))) {
     return res.status(401).json({ error: 'La vérification faciale est requise avant d’ouvrir l’espace Cartes.' });
   }
   if (!verifyPin(pin, security.pinHash)) return res.status(401).json({ error: 'Code Cartes incorrect.' });
@@ -11552,13 +11616,21 @@ router.post('/api/client/cards', requireDb, financialRateLimiter, idempotencyGua
   const clientId = res.locals.clientSession.clientId as string;
   const clientRef = adminDb.collection('clients').doc(clientId);
   const initialClient = res.locals.clientRecord.data() || {};
-  const expectedIdentityFingerprint = identityNameFingerprint(initialClient.name);
+  let expectedIdentityFingerprint: string | null = null;
+  try {
+    const cardholderName = await resolveHeyQOCardholderName(clientId, initialClient);
+    expectedIdentityFingerprint = identityNameFingerprint(cardholderName);
+  } catch (error: any) {
+    return res.status(error instanceof HeyQOError ? error.status : 503).json({
+      error: publicCardsError(error, 'Impossible de confirmer le titulaire avant l’émission.'),
+    });
+  }
   if (
     !expectedIdentityFingerprint
     || initialClient.diditIdentityNameFingerprint !== expectedIdentityFingerprint
   ) {
     return res.status(409).json({
-      error: 'Une vérification d’identité avec le nom légal du titulaire est requise avant de créer une carte.',
+      error: 'Une vérification Didit correspondant au titulaire HeyQO est requise avant de créer une carte.',
       code: 'CARDS_IDENTITY_MATCH_REQUIRED',
     });
   }
