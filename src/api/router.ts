@@ -497,7 +497,14 @@ function diditNameFromContainer(container: any): string {
 }
 
 function diditVerifiedName(payload: any): string {
+  const verificationItems = [
+    ...(Array.isArray(payload?.id_verifications) ? payload.id_verifications : []),
+    ...(Array.isArray(payload?.idVerifications) ? payload.idVerifications : []),
+    ...(Array.isArray(payload?.document_ai_documents) ? payload.document_ai_documents : []),
+    ...(Array.isArray(payload?.documentAiDocuments) ? payload.documentAiDocuments : []),
+  ];
   const containers = [
+    ...verificationItems,
     payload?.identity,
     payload?.document,
     payload?.document_data,
@@ -517,6 +524,12 @@ function diditVerifiedName(payload: any): string {
   for (const container of containers) {
     const name = diditNameFromContainer(container);
     if (name) return name;
+    // Some Didit responses wrap the extracted document fields one level
+    // deeper inside a verification item.
+    for (const nested of [container?.document, container?.result, container?.data, container?.user_details]) {
+      const nestedName = diditNameFromContainer(nested);
+      if (nestedName) return nestedName;
+    }
   }
   return '';
 }
