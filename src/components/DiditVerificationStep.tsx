@@ -23,8 +23,10 @@ export default function DiditVerificationStep({
   onBack,
 }: DiditVerificationStepProps) {
   const [status, setStatus] = useState<DiditVerificationStatus>('pending');
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const completionStarted = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -42,11 +44,21 @@ export default function DiditVerificationStep({
       }
     };
 
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const type = event.data?.type;
+      if (type !== 'didit:completed' && type !== 'solutionpam:didit-completed') return;
+      setSubmitted(true);
+      void poll();
+    };
+
+    window.addEventListener('message', handleMessage);
     void poll();
     const interval = window.setInterval(() => void poll(), 2500);
     return () => {
       active = false;
       window.clearInterval(interval);
+      window.removeEventListener('message', handleMessage);
     };
   }, [challenge.challengeId, onVerified]);
 
@@ -64,7 +76,7 @@ export default function DiditVerificationStep({
       </div>
 
       <div className="p-2 sm:p-5">
-        {status === 'approved' || error ? (
+        {status === 'approved' || submitted || error ? (
           <div
             className={`flex min-h-[220px] items-center justify-center rounded-2xl border p-6 text-center ${
               error
@@ -73,17 +85,22 @@ export default function DiditVerificationStep({
             }`}
           >
             <div>
-              {error ? <TriangleAlert className="mx-auto h-10 w-10" /> : <ShieldCheck className="mx-auto h-10 w-10" />}
+              {error ? <TriangleAlert className="mx-auto h-10 w-10" /> : status === 'approved' ? <ShieldCheck className="mx-auto h-10 w-10" /> : <Loader2 className="mx-auto h-10 w-10 animate-spin" />}
               <p className="mt-3 text-sm font-black">
-                {error ? 'La vérification n’a pas pu être finalisée.' : 'Vérification Didit terminée.'}
+                {error ? 'La vérification n’a pas pu être finalisée.' :
+                 status === 'approved' ? 'Vérification Didit approuvée.' :
+                 'Vérification Didit terminée.'}
               </p>
               <p className="mt-1 text-xs text-[#60798a]">
-                {error ? 'Vous pouvez revenir en arrière et recommencer avec une nouvelle session.' : 'Confirmation sécurisée en cours…'}
+                {error ? 'Vous pouvez revenir en arrière et recommencer avec une nouvelle session.' :
+                 status === 'approved' ? 'Solution PAM compare maintenant le prénom et le nom vérifiés avec ceux du compte.' :
+                 'Solution PAM attend la décision sécurisée de Didit, puis compare le prénom et le nom du compte.'}
               </p>
             </div>
           </div>
         ) : (
           <iframe
+            ref={iframeRef}
             title="Vérification d’identité Didit"
             src={challenge.url}
             allow="camera; microphone; fullscreen; autoplay; encrypted-media"
@@ -100,7 +117,8 @@ export default function DiditVerificationStep({
         {!rejected && <Loader2 className="h-4 w-4 animate-spin text-[#1979a8]" />}
         <span>
           {error ? 'La comparaison d’identité n’a pas pu être finalisée.' :
-           status === 'approved' ? 'Vérification validée. Ouverture sécurisée…' :
+           status === 'approved' ? 'Identité du compte validée. Ouverture sécurisée…' :
+           submitted ? 'Didit est terminé. Vérification du compte par Solution PAM…' :
            status === 'rejected' ? 'La vérification n’a pas été acceptée.' :
            status === 'expired' ? 'Cette session Didit a expiré.' :
            'Terminez la vérification dans la fenêtre ci-dessus.'}

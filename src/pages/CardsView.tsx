@@ -427,7 +427,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
               title={diditChallenge.mode === 'biometric' ? 'Vérification faciale rapide' : 'Confirmez votre identité'}
               description={diditChallenge.mode === 'biometric'
                 ? 'Votre identité est déjà validée. Effectuez uniquement un selfie avec contrôle de présence pour confirmer que vous êtes bien la même personne.'
-                : 'Première vérification : Didit doit valider votre identité complète avant l’accès à votre espace Cartes.'}
+                : 'Didit vérifie d’abord votre identité. Une fois cette étape terminée, Solution PAM compare le prénom et le nom vérifiés avec ceux de votre compte.'}
               onVerified={handleDiditVerified}
               onBack={onBack}
             />

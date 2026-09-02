@@ -449,6 +449,20 @@ function diditWebhookUrl(): string {
   return String(process.env.DIDIT_WEBHOOK_URL || 'https://solutionpam.com/api/didit/webhook').replace(/\/$/, '');
 }
 
+function diditCompletionUrl(): string {
+  const explicit = String(process.env.DIDIT_COMPLETION_URL || '').trim();
+  if (explicit) return explicit;
+  try {
+    const url = new URL(diditWebhookUrl());
+    url.pathname = '/api/didit/completed';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return 'https://solutionpam.com/api/didit/completed';
+  }
+}
+
 function normalizeDiditStatus(value: unknown): DiditVerificationStatus {
   const status = String(value || '').trim().toLowerCase();
   if (['approved', 'verified', 'success', 'completed', 'passed'].includes(status)) return 'approved';
@@ -730,7 +744,10 @@ async function createDiditChallenge(opts: {
       body: JSON.stringify({
         workflow_id: workflowId,
         vendor_data: vendorData,
-        callback: diditWebhookUrl(),
+        // Didit opens this URL in the user's verification iframe after the
+        // capture flow. Signed decisions continue to arrive separately on the
+        // webhook configured for the workflow.
+        callback: diditCompletionUrl(),
         callback_method: 'both',
         metadata: {
           product: 'solutionpam',
@@ -1667,6 +1684,40 @@ router.use('/api/affiliate', requireDb, (req, res, next) => {
     }
     next();
   });
+});
+
+router.get('/api/didit/completed', (_req, res) => {
+  // This page contains no account or verification result. It is intentionally
+  // frameable so Didit's browser callback can finish inside the existing flow.
+  // Authorization still depends exclusively on the signed webhook/API decision.
+  res.removeHeader('X-Frame-Options');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'self' https://solutionpam.com https://*.replit.dev;",
+  );
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('html').send(`<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Vérification transmise</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4fbfe;color:#18384d;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
+    main{width:min(100%,420px);text-align:center}.icon{width:64px;height:64px;margin:0 auto 20px;display:grid;place-items:center;border-radius:20px;background:#eaf7fc;color:#1979a8;font-size:30px;font-weight:900}
+    h1{margin:0;font-size:22px;line-height:1.2}p{margin:12px 0 0;color:#60798a;font-size:14px;line-height:1.6}.loader{width:26px;height:26px;margin:24px auto 0;border:3px solid #cce8f3;border-top-color:#1979a8;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="icon">✓</div>
+    <h1>Vérification Didit terminée</h1>
+    <p>Solution PAM vérifie maintenant que le prénom et le nom correspondent au compte.</p>
+    <div class="loader" aria-label="Vérification en cours"></div>
+  </main>
+  <script>window.parent.postMessage({type:'solutionpam:didit-completed'}, '*');</script>
+</body>
+</html>`);
 });
 
 router.post('/api/didit/webhook', requireDb, async (req, res) => {
