@@ -822,7 +822,7 @@ async function createSmartClientDiditChallenge(opts: {
   clientId: string;
   email?: string;
 }): Promise<DiditChallenge> {
-  await getClientDiditProfile(opts.clientId);
+  const profile = await getClientDiditProfile(opts.clientId);
   // The free Didit setup uses the full KYC workflow for every client session.
   // Returning clients must complete the identity flow again instead of
   // attempting the credit-consuming biometric-authentication workflow.
