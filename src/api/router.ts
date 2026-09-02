@@ -250,10 +250,15 @@ type CardsAccessSession = { role: 'cards'; clientId: string; exp: number };
 type CardSecurityData = Record<string, any>;
 
 function cardSecurityStatus(client: Record<string, any>, req: express.Request, clientId: string, security: CardSecurityData = {}) {
+  const currentNameFingerprint = identityNameFingerprint(client.name);
   return {
     pinConfigured: typeof security.pinHash === 'string' && security.pinHash.length > 0,
     emailTwoFactorEnabled: security.emailTwoFactorEnabled === true,
     unlocked: readCardsAccessSession(req, clientId),
+    identityMatched: Boolean(
+      currentNameFingerprint
+      && client.diditIdentityNameFingerprint === currentNameFingerprint,
+    ),
     maskedEmail: client.email ? maskEmail(String(client.email)) : '',
   };
 }
@@ -360,6 +365,77 @@ function diditStatusFromPayload(payload: any): DiditVerificationStatus {
   );
 }
 
+function diditNameFromContainer(container: any): string {
+  if (!container || typeof container !== 'object') return '';
+  const direct = container.full_name || container.fullName || container.name
+    || container.legal_name || container.legalName;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const first = container.first_name || container.firstName || container.given_name || container.givenName
+    || container.given_names || container.givenNames;
+  const last = container.last_name || container.lastName || container.surname || container.family_name || container.familyName;
+  if (typeof first === 'string' || typeof last === 'string') {
+    const combined = `${first || ''} ${last || ''}`.trim();
+    if (combined) return combined;
+  }
+  return '';
+}
+
+function diditVerifiedName(payload: any): string {
+  const containers = [
+    payload?.identity,
+    payload?.document,
+    payload?.document_data,
+    payload?.documentData,
+    payload?.id_verification,
+    payload?.idVerification,
+    payload?.decision?.identity,
+    payload?.decision?.document,
+    payload?.decision?.document_data,
+    payload?.decision?.documentData,
+    payload?.decision,
+    payload?.result?.identity,
+    payload?.result?.document,
+    payload?.result,
+    payload,
+  ];
+  for (const container of containers) {
+    const name = diditNameFromContainer(container);
+    if (name) return name;
+  }
+  return '';
+}
+
+function normalizeIdentityName(value: unknown): string {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .sort()
+    .join(' ');
+}
+
+function identityNamesMatch(left: unknown, right: unknown): boolean {
+  const a = normalizeIdentityName(left);
+  const b = normalizeIdentityName(right);
+  return Boolean(a && b && a === b);
+}
+
+function identityNameFingerprint(value: unknown): string | null {
+  const secret = sessionSecret();
+  const normalized = normalizeIdentityName(value);
+  if (!secret || !normalized) return null;
+  return createHmac('sha256', secret).update(normalized).digest('hex');
+}
+
+interface DiditDecisionResult {
+  status: DiditVerificationStatus;
+  verifiedName?: string;
+}
+
 function diditCanonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => diditCanonicalJson(item)).join(',')}]`;
@@ -459,25 +535,29 @@ async function createDiditChallenge(opts: {
 async function syncDiditDecision(
   challengeRef: FirebaseFirestore.DocumentReference,
   challenge: FirebaseFirestore.DocumentData,
-): Promise<DiditVerificationStatus> {
+): Promise<DiditDecisionResult> {
   const apiKey = String(process.env.DIDIT_API_KEY || '').trim();
   const sessionId = String(challenge.diditSessionId || '').trim();
-  if (!apiKey || !sessionId) return normalizeDiditStatus(challenge.status);
+  if (!apiKey || !sessionId) return { status: normalizeDiditStatus(challenge.status) };
   const response = await fetch(`https://verification.didit.me/v3/session/${encodeURIComponent(sessionId)}/decision/`, {
     headers: { 'x-api-key': apiKey, Accept: 'application/json' },
   });
-  if (!response.ok) return normalizeDiditStatus(challenge.status);
+  if (!response.ok) return { status: normalizeDiditStatus(challenge.status) };
   const payload = await response.json().catch(() => ({}));
   const status = diditStatusFromPayload(payload);
+  const verifiedName = diditVerifiedName(payload);
   if (status !== normalizeDiditStatus(challenge.status)) {
     await challengeRef.update({
       status,
       providerStatus: String(payload.status || payload.decision?.status || ''),
+      ...(verifiedName && identityNameFingerprint(verifiedName)
+        ? { diditVerifiedNameFingerprint: identityNameFingerprint(verifiedName) }
+        : {}),
       decisionUpdatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
-  return status;
+  return { status, ...(verifiedName ? { verifiedName } : {}) };
 }
 
 async function getDiditChallenge(challengeId: string): Promise<{
@@ -501,16 +581,70 @@ async function requireApprovedDidit(
   challengeId: string,
   purpose: DiditVerificationPurpose,
   subjectId: string,
+  expectedName?: string,
 ): Promise<boolean> {
   const challenge = await getDiditChallenge(challengeId);
   if (!challenge || challenge.data.purpose !== purpose || challenge.data.subjectId !== subjectId) return false;
   let status = normalizeDiditStatus(challenge.data.status);
-  if (status === 'pending') {
+  let verifiedName = '';
+  const expectedFingerprint = expectedName ? identityNameFingerprint(expectedName) : null;
+  const identityAlreadyMatched = Boolean(
+    challenge.data.identityMatchPassed
+      && expectedFingerprint
+      && challenge.data.identityNameFingerprint === expectedFingerprint,
+  );
+  if (
+    expectedName
+    && !identityAlreadyMatched
+    && challenge.data.diditVerifiedNameFingerprint
+    && expectedFingerprint
+  ) {
+    if (challenge.data.diditVerifiedNameFingerprint === expectedFingerprint && status === 'approved') {
+      await challenge.ref.update({
+        identityMatchPassed: true,
+        identityNameFingerprint: expectedFingerprint,
+        identityMatchedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return true;
+    }
+    if (challenge.data.diditVerifiedNameFingerprint !== expectedFingerprint) return false;
+  }
+  if (status === 'pending' || (expectedName && !identityAlreadyMatched)) {
     try {
-      status = await syncDiditDecision(challenge.ref, challenge.data);
+      const decision = await syncDiditDecision(challenge.ref, challenge.data);
+      status = decision.status;
+      verifiedName = decision.verifiedName || '';
     } catch {}
   }
-  return status === 'approved';
+  if (status !== 'approved') return false;
+  if (expectedName && !identityAlreadyMatched) {
+    if (!verifiedName || !identityNamesMatch(verifiedName, expectedName) || !expectedFingerprint) return false;
+    await challenge.ref.update({
+      identityMatchPassed: true,
+      identityNameFingerprint: expectedFingerprint,
+      identityMatchedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  return true;
+}
+
+async function confirmDiditIdentityForClient(
+  challengeId: string,
+  clientId: string,
+  clientName: string,
+): Promise<boolean> {
+  const approved = await requireApprovedDidit(challengeId, 'cards_entry', clientId, clientName);
+  if (!approved) return false;
+  const fingerprint = identityNameFingerprint(clientName);
+  if (!fingerprint) return false;
+  await adminDb.collection('clients').doc(clientId).update({
+    diditIdentityNameFingerprint: fingerprint,
+    diditIdentityVerifiedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return true;
 }
 
 async function consumeDiditChallenge(challengeId: string, purpose: DiditVerificationPurpose, subjectId: string): Promise<boolean> {
@@ -519,7 +653,13 @@ async function consumeDiditChallenge(challengeId: string, purpose: DiditVerifica
     const snap = await txn.get(ref);
     if (!snap.exists) return false;
     const data = snap.data()!;
-    if (data.purpose !== purpose || data.subjectId !== subjectId || data.status !== 'approved' || data.consumedAt) return false;
+    if (
+      data.purpose !== purpose
+      || data.subjectId !== subjectId
+      || data.status !== 'approved'
+      || data.identityMatchPassed !== true
+      || data.consumedAt
+    ) return false;
     txn.update(ref, { consumedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     return true;
   });
@@ -1198,6 +1338,9 @@ router.post('/api/didit/webhook', requireDb, async (req, res) => {
   await challenge.ref.update({
     status,
     providerStatus: String(req.body?.status || req.body?.decision?.status || ''),
+    ...(diditVerifiedName(req.body) && identityNameFingerprint(diditVerifiedName(req.body))
+      ? { diditVerifiedNameFingerprint: identityNameFingerprint(diditVerifiedName(req.body)) }
+      : {}),
     eventType: String(req.body?.event_type || req.body?.webhook_type || ''),
     webhookReceivedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -1233,6 +1376,7 @@ for (const path of [
   '/api/admin/link-google',
   '/api/admin/didit/complete',
   '/api/client/cards/security/didit/session',
+  '/api/client/cards/security/didit/confirm',
   '/api/teacher/login',
   '/api/teacher/verify-google',
 ]) router.use(path, authRateLimiter);
@@ -6497,15 +6641,16 @@ router.post('/api/admin/didit/complete', requireDb, async (req, res) => {
     if (!challenge || challenge.data.purpose !== 'admin_login') {
       return res.status(400).json({ error: 'Session de vérification administrateur invalide.' });
     }
-    if (!(await requireApprovedDidit(challengeId, 'admin_login', String(challenge.data.subjectId || '')))) {
+    const adminRecord = await adminDb.collection('admin_accounts').doc(String(challenge.data.subjectId || '')).get();
+    if (!adminRecord.exists) return res.status(404).json({ error: 'Compte administrateur introuvable.' });
+    if (!(await requireApprovedDidit(challengeId, 'admin_login', String(challenge.data.subjectId || ''), String(adminRecord.data()?.fullName || '')))) {
       return res.status(401).json({ error: 'La vérification faciale administrateur n’est pas validée.' });
     }
     if (!(await consumeDiditChallenge(challengeId, 'admin_login', String(challenge.data.subjectId || '')))) {
       return res.status(409).json({ error: 'Cette vérification Didit a déjà été utilisée.' });
     }
 
-    const adminSnap = await adminDb.collection('admin_accounts').doc(String(challenge.data.subjectId)).get();
-    if (!adminSnap.exists) return res.status(404).json({ error: 'Compte administrateur introuvable.' });
+    const adminSnap = adminRecord;
     const admin = serializeDoc(adminSnap);
     delete admin.password;
     delete admin.passwordHash;
@@ -11017,6 +11162,26 @@ router.post('/api/client/cards/security/didit/session', requireDb, async (req, r
   }
 });
 
+router.post('/api/client/cards/security/didit/confirm', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  const challengeId = String(req.body?.challengeId || '').trim();
+  if (!challengeId) return res.status(400).json({ error: 'Session Didit manquante.' });
+  try {
+    const matched = await confirmDiditIdentityForClient(challengeId, clientId, String(client.name || ''));
+    if (!matched) {
+      return res.status(409).json({
+        error: 'Le nom vérifié par Didit ne correspond pas au nom légal de votre compte Solution PAM.',
+      });
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('[client/cards/didit/confirm]', error);
+    return res.status(503).json({ error: 'La comparaison d’identité est momentanément indisponible.' });
+  }
+});
+
 router.get('/api/client/cards/security', requireDb, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const { data } = await getClientCardSecurity(clientId, res.locals.clientRecord.data() || {});
@@ -11080,7 +11245,7 @@ router.post('/api/client/cards/security/email-2fa/verify', requireDb, async (req
   const diditChallengeId = String(req.body?.diditChallengeId || '').trim();
   if (!/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
   if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
-  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId))) {
+  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId, String(client.name || '')))) {
     return res.status(401).json({ error: 'La vérification faciale est requise avant d’ouvrir l’espace Cartes.' });
   }
   const result = await verifyCardSecurityOtp(sessionId, clientId, 'setup', code);
@@ -11118,7 +11283,7 @@ router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => 
   if (!security.pinHash || !security.emailTwoFactorEnabled) {
     return res.status(423).json({ error: 'La protection Cartes doit d’abord être configurée.' });
   }
-  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId))) {
+  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId, String(client.name || '')))) {
     return res.status(401).json({ error: 'La vérification faciale est requise avant d’ouvrir l’espace Cartes.' });
   }
   if (!verifyPin(pin, security.pinHash)) return res.status(401).json({ error: 'Code Cartes incorrect.' });
@@ -11388,6 +11553,16 @@ router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req
   const clientId = res.locals.clientSession.clientId as string;
   const clientRef = adminDb.collection('clients').doc(clientId);
   const initialClient = res.locals.clientRecord.data() || {};
+  const expectedIdentityFingerprint = identityNameFingerprint(initialClient.name);
+  if (
+    !expectedIdentityFingerprint
+    || initialClient.diditIdentityNameFingerprint !== expectedIdentityFingerprint
+  ) {
+    return res.status(409).json({
+      error: 'Une vérification d’identité avec le nom légal du titulaire est requise avant de créer une carte.',
+      code: 'CARDS_IDENTITY_MATCH_REQUIRED',
+    });
+  }
   const brand = String(req.body?.brand || 'visa').toLowerCase();
   if (!['visa', 'mastercard'].includes(brand)) return res.status(400).json({ error: 'Marque de carte invalide.' });
   if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Cartes est en attente de configuration Solution PAM.' });

@@ -50,7 +50,7 @@ export default function DiditVerificationStep({
     };
   }, [challenge.challengeId, onVerified]);
 
-  const rejected = status === 'rejected' || status === 'expired';
+  const rejected = status === 'rejected' || status === 'expired' || Boolean(error);
 
   return (
     <section data-testid="didit-verification-step" className="mt-8 overflow-hidden rounded-[1.75rem] border border-[#dce8ee] bg-white shadow-[0_22px_60px_rgba(47,89,112,.12)]">
@@ -75,7 +75,8 @@ export default function DiditVerificationStep({
       <div className="flex items-center justify-center gap-2 px-5 pb-5 text-center text-xs font-bold text-[#60798a]">
         {!rejected && <Loader2 className="h-4 w-4 animate-spin text-[#1979a8]" />}
         <span>
-          {status === 'approved' ? 'Vérification validée. Ouverture sécurisée…' :
+          {error ? 'La comparaison avec le nom légal du compte a échoué.' :
+           status === 'approved' ? 'Vérification validée. Ouverture sécurisée…' :
            status === 'rejected' ? 'La vérification n’a pas été acceptée.' :
            status === 'expired' ? 'Cette session Didit a expiré.' :
            'Terminez la vérification dans la fenêtre ci-dessus.'}

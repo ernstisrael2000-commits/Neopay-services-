@@ -23,6 +23,7 @@ import CardsSecurityGate from '../components/cards/CardsSecurityGate';
 import DiditVerificationStep from '../components/DiditVerificationStep';
 import {
   createHeyQOCard,
+  confirmCardsDidit,
   depositToCard,
   getCardsSecurity,
   getSecureCardDetails,
@@ -223,7 +224,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     const start = async () => {
       try {
         const currentSecurity = await getCardsSecurity();
-        if (active && currentSecurity.security.unlocked) {
+        if (active && currentSecurity.security.unlocked && currentSecurity.security.identityMatched) {
           setSecurity(currentSecurity.security);
           setDiditVerified(true);
           return;
@@ -240,7 +241,8 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     return () => { active = false; };
   }, [clientId]);
 
-  const handleDiditVerified = useCallback(() => {
+  const handleDiditVerified = useCallback(async (challengeId: string) => {
+    await confirmCardsDidit(challengeId);
     setDiditVerified(true);
   }, []);
 

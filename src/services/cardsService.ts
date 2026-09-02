@@ -19,6 +19,7 @@ export interface CardsSecuritySnapshot {
   pinConfigured: boolean;
   emailTwoFactorEnabled: boolean;
   unlocked: boolean;
+  identityMatched: boolean;
   maskedEmail: string;
 }
 
@@ -57,6 +58,11 @@ export const getCards = () => apiFetch<CardsSnapshot>('/api/client/cards');
 export const getCardsSecurity = () => apiFetch<{ security: CardsSecuritySnapshot }>('/api/client/cards/security');
 export const startCardsDiditSession = () =>
   apiFetch<{ challenge: DiditChallenge }>('/api/client/cards/security/didit/session', { method: 'POST' });
+export const confirmCardsDidit = (challengeId: string) =>
+  apiFetch<{ success: boolean }>('/api/client/cards/security/didit/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ challengeId }),
+  });
 export const setCardsSecurityPin = (pin: string, confirmPin: string) =>
   post<{ success: boolean; security: CardsSecuritySnapshot }>('/api/client/cards/security/pin', { pin, confirmPin });
 export const requestCardsEmailTwoFactor = () =>
