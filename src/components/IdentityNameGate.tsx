@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, UserRoundCheck, Loader2 } from 'lucide-react';
+import { UserRoundCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
@@ -50,7 +50,7 @@ export default function IdentityNameGate({ client, onCompleted }: IdentityNameGa
           </div>
           <DialogTitle className="text-2xl font-black text-white">Confirmez votre identité</DialogTitle>
           <DialogDescription className="mt-2 text-sm leading-6 text-white/75">
-            Indiquez votre prénom et votre nom officiels. Ils seront protégés côté serveur et utilisés pour sécuriser vos futurs services financiers.
+            Indiquez simplement votre prénom et votre nom pour compléter votre profil.
           </DialogDescription>
         </div>
 
@@ -66,13 +66,6 @@ export default function IdentityNameGate({ client, onCompleted }: IdentityNameGa
               <Input id="identity-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)}
                 autoComplete="family-name" maxLength={80} placeholder="Votre nom" className="h-12 rounded-xl" required />
             </div>
-          </div>
-
-          <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-emerald-900">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
-            <p className="text-xs leading-5">
-              Une empreinte HMAC-SHA256 est calculée uniquement sur le serveur. Votre adresse e-mail n’est jamais utilisée pour comparer le titulaire d’une carte.
-            </p>
           </div>
 
           <Button type="submit" disabled={saving} className="h-12 w-full rounded-xl bg-[#1478a7] font-black text-white hover:bg-[#11678f]">
