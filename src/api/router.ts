@@ -250,6 +250,7 @@ type CardsAccessSession = { role: 'cards'; clientId: string; exp: number };
 type CardSecurityData = Record<string, any>;
 
 function cardSecurityStatus(client: Record<string, any>, req: express.Request, clientId: string, security: CardSecurityData = {}) {
+  const clientSession = readClientSession(req);
   return {
     pinConfigured: typeof security.pinHash === 'string' && security.pinHash.length > 0,
     emailTwoFactorEnabled: security.emailTwoFactorEnabled === true,
@@ -258,6 +259,10 @@ function cardSecurityStatus(client: Record<string, any>, req: express.Request, c
       client.identityNameCompleted === true
       && client.identityNameFingerprint
       && client.diditIdentityNameFingerprint === client.identityNameFingerprint,
+    ),
+    diditVerifiedThisSession: Boolean(
+      clientSession?.clientId === clientId
+      && clientSession.cardsDiditVerified === true,
     ),
     maskedEmail: client.email ? maskEmail(String(client.email)) : '',
   };
@@ -1115,7 +1120,12 @@ function verifyPassword(password: string, stored: unknown): boolean {
 }
 
 type AdminSession = { role: 'admin'; adminId: string; exp: number };
-type ClientSession = { role: 'client'; clientId: string; exp: number };
+type ClientSession = {
+  role: 'client';
+  clientId: string;
+  exp: number;
+  cardsDiditVerified?: boolean;
+};
 type AgentSession = { role: 'agent'; agentId: string; exp: number };
 type AffiliateSession = { role: 'affiliate'; affiliateId: string; exp: number };
 
@@ -1192,10 +1202,15 @@ function readClientSession(req: express.Request): ClientSession | null {
   }
 }
 
-function setClientSession(res: express.Response, clientId: string): void {
+function setClientSession(res: express.Response, clientId: string, cardsDiditVerified = false): void {
   const secret = sessionSecret();
   if (!secret) throw new Error('SESSION_SECRET doit être configuré pour ouvrir une session client.');
-  const session: ClientSession = { role: 'client', clientId, exp: Date.now() + 8 * 60 * 60 * 1000 };
+  const session: ClientSession = {
+    role: 'client',
+    clientId,
+    exp: Date.now() + 8 * 60 * 60 * 1000,
+    ...(cardsDiditVerified ? { cardsDiditVerified: true } : {}),
+  };
   const payload = Buffer.from(JSON.stringify(session)).toString('base64url');
   res.cookie('rena_client_session', `${payload}.${signSession(payload, secret)}`, {
     httpOnly: true,
@@ -5971,7 +5986,12 @@ router.get('/api/client/session', requireDb, async (req, res) => {
 
     const client = serializeDoc(clientDoc);
     delete client.password;
-    setClientSession(res, clientDoc.id);
+    const existingSession = readClientSession(req);
+    const preserveCardsDidit = Boolean(
+      existingSession?.clientId === clientDoc.id
+      && existingSession.cardsDiditVerified === true,
+    );
+    setClientSession(res, clientDoc.id, preserveCardsDidit);
     return res.json({ success: true, client });
   } catch (e: any) {
     console.error('[client/session]', e);
@@ -11747,6 +11767,7 @@ router.post('/api/client/cards/security/didit/confirm', requireDb, async (req, r
         error: 'Le nom vérifié par Didit ne correspond pas au prénom et au nom officiels du titulaire du compte.',
       });
     }
+    setClientSession(res, clientId, true);
     res.setHeader('Cache-Control', 'no-store');
     return res.json({ success: true });
   } catch (error: any) {

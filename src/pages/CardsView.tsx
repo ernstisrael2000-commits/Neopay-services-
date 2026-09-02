@@ -226,7 +226,11 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     const start = async () => {
       try {
         const currentSecurity = await getCardsSecurity();
-        if (active && currentSecurity.security.unlocked && currentSecurity.security.identityMatched) {
+        if (
+          active
+          && currentSecurity.security.diditVerifiedThisSession
+          && currentSecurity.security.identityMatched
+        ) {
           setSecurity(currentSecurity.security);
           setDiditVerified(true);
           return;

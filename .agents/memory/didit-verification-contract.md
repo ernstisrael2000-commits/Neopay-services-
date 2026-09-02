@@ -15,11 +15,11 @@ For account ownership, the verified legal name returned by Didit must match the 
 
 **How to apply:** Compare card challenges only against the separately collected official account first and last name and its server-keyed fingerprint. Require a fresh full Didit verification when that official identity changes. Never read or compare a HeyQO cardholder field when deciding access.
 
-Client sessions use Didit's full KYC workflow, including for returning clients. The stable `vendor_data` is still reused so the provider identity remains linked, but no biometric-authentication workflow is required.
+Client sessions use Didit's full KYC workflow once per signed client login session. The stable `vendor_data` is reused, but no biometric-authentication workflow is required.
 
 **Why:** The current free Didit setup does not have capacity for credit-consuming biometric-authentication sessions. Requiring full KYC keeps the requested second/third-login behavior explicit without silently bypassing identity verification.
 
-**How to apply:** Persist only provider session identifiers, stable vendor data, verification status, purpose, mode, timestamps, and keyed identity fingerprints. Do not request or store biometric media locally.
+**How to apply:** After full KYC succeeds, record only a signed server-session flag. Skip Didit while that login session remains active, but reset the flag on logout or a new login. PIN and e-mail 2FA still govern Card access.
 
 Didit's session `callback` is a browser return URL loaded after the capture flow; it is not a decision channel. Keep it on a dedicated, frameable, data-free completion page. Authoritative decisions come from the signed webhook or a server-authenticated read of Didit's decision API.
 

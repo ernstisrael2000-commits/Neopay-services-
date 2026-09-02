@@ -20,6 +20,7 @@ export interface CardsSecuritySnapshot {
   emailTwoFactorEnabled: boolean;
   unlocked: boolean;
   identityMatched: boolean;
+  diditVerifiedThisSession: boolean;
   maskedEmail: string;
 }
 
