@@ -45,6 +45,7 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { toast } from 'sonner';
 import { logoutClient, restoreClientSession } from './services/clientService';
+import { trackEvent } from './lib/projectAnalytics';
 
 type AppView = 'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'cards' | 'wallet' | 'seo';
 type CatalogTab = 'products' | 'games' | 'giftcards' | 'cards';
@@ -133,6 +134,7 @@ function AppInner() {
   });
 
   const handleAdminLogin = (admin: AdminAccount) => {
+    trackEvent('login_completed', { role: 'admin' });
     setLoggedAdmin(admin);
     localStorage.setItem('rena_admin', JSON.stringify(admin));
   };
@@ -210,6 +212,7 @@ function AppInner() {
 
   const handleViewChange = (newView: AppView) => {
     if (newView === view) return;
+    trackEvent('navigation_view_selected', { view: newView });
     if (newView === 'products') setCatalogTab('products');
     const fromIdx = NAV_ORDER.indexOf(view);
     const toIdx   = NAV_ORDER.indexOf(newView);
@@ -223,6 +226,7 @@ function AppInner() {
   };
 
   const handleCatalogShortcut = (tab: CatalogTab) => {
+    trackEvent('catalog_shortcut_selected', { tab });
     handleViewChange('products');
     setCatalogTab(tab);
   };
@@ -252,6 +256,7 @@ function AppInner() {
   });
 
   const handleAffiliateLogin = (affiliate: Affiliate) => {
+    trackEvent('login_completed', { role: 'affiliate' });
     setLoggedAffiliate(affiliate);
     localStorage.setItem('rena_affiliate', JSON.stringify(affiliate));
   };
@@ -267,6 +272,7 @@ function AppInner() {
   });
 
   const handleAgentLogin = (agent: Agent) => {
+    trackEvent('login_completed', { role: 'agent' });
     setLoggedAgent(agent);
     localStorage.setItem('rena_agent', JSON.stringify(agent));
   };
@@ -282,6 +288,7 @@ function AppInner() {
   });
 
   const handleTeacherLogin = (teacher: Teacher) => {
+    trackEvent('login_completed', { role: 'teacher' });
     setLoggedTeacher(teacher);
     localStorage.setItem('rena_teacher', JSON.stringify(teacher));
   };
@@ -302,6 +309,7 @@ function AppInner() {
   useFCM(loggedClient?.id || null);
 
   const handleClientLogin = (client: Client) => {
+    trackEvent('login_completed', { role: 'client' });
     setLoggedClient(client);
     localStorage.setItem('rena_client', JSON.stringify(client));
   };

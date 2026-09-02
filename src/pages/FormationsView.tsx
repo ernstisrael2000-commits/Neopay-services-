@@ -19,6 +19,7 @@ import PlopPlopMethodPicker from '../components/PlopPlopMethodPicker';
 import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
+import { trackEvent } from '../lib/projectAnalytics';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { loginClientWithGoogle } from '../services/clientService';
 import { openCertificate } from '../lib/certificateGenerator';
@@ -344,6 +345,10 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur lors de l\'achat.');
+      trackEvent('formation_purchase_completed', {
+        amount_usd: Number(priceUSD.toFixed(2)),
+        payment_method: 'wallet',
+      });
       setPurchasedIds(prev => [...prev, formation.id!]);
       toast.success(`✅ Accès à "${formation.title}" activé !`);
       setSelected(null);

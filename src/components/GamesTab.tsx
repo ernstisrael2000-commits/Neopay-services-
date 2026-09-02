@@ -12,6 +12,7 @@ import { isGameAvailableInHaiti } from '../lib/haitiFilter';
 import { useSettingsCtx } from '../contexts/SettingsContext';
 import { useClientData } from '../services/clientService';
 import { Skeleton } from './ui/skeleton';
+import { trackEvent } from '../lib/projectAnalytics';
 
 export type { FazerCategory };
 
@@ -366,6 +367,10 @@ export function GameDialog({ category, priceOverrides, loggedClient, exchangeRat
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur commande.');
+      trackEvent('topup_order_completed', {
+        category: category.category_id,
+        amount_usd: Number(selectedOffer.price),
+      });
       toast.success(`🎮 Commande passée ! ${selectedOffer.name} livré automatiquement.`);
       handleClose();
     } catch (e: any) {

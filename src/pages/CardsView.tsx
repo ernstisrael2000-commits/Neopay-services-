@@ -38,6 +38,7 @@ import {
   withdrawFromCard,
 } from '../services/cardsService';
 import type { DiditChallenge } from '../services/diditService';
+import { trackEvent } from '../lib/projectAnalytics';
 import type { HeyQOCard, HeyQOCardTransaction } from '../types';
 
 interface CardsViewProps {
@@ -243,6 +244,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
 
   const handleDiditVerified = useCallback(async (challengeId: string) => {
     await confirmCardsDidit(challengeId);
+    trackEvent('identity_verification_completed', { purpose: 'cards' });
     setDiditVerified(true);
   }, []);
 
@@ -293,6 +295,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       const result = await createHeyQOCard('visa', intentKey('issue'));
       delete intentKeys.current.issue;
       if (result?.card) adoptCard(result.card);
+      trackEvent('card_issued', { status: result?.processing ? 'processing' : 'created', brand: 'visa' });
       await refresh();
       setNotice(result?.processing ? 'Votre carte est en cours de création. Son statut sera actualisé automatiquement.' : 'Votre carte a bien été créée.');
     } catch (cause: any) {
@@ -309,6 +312,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       setKycOpen(false);
       await refresh();
       const kycStatus = String(result.customer?.kycStatus || result.customer?.status || '').toLowerCase();
+      trackEvent('card_kyc_submitted', { status: kycStatus || 'pending' });
       if (['approved', 'verified', 'active', 'completed'].includes(kycStatus)) {
         setNotice('KYC approuvé. Émission de votre carte en cours.');
         await issueCard();
@@ -331,6 +335,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
       if (action === 'unfreeze') await unfreezeCard(card.id, key);
       if (action === 'terminate') await terminateCard(card.id, key);
       delete intentKeys.current[`${action}:${card.id}`];
+      trackEvent('card_action_completed', { action });
       setNotice(action === 'terminate' ? 'Carte clôturée.' : action === 'freeze' ? 'Carte gelée.' : 'Carte réactivée.');
       await refresh();
     } catch (cause: any) {

@@ -6,6 +6,7 @@ import {
   Wallet, ChevronRight, Search, ShieldCheck, Zap, Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { trackEvent } from '../lib/projectAnalytics';
 import { Client } from '../types';
 import { useFazerGiftCards, useFazerGiftCardOffers, FazerGiftCategory, FazerOffer } from '../hooks/useFazerTopups';
 import { isGiftCardAvailableInHaiti } from '../lib/haitiFilter';
@@ -226,6 +227,10 @@ export function GiftCardDialog({ category, exchangeRate, loggedClient, onClose, 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur commande.');
+      trackEvent('gift_card_order_completed', {
+        category: category.category_id,
+        amount_usd: Number(selectedOffer.price),
+      });
       const code = data.code || data.order?.code || data.order?.pin || data.order?.serial || null;
       if (code) {
         setCardCode(code);

@@ -13,6 +13,7 @@ import OtpVerifyStep from './OtpVerifyStep';
 import { establishAdminFirebaseSession } from '../lib/adminFirebaseSession';
 import DiditVerificationStep from './DiditVerificationStep';
 import { completeAdminDidit, type DiditChallenge } from '../services/diditService';
+import { trackEvent } from '../lib/projectAnalytics';
 
 interface AdminLoginProps {
   onLoginSuccess: (admin: AdminAccount) => void;
@@ -78,6 +79,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
   const handleDiditComplete = async (challengeId: string) => {
     try {
       const result = await completeAdminDidit(challengeId);
+      trackEvent('identity_verification_completed', { purpose: 'admin' });
       await establishAdminFirebaseSession(result.firebaseToken);
       toast.success(`Bienvenue, ${result.admin.fullName} !`);
       setPendingDidit(null);

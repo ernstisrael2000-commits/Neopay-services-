@@ -20,6 +20,7 @@ import OtpVerifyStep from './OtpVerifyStep';
 import { establishAdminFirebaseSession } from '../lib/adminFirebaseSession';
 import DiditVerificationStep from './DiditVerificationStep';
 import { completeAdminDidit, type DiditChallenge } from '../services/diditService';
+import { trackEvent } from '../lib/projectAnalytics';
 
 type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google' | 'admin-2fa' | 'admin-didit';
 
@@ -181,6 +182,7 @@ export default function UserAuthModal({
         sponsorCode: regSponsor.trim() || undefined
       });
       toast.success(`Compte créé ! Bienvenue, ${client.name} !`);
+      trackEvent('signup_completed', { method: 'email' });
       onClientLogin(client);
       handleClose(false);
     } catch (err: any) {
@@ -255,6 +257,7 @@ export default function UserAuthModal({
         googleUser
       });
       toast.success(`Compte créé ! Bienvenue, ${client.name} !`);
+      trackEvent('signup_completed', { method: 'google' });
       onClientLogin(client);
       handleClose(false);
     } catch (err: any) {
@@ -349,6 +352,7 @@ export default function UserAuthModal({
   const handleAdminDiditComplete = async (challengeId: string) => {
     try {
       const result = await completeAdminDidit(challengeId);
+      trackEvent('identity_verification_completed', { purpose: 'admin' });
       await establishAdminFirebaseSession(result.firebaseToken);
       toast.success(`Bienvenue Admin, ${result.admin.fullName} !`);
       onAdminLogin(result.admin);

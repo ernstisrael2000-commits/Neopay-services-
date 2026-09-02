@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CheckCircle2, XCircle, Clock, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { trackEvent } from '../lib/projectAnalytics';
 
 interface Props {
   referenceId: string;
@@ -15,7 +16,22 @@ export default function PaymentSuccessView({ referenceId, onClose }: Props) {
   const [usdAmount, setUsd]     = useState<number | null>(null);
   const [htgAmount, setHtg]     = useState<number | null>(null);
   const [attempts, setAttempts] = useState(0);
+  const trackedStatus = useRef<Status | null>(null);
   const MAX = 40;
+
+  useEffect(() => {
+    if (trackedStatus.current === status) return;
+    if (status === 'completed') {
+      trackedStatus.current = status;
+      trackEvent('payment_completed', {
+        method: 'moncash',
+        amount_usd: usdAmount ?? 0,
+      });
+    } else if (status === 'failed' || status === 'cancelled') {
+      trackedStatus.current = status;
+      trackEvent('payment_failed', { method: 'moncash', status });
+    }
+  }, [status, usdAmount]);
 
   // On mount: call /verify first (asks MonCash API directly) then fall back to polling /status
   useEffect(() => {
