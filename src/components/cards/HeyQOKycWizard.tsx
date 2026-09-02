@@ -84,8 +84,20 @@ function UploadField({ label, value, onChange, onInvalidFile, optional = false, 
   </div>;
 }
 
+function sanitizeInput(key: keyof HeyQOKycValue, value: string): string {
+  const normalized = value.normalize('NFC').replace(/[\u0000-\u001F\u007F]/g, '');
+  if (key === 'phone') return normalized.replace(/[^\d+() -]/g, '').slice(0, 40);
+  if (key === 'addressCountry') return normalized.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
+  if (key === 'addressPostalCode') return normalized.replace(/[^a-zA-Z0-9 -]/g, '').toUpperCase().slice(0, 24);
+  if (key === 'occupation') return normalized.replace(/\D/g, '').slice(0, 40);
+  if (key === 'documentNumber' || key === 'taxIdNumber') {
+    return normalized.replace(/[^\p{L}\p{N} ./''’()-]/gu, '').slice(0, 80);
+  }
+  return normalized.replace(/\s+/g, ' ').slice(0, 160);
+}
+
 function valueFor(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>, setValue: Dispatch<SetStateAction<HeyQOKycValue>>, key: keyof HeyQOKycValue) {
-  setValue((current) => ({ ...current, [key]: event.target.value }));
+  setValue((current) => ({ ...current, [key]: sanitizeInput(key, event.target.value) }));
 }
 
 export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error = null, initialValue, sandboxPreview = false }: HeyQOKycWizardProps) {
@@ -102,7 +114,10 @@ export default function HeyQOKycWizard({ onSubmit, onClose, busy = false, error 
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
   }, [busy, onClose]);
 
-  const update = (key: keyof HeyQOKycValue, next: string | boolean | File | null) => setValue((current) => ({ ...current, [key]: next }));
+  const update = (key: keyof HeyQOKycValue, next: string | boolean | File | null) => setValue((current) => ({
+    ...current,
+    [key]: typeof next === 'string' ? sanitizeInput(key, next) : next,
+  }));
   const cacheFile = async (
     fileKey: 'documentFrontFile' | 'documentBackFile' | 'proofOfAddressFile',
     base64Key: 'documentFrontBase64' | 'documentBackBase64' | 'proofOfAddressBase64',

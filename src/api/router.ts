@@ -534,11 +534,21 @@ function identityNameFingerprint(value: unknown): string | null {
 }
 
 function validatedIdentityNamePart(value: unknown, label: string): string {
-  const cleaned = String(value || '').normalize('NFC').trim().replace(/\s+/g, ' ');
+  const cleaned = typeof value === 'string'
+    ? value.normalize('NFC').trim().replace(/\s+/g, ' ')
+    : '';
   if (cleaned.length < 2 || cleaned.length > 80 || !/^[\p{L}\p{M}][\p{L}\p{M}'’ -]*$/u.test(cleaned)) {
     throw new Error(`${label} est invalide.`);
   }
   return cleaned;
+}
+
+function isValidSecuritySessionId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{10,160}$/.test(value.trim());
+}
+
+function isValidSecurityCode(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{6}$/.test(value.trim());
 }
 
 function clientIdentityNameFields(firstNameValue: unknown, lastNameValue: unknown) {
@@ -1427,6 +1437,27 @@ async function requireClientSession(req: express.Request, res: express.Response,
   }
 }
 
+function clientIdentityIsComplete(client: FirebaseFirestore.DocumentData): boolean {
+  if (client?.identityNameCompleted !== true || !client?.identityNameFingerprint) return false;
+  try {
+    const identity = clientIdentityNameFields(client.firstName, client.lastName);
+    return identity.identityNameFingerprint === client.identityNameFingerprint;
+  } catch {
+    return false;
+  }
+}
+
+function requireCompletedClientIdentity(res: express.Response, next: express.NextFunction) {
+  const client = res.locals.clientRecord?.data() || {};
+  if (!clientIdentityIsComplete(client)) {
+    return res.status(428).json({
+      error: 'Ajoutez d’abord votre prénom et votre nom officiels pour continuer.',
+      code: 'CLIENT_IDENTITY_NAME_REQUIRED',
+    });
+  }
+  return next();
+}
+
 async function requireClientCardsAccess(req: express.Request, res: express.Response, next: express.NextFunction) {
   const clientId = res.locals.clientSession?.clientId as string | undefined;
   const client = res.locals.clientRecord?.data() || {};
@@ -1580,25 +1611,31 @@ const publicClientPaths = new Set([
 ]);
 router.use('/api/client', requireDb, (req, res, next) => {
   if (publicClientPaths.has(req.path)) return next();
+  const isIdentityNamePath = req.path === '/identity-name';
   return requireClientSession(req, res, () => {
-    const sessionId = res.locals.clientSession.clientId as string;
-    const suppliedIds = [req.body?.clientId, req.body?.senderClientId, req.query?.clientId];
-    if (suppliedIds.some((id) => id && id !== sessionId)) {
-      return res.status(403).json({ error: 'Accès refusé.' });
-    }
-    const clientPathMatch = req.path.match(/^\/(?:transactions|pending-confirmations|notifications\/read-all|notifications\/clear-all)\/([^/]+)$/);
-    if (clientPathMatch && clientPathMatch[1] !== sessionId) {
-      return res.status(403).json({ error: 'Accès refusé.' });
-    }
-    if (req.body && typeof req.body === 'object') {
-      const client = res.locals.clientRecord.data() || {};
-      if ('clientId' in req.body) req.body.clientId = sessionId;
-      if ('senderClientId' in req.body) req.body.senderClientId = sessionId;
-      if ('clientName' in req.body) req.body.clientName = client.name || '';
-      if ('clientPhone' in req.body) req.body.clientPhone = client.phone || '';
-      if ('clientWalletId' in req.body) req.body.clientWalletId = client.walletId || '';
-    }
-    next();
+    const continueForClient = isIdentityNamePath
+      ? (callback: express.NextFunction) => callback()
+      : (callback: express.NextFunction) => requireCompletedClientIdentity(res, callback);
+    return continueForClient(() => {
+      const sessionId = res.locals.clientSession.clientId as string;
+      const suppliedIds = [req.body?.clientId, req.body?.senderClientId, req.query?.clientId];
+      if (suppliedIds.some((id) => id && id !== sessionId)) {
+        return res.status(403).json({ error: 'Accès refusé.' });
+      }
+      const clientPathMatch = req.path.match(/^\/(?:transactions|pending-confirmations|notifications\/read-all|notifications\/clear-all)\/([^/]+)$/);
+      if (clientPathMatch && clientPathMatch[1] !== sessionId) {
+        return res.status(403).json({ error: 'Accès refusé.' });
+      }
+      if (req.body && typeof req.body === 'object') {
+        const client = res.locals.clientRecord.data() || {};
+        if ('clientId' in req.body) req.body.clientId = sessionId;
+        if ('senderClientId' in req.body) req.body.senderClientId = sessionId;
+        if ('clientName' in req.body) req.body.clientName = client.name || '';
+        if ('clientPhone' in req.body) req.body.clientPhone = client.phone || '';
+        if ('clientWalletId' in req.body) req.body.clientWalletId = client.walletId || '';
+      }
+      return next();
+    });
   });
 });
 
@@ -1698,7 +1735,7 @@ router.get('/api/didit/status/:challengeId', requireDb, async (req, res) => {
 router.post('/api/client/didit/session', requireDb, async (req, res) => {
   try {
     const clientId = String(res.locals.clientSession?.clientId || '').trim();
-    const requestedPurpose = String(req.body?.purpose || '').trim();
+    const requestedPurpose = typeof req.body?.purpose === 'string' ? req.body.purpose.trim() : '';
     const allowedPurposes = new Set(['card_issue', 'card_details', 'account_change', 'financial_risk']);
     if (!clientId || !allowedPurposes.has(requestedPurpose)) {
       return res.status(400).json({ error: 'Action de vérification invalide.' });
@@ -2735,10 +2772,12 @@ router.post('/api/agent/link-uid', requireDb, async (req, res) => {
 // ── Agent: Verify 2FA OTP ─────────────────────────────────────────────────────
 router.post('/api/agent/verify-2fa', requireDb, async (req, res) => {
   try {
-    const { sessionId, code } = req.body;
-    if (!sessionId || !code) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const { sessionId, code } = req.body || {};
+    if (!isValidSecuritySessionId(sessionId) || !isValidSecurityCode(code)) {
+      return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
+    }
 
-    const result = await verify2FASession(sessionId, code, 'agent');
+    const result = await verify2FASession(sessionId.trim(), code.trim(), 'agent');
     if (!result.ok) return res.status(401).json({ error: result.error });
 
     const agentSnap = await adminDb.collection('agents').doc(result.accountId!).get();
@@ -4092,10 +4131,12 @@ router.post('/api/affiliate/google-login', requireDb, async (req, res) => {
 // ── Affiliate: Verify 2FA OTP ─────────────────────────────────────────────────
 router.post('/api/affiliate/verify-2fa', requireDb, async (req, res) => {
   try {
-    const { sessionId, code } = req.body;
-    if (!sessionId || !code) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const { sessionId, code } = req.body || {};
+    if (!isValidSecuritySessionId(sessionId) || !isValidSecurityCode(code)) {
+      return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
+    }
 
-    const result = await verify2FASession(sessionId, code, 'affiliate');
+    const result = await verify2FASession(sessionId.trim(), code.trim(), 'affiliate');
     if (!result.ok) return res.status(401).json({ error: result.error });
 
     const affSnap = await adminDb.collection('affiliates').doc(result.accountId!).get();
@@ -7017,10 +7058,12 @@ router.post('/api/admin/login', requireDb, async (req, res) => {
 // ── Admin: Verify 2FA OTP (phase 2 for both credential + Google logins) ──────
 router.post('/api/admin/verify-2fa', requireDb, async (req, res) => {
   try {
-    const { sessionId, code } = req.body;
-    if (!sessionId || !code) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const { sessionId, code } = req.body || {};
+    if (!isValidSecuritySessionId(sessionId) || !isValidSecurityCode(code)) {
+      return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
+    }
 
-    const result = await verify2FASession(sessionId, code, 'admin');
+    const result = await verify2FASession(sessionId.trim(), code.trim(), 'admin');
     if (!result.ok) return res.status(401).json({ error: result.error });
 
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
@@ -7047,7 +7090,10 @@ router.post('/api/admin/verify-2fa', requireDb, async (req, res) => {
 
 router.post('/api/admin/didit/complete', requireDb, async (req, res) => {
   try {
-    const challengeId = String(req.body?.challengeId || '').trim();
+    const challengeId = typeof req.body?.challengeId === 'string' ? req.body.challengeId.trim() : '';
+    if (!isValidSecuritySessionId(challengeId)) {
+      return res.status(400).json({ error: 'Session Didit invalide.' });
+    }
     const challenge = await getDiditChallenge(challengeId);
     if (!challenge || challenge.data.purpose !== 'admin_login') {
       return res.status(400).json({ error: 'Session de vérification administrateur invalide.' });
@@ -11541,7 +11587,26 @@ const HEYQO_KYC_ENUMS = {
 };
 
 function cleanKycText(value: unknown, maxLength: number): string {
-  return String(value || '').trim().slice(0, maxLength);
+  if (typeof value !== 'string') return '';
+  return value
+    .normalize('NFC')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function validateKycText(
+  value: unknown,
+  label: string,
+  maxLength: number,
+  pattern: RegExp,
+): string {
+  const cleaned = cleanKycText(value, maxLength);
+  if (!cleaned || !pattern.test(cleaned)) {
+    throw new HeyQOError(`${label} est invalide.`, 400, undefined, 'not_sent');
+  }
+  return cleaned;
 }
 
 function validateKycImage(value: unknown, label: string, required = true): string | undefined {
@@ -11586,8 +11651,8 @@ router.post('/api/client/cards/security/didit/session', requireDb, async (req, r
 router.post('/api/client/cards/security/didit/confirm', requireDb, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
-  const challengeId = String(req.body?.challengeId || '').trim();
-  if (!challengeId) return res.status(400).json({ error: 'Session Didit manquante.' });
+  const challengeId = typeof req.body?.challengeId === 'string' ? req.body.challengeId.trim() : '';
+  if (!/^[A-Za-z0-9_-]{10,160}$/.test(challengeId)) return res.status(400).json({ error: 'Session Didit invalide.' });
   const accountName = clientOfficialIdentityName(client);
   if (!accountName) return res.status(409).json({ error: 'Confirmez d’abord le prénom et le nom officiels du titulaire du compte.' });
   try {
@@ -11618,8 +11683,8 @@ router.post('/api/client/cards/security/pin', requireDb, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   const { ref: securityRef, data: existingSecurity } = await getClientCardSecurity(clientId, client);
-  const pin = String(req.body?.pin || '');
-  const confirmPin = String(req.body?.confirmPin || '');
+  const pin = typeof req.body?.pin === 'string' ? req.body.pin : '';
+  const confirmPin = typeof req.body?.confirmPin === 'string' ? req.body.confirmPin : '';
   if (!/^\d{6}$/.test(pin)) return res.status(400).json({ error: 'Le code Cartes doit comporter exactement 6 chiffres.' });
   if (pin !== confirmPin) return res.status(400).json({ error: 'Les deux codes Cartes ne correspondent pas.' });
   const pinHash = hashPin(pin);
@@ -11665,10 +11730,12 @@ router.post('/api/client/cards/security/email-2fa/verify', requireDb, async (req
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   const { ref: securityRef, data: security } = await getClientCardSecurity(clientId, client);
-  const sessionId = String(req.body?.sessionId || '');
-  const code = String(req.body?.code || '').trim();
-  const diditChallengeId = String(req.body?.diditChallengeId || '').trim();
-  if (!/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  const diditChallengeId = typeof req.body?.diditChallengeId === 'string' ? req.body.diditChallengeId.trim() : '';
+  if (!/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code) || !/^[A-Za-z0-9_-]{10,160}$/.test(diditChallengeId)) {
+    return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
+  }
   if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
   const accountName = clientOfficialIdentityName(client);
   if (!accountName) return res.status(409).json({ error: 'Confirmez d’abord l’identité officielle du titulaire du compte.' });
@@ -11700,11 +11767,11 @@ router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => 
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   const { data: security } = await getClientCardSecurity(clientId, client);
-  const pin = String(req.body?.pin || '');
-  const sessionId = String(req.body?.sessionId || '');
-  const code = String(req.body?.code || '').trim();
-  const diditChallengeId = String(req.body?.diditChallengeId || '').trim();
-  if (!/^\d{6}$/.test(pin) || !/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) {
+  const pin = typeof req.body?.pin === 'string' ? req.body.pin : '';
+  const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId.trim() : '';
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  const diditChallengeId = typeof req.body?.diditChallengeId === 'string' ? req.body.diditChallengeId.trim() : '';
+  if (!/^\d{6}$/.test(pin) || !/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code) || !/^[A-Za-z0-9_-]{10,160}$/.test(diditChallengeId)) {
     return res.status(400).json({ error: 'PIN, session ou code de vérification invalide.' });
   }
   if (!security.pinHash || !security.emailTwoFactorEnabled) {
@@ -11739,7 +11806,9 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
   let providerMutationStarted = false;
   if (!isHeyQOConfigured()) return res.status(503).json({ error: 'Le service Solution PAM n’est pas encore configuré.' });
   try {
-    const kyc = req.body?.kyc || {};
+    const kyc = req.body?.kyc && typeof req.body.kyc === 'object' && !Array.isArray(req.body.kyc)
+      ? req.body.kyc
+      : {};
     const dateOfBirth = cleanKycText(kyc.dateOfBirth, 10);
     const gender = cleanKycText(kyc.gender, 16);
     const documentType = cleanKycText(kyc.documentType, 32).toUpperCase();
@@ -11757,9 +11826,12 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
     if (!client.email || !client.firstName || !client.lastName || client.identityNameCompleted !== true) {
       throw new HeyQOError('Confirmez d’abord votre prénom et votre nom officiels.', 400, undefined, 'not_sent');
     }
-    if (!kyc.consent) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à Solution PAM.', 400, undefined, 'not_sent');
+    if (kyc.consent !== true) throw new HeyQOError('Votre consentement est requis pour transmettre le dossier KYC à Solution PAM.', 400, undefined, 'not_sent');
 
-    const countryCode = cleanKycText(kyc.addressCountry || 'HT', 3).toUpperCase();
+    const countryCode = cleanKycText(kyc.addressCountry || 'HT', 2).toUpperCase();
+    if (!/^[A-Z]{2}$/.test(countryCode)) {
+      throw new HeyQOError('Le code pays est invalide.', 400, undefined, 'not_sent');
+    }
     const submittedPhone = cleanKycText(kyc.phone, 40);
     const phone = normalizeHeyQOPhone(submittedPhone, countryCode);
     if (!phone) {
@@ -11775,6 +11847,17 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
     const documentFront = validateKycImage(kyc.documentFrontBase64, 'Le recto de la pièce');
     const documentBack = validateKycImage(kyc.documentBackBase64, 'Le verso de la pièce', false);
     const proofOfAddress = validateKycImage(kyc.proofOfAddressBase64, 'Le justificatif d’adresse');
+    const safeIdentityText = /^[\p{L}\p{M}\p{N} .,'’'()/#+&-]+$/u;
+    const documentNumber = validateKycText(kyc.documentNumber, 'Le numéro du document', 80, safeIdentityText);
+    const taxIdNumber = cleanKycText(kyc.taxIdNumber, 80);
+    if (taxIdNumber && !safeIdentityText.test(taxIdNumber)) {
+      throw new HeyQOError('Le numéro fiscal est invalide.', 400, undefined, 'not_sent');
+    }
+    const addressStreet = validateKycText(kyc.addressStreet, 'L’adresse', 160, safeIdentityText);
+    const addressCity = validateKycText(kyc.addressCity, 'La ville', 80, safeIdentityText);
+    const addressState = validateKycText(kyc.addressState, 'Le département ou l’État', 80, safeIdentityText);
+    const addressPostalCode = validateKycText(kyc.addressPostalCode, 'Le code postal', 24, /^[A-Z0-9][A-Z0-9 -]*$/i);
+    const occupation = validateKycText(kyc.occupation, 'Le code profession', 40, /^\d+$/);
     const customerBody = {
       first_name: String(client.firstName),
       last_name: String(client.lastName),
@@ -11784,18 +11867,18 @@ router.post('/api/client/cards/customer', requireDb, requireClientCardsAccess, a
       date_of_birth: dateOfBirth,
       gender,
       document_type: documentType,
-      document_number: cleanKycText(kyc.documentNumber, 80),
-      ...(cleanKycText(kyc.taxIdNumber, 80) && { tax_id_number: cleanKycText(kyc.taxIdNumber, 80) }),
+      document_number: documentNumber,
+      ...(taxIdNumber && { tax_id_number: taxIdNumber }),
       document_front_base64: documentFront,
       ...(documentBack && { document_back_base64: documentBack }),
-      address_street: cleanKycText(kyc.addressStreet, 160),
-      address_city: cleanKycText(kyc.addressCity, 80),
-      address_state: cleanKycText(kyc.addressState, 80),
-      address_postal_code: cleanKycText(kyc.addressPostalCode, 24),
+      address_street: addressStreet,
+      address_city: addressCity,
+      address_state: addressState,
+      address_postal_code: addressPostalCode,
       address_country: countryCode,
       proof_of_address_base64: proofOfAddress,
       pof_employment_status: employmentStatus,
-      pof_occupation: cleanKycText(kyc.occupation, 40),
+      pof_occupation: occupation,
       pof_primary_purpose: primaryPurpose,
       pof_source_of_funds: sourceOfFunds,
       pof_expected_monthly_pay: expectedMonthlyPay,
@@ -12119,7 +12202,7 @@ router.post('/api/client/cards/:cardId/secure-details', requireDb, requireClient
   const client = res.locals.clientRecord.data() || {};
   try {
     const { data: security } = await getClientCardSecurity(clientId, client);
-    const pin = String(req.body?.pin || '');
+    const pin = typeof req.body?.pin === 'string' ? req.body.pin : '';
     if (!/^\d{6}$/.test(pin)) return res.status(400).json({ error: 'Le code Cartes doit comporter exactement 6 chiffres.' });
     if (!security.pinHash || !security.emailTwoFactorEnabled) {
       return res.status(423).json({ error: 'La protection Cartes doit d’abord être configurée.' });

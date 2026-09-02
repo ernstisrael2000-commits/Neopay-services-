@@ -8,6 +8,14 @@ import { Label } from './ui/label';
 import { completeClientIdentityName } from '../services/clientService';
 import type { Client } from '../types';
 
+function filterNameInput(value: string): string {
+  return value
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}'’ -]/gu, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 80);
+}
+
 interface IdentityNameGateProps {
   client: Client;
   onCompleted: (client: Client) => void;
@@ -21,13 +29,15 @@ export default function IdentityNameGate({ client, onCompleted }: IdentityNameGa
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) {
+    const cleanFirstName = filterNameInput(firstName).trim();
+    const cleanLastName = filterNameInput(lastName).trim();
+    if (!cleanFirstName || !cleanLastName) {
       toast.error('Votre prénom et votre nom sont obligatoires.');
       return;
     }
     setSaving(true);
     try {
-      const updated = await completeClientIdentityName(firstName.trim(), lastName.trim());
+      const updated = await completeClientIdentityName(cleanFirstName, cleanLastName);
       onCompleted(updated);
       toast.success('Votre identité de profil est enregistrée.');
     } catch (error: any) {
@@ -58,13 +68,13 @@ export default function IdentityNameGate({ client, onCompleted }: IdentityNameGa
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="identity-first-name" className="text-xs font-black uppercase tracking-wider text-slate-500">Prénom officiel</Label>
-              <Input id="identity-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)}
-                autoComplete="given-name" maxLength={80} placeholder="Votre prénom" className="h-12 rounded-xl" required autoFocus />
+               <Input id="identity-first-name" value={firstName} onChange={(event) => setFirstName(filterNameInput(event.target.value))}
+                 autoComplete="given-name" maxLength={80} pattern="[\p{L}\p{M}][\p{L}\p{M}'’ -]{1,79}" placeholder="Votre prénom" className="h-12 rounded-xl" required autoFocus />
             </div>
             <div className="space-y-2">
               <Label htmlFor="identity-last-name" className="text-xs font-black uppercase tracking-wider text-slate-500">Nom officiel</Label>
-              <Input id="identity-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)}
-                autoComplete="family-name" maxLength={80} placeholder="Votre nom" className="h-12 rounded-xl" required />
+               <Input id="identity-last-name" value={lastName} onChange={(event) => setLastName(filterNameInput(event.target.value))}
+                 autoComplete="family-name" maxLength={80} pattern="[\p{L}\p{M}][\p{L}\p{M}'’ -]{1,79}" placeholder="Votre nom" className="h-12 rounded-xl" required />
             </div>
           </div>
 

@@ -213,6 +213,10 @@ function AppInner() {
 
   const handleViewChange = (newView: AppView) => {
     if (newView === view) return;
+    if (identityNamePending && newView !== 'home') {
+      toast.error('Ajoutez d’abord votre prénom et votre nom officiels pour continuer.');
+      return;
+    }
     trackEvent('navigation_view_selected', { view: newView });
     if (newView === 'products') setCatalogTab('products');
     const fromIdx = NAV_ORDER.indexOf(view);
@@ -306,6 +310,7 @@ function AppInner() {
     return saved ? JSON.parse(saved) : null;
   });
   const [clientSessionResolved, setClientSessionResolved] = useState(false);
+  const identityNamePending = Boolean(loggedClient && loggedClient.identityNameCompleted !== true);
 
   useFCM(loggedClient?.id || null);
 
@@ -336,9 +341,18 @@ function AppInner() {
         if (active && client) {
           setLoggedClient(client);
           localStorage.setItem('rena_client', JSON.stringify(client));
+        } else if (active) {
+          // The browser cache is not a session. Never keep a locally stored
+          // profile after the server says there is no active client session.
+          setLoggedClient(null);
+          localStorage.removeItem('rena_client');
         }
       } catch (error) {
         console.warn('Impossible de restaurer la session client.', error);
+        if (active) {
+          setLoggedClient(null);
+          localStorage.removeItem('rena_client');
+        }
       } finally {
         if (active) setClientSessionResolved(true);
       }
@@ -347,6 +361,16 @@ function AppInner() {
     void restore();
     return () => { active = false; };
   }, [loading, user?.uid]);
+
+  useEffect(() => {
+    if (!clientSessionResolved || !identityNamePending) return;
+    if (view !== 'home') {
+      setView('home');
+      setSeoPath(null);
+      setHistory(['home']);
+      if (window.location.pathname !== '/') window.history.replaceState({ view: 'home' }, '', '/');
+    }
+  }, [clientSessionResolved, identityNamePending, view]);
 
   const handleClientLogout = () => {
     setLoggedClient(null);
@@ -370,7 +394,7 @@ function AppInner() {
     return () => { if (clientUnsub.current) clientUnsub.current(); };
   }, [loggedClient?.id]);
 
-  if (loading || splashVisible) {
+  if (loading || splashVisible || !clientSessionResolved) {
     return <LoadingScreen />;
   }
 
