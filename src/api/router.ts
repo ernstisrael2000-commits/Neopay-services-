@@ -10720,9 +10720,31 @@ function heyqoCustomerIds(client: any): string[] {
 }
 
 function explicitHeyQOCardholderName(card: any): string {
-  const safe = sanitizeHeyQOCard(card);
-  const value = safe.name_on_card || safe.cardholder_name || safe.cardholder;
-  return typeof value === 'string' ? value.trim().slice(0, 120) : '';
+  const pending: any[] = [card];
+  const seen = new Set<any>();
+  const holderKeys = [
+    'name_on_card',
+    'nameOnCard',
+    'cardholder_name',
+    'cardholderName',
+    'cardholder',
+    'card_holder',
+    'cardHolder',
+  ];
+  const nestedKeys = ['card', 'info', 'details', 'card_details', 'cardDetails', 'secure_view', 'secureView', 'data', 'result', 'payload'];
+  while (pending.length && seen.size < 64) {
+    const candidate = pending.shift();
+    if (!candidate || typeof candidate !== 'object' || seen.has(candidate)) continue;
+    seen.add(candidate);
+    for (const key of holderKeys) {
+      const value = candidate[key];
+      if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 120);
+    }
+    for (const key of nestedKeys) {
+      if (candidate[key] && typeof candidate[key] === 'object') pending.push(candidate[key]);
+    }
+  }
+  return '';
 }
 
 async function resolveHeyQOCardholderName(clientId: string, client: any): Promise<string> {
@@ -10753,6 +10775,18 @@ async function resolveHeyQOCardholderName(clientId: string, client: any): Promis
     const detailedCard = await loadOwnedHeyQOCard(clientId, cardId, client);
     const detailedName = explicitHeyQOCardholderName(detailedCard);
     if (detailedName) return detailedName;
+    try {
+      // Some HeyQO card responses expose the holder only in the secure-view
+      // payload. The URL is never returned here; only the server-side name is
+      // used for the identity comparison.
+      const secureView = await createHeyQOSecureView(cardId);
+      const secureName = explicitHeyQOCardholderName(secureView.data)
+        || secureCardDetails(secureView.data).cardholderName
+        || '';
+      if (secureName) return secureName.slice(0, 120);
+    } catch (error: any) {
+      console.warn('[HeyQO cardholder lookup]', error?.message || error);
+    }
   }
 
   throw new HeyQOError(

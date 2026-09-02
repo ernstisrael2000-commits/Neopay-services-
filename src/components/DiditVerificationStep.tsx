@@ -99,7 +99,7 @@ export default function DiditVerificationStep({
       <div className="flex items-center justify-center gap-2 px-5 pb-5 text-center text-xs font-bold text-[#60798a]">
         {!rejected && <Loader2 className="h-4 w-4 animate-spin text-[#1979a8]" />}
         <span>
-          {error ? 'La comparaison avec le nom légal du compte a échoué.' :
+          {error ? 'La comparaison avec le titulaire de la carte a échoué.' :
            status === 'approved' ? 'Vérification validée. Ouverture sécurisée…' :
            status === 'rejected' ? 'La vérification n’a pas été acceptée.' :
            status === 'expired' ? 'Cette session Didit a expiré.' :
