@@ -11720,7 +11720,13 @@ router.post('/api/client/cards/security/didit/session', requireDb, async (req, r
     return res.json({ success: true, challenge });
   } catch (error: any) {
     console.error('[client/cards/didit/session]', error);
-    return res.status(503).json({ error: 'La vérification faciale Cartes est momentanément indisponible.' });
+    const providerMessage = String(error?.message || '');
+    const creditsUnavailable = /not enough credits|insufficient credits|top up/i.test(providerMessage);
+    return res.status(503).json({
+      error: creditsUnavailable
+        ? 'La vérification faciale Cartes ne peut pas démarrer pour le moment. Le service Didit doit disposer de crédits pour lancer une nouvelle vérification.'
+        : 'La vérification faciale Cartes est momentanément indisponible.',
+    });
   }
 });
 

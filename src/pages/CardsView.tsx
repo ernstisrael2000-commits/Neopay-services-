@@ -198,6 +198,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
   const [diditLoading, setDiditLoading] = useState(true);
   const [diditVerified, setDiditVerified] = useState(false);
   const [diditError, setDiditError] = useState<string | null>(null);
+  const [diditRetry, setDiditRetry] = useState(0);
   const [security, setSecurity] = useState<CardsSecuritySnapshot | null>(null);
   const [securityLoading, setSecurityLoading] = useState(true);
   const [securityError, setSecurityError] = useState<string | null>(null);
@@ -240,7 +241,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     };
     void start();
     return () => { active = false; };
-  }, [clientId]);
+  }, [clientId, diditRetry]);
 
   const handleDiditVerified = useCallback(async (challengeId: string) => {
     await confirmCardsDidit(challengeId);
@@ -433,7 +434,17 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
             />
           ) : diditError ? (
             <div role="alert" className="mt-16 rounded-2xl border border-[#f3b7b0] bg-[#fff1f0] p-5 text-sm text-[#b42318]">
-              {diditError}
+              <p>{diditError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDiditError(null);
+                  setDiditRetry((value) => value + 1);
+                }}
+                className="mt-4 min-h-11 w-full rounded-xl border border-[#d99a94] bg-white px-4 text-sm font-black text-[#a92f28] transition hover:bg-[#fff8f7]"
+              >
+                Réessayer
+              </button>
             </div>
           ) : securityLoading ? (
             <div className="mt-16 rounded-[1.75rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.1)]">
