@@ -12,6 +12,7 @@ interface CardsSecurityGateProps {
   security: CardsSecuritySnapshot;
   onSecurityChange: (security: CardsSecuritySnapshot) => void;
   externalError?: string | null;
+  diditChallengeId: string;
 }
 
 function SecurityInput({
@@ -45,7 +46,7 @@ function SecurityInput({
   );
 }
 
-export default function CardsSecurityGate({ security, onSecurityChange, externalError }: CardsSecurityGateProps) {
+export default function CardsSecurityGate({ security, onSecurityChange, externalError, diditChallengeId }: CardsSecurityGateProps) {
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [code, setCode] = useState('');
@@ -104,7 +105,7 @@ export default function CardsSecurityGate({ security, onSecurityChange, external
     setBusy(true);
     setError(null);
     try {
-      const result = await verifyCardsEmailTwoFactor(sessionId, code);
+      const result = await verifyCardsEmailTwoFactor(sessionId, code, diditChallengeId);
       onSecurityChange(result.security);
       setSessionId('');
       setCode('');
@@ -123,7 +124,7 @@ export default function CardsSecurityGate({ security, onSecurityChange, external
     setBusy(true);
     setError(null);
     try {
-      const result = await unlockCards(sessionId, pin, code);
+      const result = await unlockCards(sessionId, pin, code, diditChallengeId);
       onSecurityChange(result.security);
       setSessionId('');
       setPin('');

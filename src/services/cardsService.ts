@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/apiFetch';
 import { fileToBase64 } from '../lib/fileToBase64';
 import type { HeyQOCard, HeyQOCardTransaction, HeyQOCustomer } from '../types';
+import type { DiditChallenge } from './diditService';
 
 export interface CardsSnapshot {
   configured: boolean;
@@ -54,21 +55,23 @@ async function post<T = any>(
 
 export const getCards = () => apiFetch<CardsSnapshot>('/api/client/cards');
 export const getCardsSecurity = () => apiFetch<{ security: CardsSecuritySnapshot }>('/api/client/cards/security');
+export const startCardsDiditSession = () =>
+  apiFetch<{ challenge: DiditChallenge }>('/api/client/cards/security/didit/session', { method: 'POST' });
 export const setCardsSecurityPin = (pin: string, confirmPin: string) =>
   post<{ success: boolean; security: CardsSecuritySnapshot }>('/api/client/cards/security/pin', { pin, confirmPin });
 export const requestCardsEmailTwoFactor = () =>
   post<{ success: boolean; sessionId: string; maskedEmail: string; purpose: 'setup' | 'unlock'; expiresInSeconds: number }>(
     '/api/client/cards/security/email-2fa/request',
   );
-export const verifyCardsEmailTwoFactor = (sessionId: string, code: string) =>
+export const verifyCardsEmailTwoFactor = (sessionId: string, code: string, diditChallengeId: string) =>
   post<{ success: boolean; security: CardsSecuritySnapshot }>(
     '/api/client/cards/security/email-2fa/verify',
-    { sessionId, code },
+    { sessionId, code, diditChallengeId },
   );
-export const unlockCards = (sessionId: string, pin: string, code: string) =>
+export const unlockCards = (sessionId: string, pin: string, code: string, diditChallengeId: string) =>
   post<{ success: boolean; security: CardsSecuritySnapshot }>(
     '/api/client/cards/security/unlock',
-    { sessionId, pin, code },
+    { sessionId, pin, code, diditChallengeId },
   );
 export const createHeyQOCard = (brand: 'visa' | 'mastercard', idempotencyKey?: string) =>
   post<CreateCardResult>('/api/client/cards', { brand }, idempotencyKey, 60_000);

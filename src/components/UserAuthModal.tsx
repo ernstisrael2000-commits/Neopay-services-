@@ -18,8 +18,10 @@ import { loginAdminWithGoogle, linkAdminGoogle } from '../services/adminService'
 import { Client, AdminAccount } from '../types';
 import OtpVerifyStep from './OtpVerifyStep';
 import { establishAdminFirebaseSession } from '../lib/adminFirebaseSession';
+import DiditVerificationStep from './DiditVerificationStep';
+import { completeAdminDidit, type DiditChallenge } from '../services/diditService';
 
-type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google' | 'admin-2fa';
+type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google' | 'admin-2fa' | 'admin-didit';
 
 interface UserAuthModalProps {
   open: boolean;
@@ -125,6 +127,7 @@ export default function UserAuthModal({
 
   // Admin 2FA state
   const [adminPending2FA, setAdminPending2FA] = useState<{ sessionId: string; maskedEmail: string } | null>(null);
+  const [adminPendingDidit, setAdminPendingDidit] = useState<DiditChallenge | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
@@ -136,6 +139,7 @@ export default function UserAuthModal({
     setPendingGoogleEmail(''); setPendingGoogleUid('');
     setLinkFullName(''); setLinkPassword(''); setLinkCode(''); setShowLinkPassword(false);
     setAdminPending2FA(null); setOtpLoading(false); setOtpError(null);
+    setAdminPendingDidit(null);
     setView('choice');
     setLoading(false);
   };
@@ -321,6 +325,12 @@ export default function UserAuthModal({
         body: JSON.stringify({ sessionId, code }),
       });
       const data = await res.json();
+      if (data.pendingDidit && data.didit) {
+        setAdminPendingDidit(data.didit as DiditChallenge);
+        setView('admin-didit');
+        setOtpLoading(false);
+        return;
+      }
       if (!res.ok || !data.success) {
         setOtpError(data.error || 'Code incorrect.');
         return;
@@ -333,6 +343,20 @@ export default function UserAuthModal({
       setOtpError('Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+  const handleAdminDiditComplete = async (challengeId: string) => {
+    try {
+      const result = await completeAdminDidit(challengeId);
+      await establishAdminFirebaseSession(result.firebaseToken);
+      toast.success(`Bienvenue Admin, ${result.admin.fullName} !`);
+      onAdminLogin(result.admin);
+      handleClose(false);
+    } catch (cause: any) {
+      setAdminPendingDidit(null);
+      setView('admin-access');
+      setGoogleError(cause?.message || 'La vérification faciale administrateur n’a pas pu être finalisée.');
     }
   };
 
@@ -738,6 +762,16 @@ export default function UserAuthModal({
               />
             </div>
           </div>
+        )}
+
+        {view === 'admin-didit' && adminPendingDidit && (
+          <DiditVerificationStep
+            challenge={adminPendingDidit}
+            title="Vérification administrateur"
+            description="Une vérification faciale avec présence réelle est obligatoire avant l’ouverture de votre session administrateur."
+            onVerified={handleAdminDiditComplete}
+            onBack={() => { setAdminPendingDidit(null); setView('admin-access'); }}
+          />
         )}
 
         {/* ── ADMIN LINK GOOGLE — first-time Google account association ── */}

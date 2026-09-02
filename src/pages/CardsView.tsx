@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ArrowDownToLine,
@@ -20,6 +20,7 @@ import {
 import { motion } from 'motion/react';
 import HeyQOKycWizard, { type HeyQOKycValue } from '../components/cards/HeyQOKycWizard';
 import CardsSecurityGate from '../components/cards/CardsSecurityGate';
+import DiditVerificationStep from '../components/DiditVerificationStep';
 import {
   createHeyQOCard,
   depositToCard,
@@ -27,6 +28,7 @@ import {
   getSecureCardDetails,
   freezeCard,
   submitHeyQOCustomerKyc,
+  startCardsDiditSession,
   terminateCard,
   unfreezeCard,
   useClientCards,
@@ -34,6 +36,7 @@ import {
   type SecureCardDetails,
   withdrawFromCard,
 } from '../services/cardsService';
+import type { DiditChallenge } from '../services/diditService';
 import type { HeyQOCard, HeyQOCardTransaction } from '../types';
 
 interface CardsViewProps {
@@ -189,6 +192,10 @@ function QuickAction({ label, icon: Icon, onClick, testId, tone = 'blue', disabl
 }
 
 export default function CardsView({ clientId, clientName, clientPhone = '', onBack }: CardsViewProps) {
+  const [diditChallenge, setDiditChallenge] = useState<DiditChallenge | null>(null);
+  const [diditLoading, setDiditLoading] = useState(true);
+  const [diditVerified, setDiditVerified] = useState(false);
+  const [diditError, setDiditError] = useState<string | null>(null);
   const [security, setSecurity] = useState<CardsSecuritySnapshot | null>(null);
   const [securityLoading, setSecurityLoading] = useState(true);
   const [securityError, setSecurityError] = useState<string | null>(null);
@@ -206,6 +213,36 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [copiedCardNumber, setCopiedCardNumber] = useState(false);
   const intentKeys = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    setDiditChallenge(null);
+    setDiditVerified(false);
+    setDiditError(null);
+    setDiditLoading(true);
+    const start = async () => {
+      try {
+        const currentSecurity = await getCardsSecurity();
+        if (active && currentSecurity.security.unlocked) {
+          setSecurity(currentSecurity.security);
+          setDiditVerified(true);
+          return;
+        }
+        const result = await startCardsDiditSession();
+        if (active) setDiditChallenge(result.challenge);
+      } catch (cause: any) {
+        if (active) setDiditError(cause?.message || 'La vérification faciale Cartes est indisponible.');
+      } finally {
+        if (active) setDiditLoading(false);
+      }
+    };
+    void start();
+    return () => { active = false; };
+  }, [clientId]);
+
+  const handleDiditVerified = useCallback(() => {
+    setDiditVerified(true);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -362,7 +399,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     }
   };
 
-  if (securityLoading || !security || !securityUnlocked) {
+  if (diditLoading || !diditVerified || securityLoading || !security || !securityUnlocked) {
     return (
       <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#f3f8fb] px-4 pb-12 text-[#18384d] sm:px-6">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#dff3fb_0%,transparent_42%),linear-gradient(180deg,#f8fcfe_0%,#f3f8fb_65%,#edf5f8_100%)]" />
@@ -372,13 +409,30 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
               <ArrowLeft className="h-4 w-4" /> Retour à l’accueil
             </button>
           </header>
-          {securityLoading ? (
+          {diditLoading ? (
+            <div className="mt-16 rounded-[1.75rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.1)]">
+              <ShieldCheck className="mx-auto h-9 w-9 animate-pulse text-[#1979a8]" />
+              <p className="mt-4 text-sm font-bold">Préparation de la vérification Didit…</p>
+            </div>
+          ) : !diditVerified && diditChallenge ? (
+            <DiditVerificationStep
+              challenge={diditChallenge}
+              title="Confirmez votre identité"
+              description="Cette vérification est obligatoire à l’entrée de votre espace Cartes. Elle protège vos informations et vos opérations sensibles."
+              onVerified={handleDiditVerified}
+              onBack={onBack}
+            />
+          ) : diditError ? (
+            <div role="alert" className="mt-16 rounded-2xl border border-[#f3b7b0] bg-[#fff1f0] p-5 text-sm text-[#b42318]">
+              {diditError}
+            </div>
+          ) : securityLoading ? (
             <div className="mt-16 rounded-[1.75rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.1)]">
               <ShieldCheck className="mx-auto h-9 w-9 animate-pulse text-[#1979a8]" />
               <p className="mt-4 text-sm font-bold">Vérification de sécurité…</p>
             </div>
           ) : security ? (
-            <CardsSecurityGate security={security} onSecurityChange={setSecurity} externalError={securityError} />
+            <CardsSecurityGate security={security} onSecurityChange={setSecurity} externalError={securityError} diditChallengeId={diditChallenge?.challengeId || ''} />
           ) : (
             <div role="alert" className="mt-16 rounded-2xl border border-[#f3b7b0] bg-[#fff1f0] p-5 text-sm text-[#b42318]">
               {securityError || 'La protection Cartes est indisponible.'}

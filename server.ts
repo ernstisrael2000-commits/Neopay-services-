@@ -93,12 +93,12 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(self "https://verify.didit.me"), camera=(self "https://verify.didit.me")');
     // Firebase Google Auth injects its official loader and uses an accounts iframe
     // during popup sign-in. Keep the policy restrictive while explicitly allowing
     // only those required Google/Firebase origins.
     // Course player embeds preview videos via Vimeo/YouTube iframes; allow those origins explicitly.
-    res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com; frame-src 'self' https://heyqo.cash https://*.heyqo.cash https://accounts.google.com https://*.firebaseapp.com https://player.vimeo.com https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https: wss:;");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com; frame-src 'self' https://heyqo.cash https://*.heyqo.cash https://accounts.google.com https://*.firebaseapp.com https://verify.didit.me https://*.didit.me https://player.vimeo.com https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' https: wss:;");
     if (process.env.NODE_ENV === 'production') {
       res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     }

@@ -114,6 +114,8 @@ VITE_ADMIN_SECRET = "rena-admin-2024"
 FROM_EMAIL = "noreply@rena.ht"
 NODE_ENV = "development"
 PORT = "5000"
+DIDIT_ADMIN_WORKFLOW_ID = "103e03d8-139d-4faf-a978-37d86fe045de"
+DIDIT_CARDS_WORKFLOW_ID = "103e03d8-139d-4faf-a978-37d86fe045de"
 
 [postMerge]
 path = "scripts/post-merge.sh"

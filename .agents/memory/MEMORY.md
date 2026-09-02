@@ -18,3 +18,4 @@
 - [Mobile file picker compatibility](mobile-file-picker.md) — Android document-picker files can fail with FileReader; prefer chunked File.arrayBuffer reads
 - [HeyQO validation response](heyqo-validation-response.md) — nested provider validation details need safe parsing; customer phone values must be E.164
 - [Card access security](card-access-security.md) — card details and mutations require a server-only PIN plus email 2FA and a short-lived signed access grant
+- [Didit verification contract](didit-verification-contract.md) — identity access must use short-lived server-bound challenges and fresh HMAC webhooks as the source of truth

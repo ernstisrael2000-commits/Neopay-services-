@@ -11,6 +11,8 @@ import { isInIframe } from '../lib/google-auth';
 import { AdminAccount } from '../types';
 import OtpVerifyStep from './OtpVerifyStep';
 import { establishAdminFirebaseSession } from '../lib/adminFirebaseSession';
+import DiditVerificationStep from './DiditVerificationStep';
+import { completeAdminDidit, type DiditChallenge } from '../services/diditService';
 
 interface AdminLoginProps {
   onLoginSuccess: (admin: AdminAccount) => void;
@@ -38,6 +40,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
 
   // 2FA state
   const [pending2FA, setPending2FA] = useState<{ sessionId: string; maskedEmail: string } | null>(null);
+  const [pendingDidit, setPendingDidit] = useState<DiditChallenge | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
@@ -55,6 +58,10 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
+        if (data.pendingDidit && data.didit) {
+          setPendingDidit(data.didit as DiditChallenge);
+          return;
+        }
         setOtpError(data.error || 'Code incorrect.');
         return;
       }
@@ -65,6 +72,19 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
       setOtpError('Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setOtpLoading(false);
+    }
+  };
+
+  const handleDiditComplete = async (challengeId: string) => {
+    try {
+      const result = await completeAdminDidit(challengeId);
+      await establishAdminFirebaseSession(result.firebaseToken);
+      toast.success(`Bienvenue, ${result.admin.fullName} !`);
+      setPendingDidit(null);
+      onLoginSuccess(result.admin);
+    } catch (cause: any) {
+      setPendingDidit(null);
+      setError(cause?.message || 'La vérification faciale administrateur n’a pas pu être finalisée.');
     }
   };
 
@@ -135,6 +155,22 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
   };
 
   // ── 2FA step ─────────────────────────────────────────────────────────────────
+  if (pendingDidit) {
+    return (
+      <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gray-50/50">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
+          <DiditVerificationStep
+            challenge={pendingDidit}
+            title="Vérification administrateur"
+            description="Une vérification faciale avec présence réelle est obligatoire avant l’ouverture de votre session administrateur."
+            onVerified={handleDiditComplete}
+            onBack={() => setPendingDidit(null)}
+          />
+        </motion.div>
+      </div>
+    );
+  }
+
   if (pending2FA) {
     return (
       <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gray-50/50">

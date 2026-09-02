@@ -319,6 +319,212 @@ function readCardsAccessSession(req: express.Request, clientId: string): boolean
   }
 }
 
+type DiditVerificationPurpose = 'admin_login' | 'cards_entry';
+type DiditVerificationStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+
+interface DiditChallenge {
+  challengeId: string;
+  sessionId: string;
+  url: string;
+  expiresAt: string;
+}
+
+function diditWorkflowId(purpose: DiditVerificationPurpose): string {
+  return String(
+    purpose === 'admin_login'
+      ? process.env.DIDIT_ADMIN_WORKFLOW_ID || process.env.DIDIT_WORKFLOW_ID
+      : process.env.DIDIT_CARDS_WORKFLOW_ID || process.env.DIDIT_WORKFLOW_ID
+      || '',
+  ).trim();
+}
+
+function diditWebhookUrl(): string {
+  return String(process.env.DIDIT_WEBHOOK_URL || 'https://solutionpam.com/api/didit/webhook').replace(/\/$/, '');
+}
+
+function normalizeDiditStatus(value: unknown): DiditVerificationStatus {
+  const status = String(value || '').trim().toLowerCase();
+  if (['approved', 'verified', 'success', 'completed', 'passed'].includes(status)) return 'approved';
+  if (['declined', 'rejected', 'failed', 'cancelled', 'canceled', 'expired'].includes(status)) {
+    return status === 'expired' ? 'expired' : 'rejected';
+  }
+  return 'pending';
+}
+
+function diditStatusFromPayload(payload: any): DiditVerificationStatus {
+  return normalizeDiditStatus(
+    payload?.status
+    || payload?.decision?.status
+    || payload?.decision?.decision
+    || payload?.decision?.result,
+  );
+}
+
+function diditCanonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => diditCanonicalJson(item)).join(',')}]`;
+  return `{${Object.keys(value as Record<string, unknown>).sort().map((key) =>
+    `${JSON.stringify(key)}:${diditCanonicalJson((value as Record<string, unknown>)[key])}`,
+  ).join(',')}}`;
+}
+
+function signaturesMatch(received: string | undefined, expected: string): boolean {
+  if (!received) return false;
+  const provided = Buffer.from(received.trim(), 'hex');
+  const computed = Buffer.from(expected, 'hex');
+  return provided.length === computed.length && timingSafeEqual(provided, computed);
+}
+
+function verifyDiditWebhookSignature(req: express.Request): boolean {
+  const secret = String(process.env.DIDIT_WEBHOOK_SECRET || '');
+  const timestamp = Number(req.get('X-Timestamp'));
+  if (!secret || !Number.isFinite(timestamp) || Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300) return false;
+
+  const signatureV2 = req.get('X-Signature-V2');
+  const expectedV2 = createHmac('sha256', secret).update(diditCanonicalJson(req.body)).digest('hex');
+  if (signaturesMatch(signatureV2, expectedV2)) return true;
+
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+  const signature = req.get('X-Signature');
+  if (!rawBody || !signature) return false;
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  return signaturesMatch(signature, expected);
+}
+
+async function createDiditChallenge(opts: {
+  purpose: DiditVerificationPurpose;
+  subjectId: string;
+  email?: string;
+}): Promise<DiditChallenge> {
+  const apiKey = String(process.env.DIDIT_API_KEY || '').trim();
+  const workflowId = diditWorkflowId(opts.purpose);
+  if (!apiKey || !workflowId) {
+    throw new Error('La vérification Didit n’est pas configurée.');
+  }
+
+  const challengeRef = adminDb.collection('didit_verifications').doc();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  const vendorData = `solutionpam:${opts.purpose}:${opts.subjectId}:${challengeRef.id}`;
+  await challengeRef.create({
+    purpose: opts.purpose,
+    subjectId: opts.subjectId,
+    vendorData,
+    status: 'pending',
+    expiresAt,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch('https://verification.didit.me/v3/session/', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workflow_id: workflowId,
+        vendor_data: vendorData,
+        callback: diditWebhookUrl(),
+        callback_method: 'both',
+        metadata: {
+          product: 'solutionpam',
+          purpose: opts.purpose,
+          challenge_id: challengeRef.id,
+        },
+        language: 'fr',
+        ...(opts.email ? { contact_details: { email: opts.email, send_notification_emails: false, email_lang: 'fr' } } : {}),
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(`Didit session creation failed (${response.status}).`);
+    const sessionId = String(payload.session_id || '').trim();
+    const url = String(payload.url || payload.verification_url || '').trim();
+    if (!sessionId || !url) throw new Error('Réponse Didit invalide.');
+
+    await challengeRef.update({
+      diditSessionId: sessionId,
+      providerStatus: String(payload.status || 'Not Started'),
+      url,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return { challengeId: challengeRef.id, sessionId, url, expiresAt: expiresAt.toISOString() };
+  } catch (error) {
+    await challengeRef.delete().catch(() => {});
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function syncDiditDecision(
+  challengeRef: FirebaseFirestore.DocumentReference,
+  challenge: FirebaseFirestore.DocumentData,
+): Promise<DiditVerificationStatus> {
+  const apiKey = String(process.env.DIDIT_API_KEY || '').trim();
+  const sessionId = String(challenge.diditSessionId || '').trim();
+  if (!apiKey || !sessionId) return normalizeDiditStatus(challenge.status);
+  const response = await fetch(`https://verification.didit.me/v3/session/${encodeURIComponent(sessionId)}/decision/`, {
+    headers: { 'x-api-key': apiKey, Accept: 'application/json' },
+  });
+  if (!response.ok) return normalizeDiditStatus(challenge.status);
+  const payload = await response.json().catch(() => ({}));
+  const status = diditStatusFromPayload(payload);
+  if (status !== normalizeDiditStatus(challenge.status)) {
+    await challengeRef.update({
+      status,
+      providerStatus: String(payload.status || payload.decision?.status || ''),
+      decisionUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  return status;
+}
+
+async function getDiditChallenge(challengeId: string): Promise<{
+  ref: FirebaseFirestore.DocumentReference;
+  data: FirebaseFirestore.DocumentData;
+} | null> {
+  if (!/^[A-Za-z0-9_-]{10,160}$/.test(challengeId)) return null;
+  const ref = adminDb.collection('didit_verifications').doc(challengeId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const data = snap.data()!;
+  const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
+  if (expiresAt <= new Date()) {
+    await ref.update({ status: 'expired', updatedAt: FieldValue.serverTimestamp() }).catch(() => {});
+    return { ref, data: { ...data, status: 'expired' } };
+  }
+  return { ref, data };
+}
+
+async function requireApprovedDidit(
+  challengeId: string,
+  purpose: DiditVerificationPurpose,
+  subjectId: string,
+): Promise<boolean> {
+  const challenge = await getDiditChallenge(challengeId);
+  if (!challenge || challenge.data.purpose !== purpose || challenge.data.subjectId !== subjectId) return false;
+  let status = normalizeDiditStatus(challenge.data.status);
+  if (status === 'pending') {
+    try {
+      status = await syncDiditDecision(challenge.ref, challenge.data);
+    } catch {}
+  }
+  return status === 'approved';
+}
+
+async function consumeDiditChallenge(challengeId: string, purpose: DiditVerificationPurpose, subjectId: string): Promise<boolean> {
+  const ref = adminDb.collection('didit_verifications').doc(challengeId);
+  return adminDb.runTransaction(async (txn) => {
+    const snap = await txn.get(ref);
+    if (!snap.exists) return false;
+    const data = snap.data()!;
+    if (data.purpose !== purpose || data.subjectId !== subjectId || data.status !== 'approved' || data.consumedAt) return false;
+    txn.update(ref, { consumedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    return true;
+  });
+}
+
 async function createCardSecurityOtp(clientId: string, email: string, purpose: 'setup' | 'unlock') {
   const otpPlain = String(randomInt(100000, 999999));
   const ref = adminDb.collection('card_security_otps').doc();
@@ -891,6 +1097,7 @@ const publicAdminPaths = new Set([
   '/verify-2fa',
   '/verify-google',
   '/link-google',
+  '/didit/complete',
 ]);
 router.use('/api/admin', requireDb, (req, res, next) => {
   if (publicAdminPaths.has(req.path)) return next();
@@ -960,6 +1167,57 @@ router.use('/api/affiliate', requireDb, (req, res, next) => {
   });
 });
 
+router.post('/api/didit/webhook', requireDb, async (req, res) => {
+  if (!verifyDiditWebhookSignature(req)) {
+    return res.status(401).json({ error: 'Signature Didit invalide ou expirée.' });
+  }
+
+  const sessionId = String(req.body?.session_id || '').trim();
+  if (!sessionId) return res.status(400).json({ error: 'Session Didit manquante.' });
+
+  const matching = await adminDb.collection('didit_verifications')
+    .where('diditSessionId', '==', sessionId)
+    .limit(1)
+    .get();
+  if (matching.empty) {
+    // A valid event for an unknown session is acknowledged without leaking
+    // internal state or causing Didit to retry forever.
+    return res.json({ ok: true });
+  }
+
+  const challenge = matching.docs[0];
+  const current = challenge.data();
+  const incomingStatus = diditStatusFromPayload(req.body);
+  const currentStatus = normalizeDiditStatus(current.status);
+  const status = currentStatus === 'approved' && incomingStatus !== 'approved' ? currentStatus : incomingStatus;
+  const vendorData = String(req.body?.vendor_data || '').trim();
+  if (vendorData && vendorData !== String(current.vendorData || '')) {
+    return res.status(409).json({ error: 'Session Didit non correspondante.' });
+  }
+
+  await challenge.ref.update({
+    status,
+    providerStatus: String(req.body?.status || req.body?.decision?.status || ''),
+    eventType: String(req.body?.event_type || req.body?.webhook_type || ''),
+    webhookReceivedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return res.json({ ok: true });
+});
+
+router.get('/api/didit/status/:challengeId', requireDb, async (req, res) => {
+  const challenge = await getDiditChallenge(String(req.params.challengeId || ''));
+  if (!challenge) return res.status(404).json({ error: 'Session Didit introuvable.' });
+  const expiresAt = challenge.data.expiresAt?.toDate
+    ? challenge.data.expiresAt.toDate().toISOString()
+    : new Date(challenge.data.expiresAt).toISOString();
+  return res.json({
+    challengeId: challenge.ref.id,
+    status: normalizeDiditStatus(challenge.data.status),
+    expiresAt,
+  });
+});
+
 // Route profiles run after the role guards above, so financial and AI limits
 // use both the source IP and the verified signed session identity.
 for (const path of [
@@ -973,6 +1231,8 @@ for (const path of [
   '/api/admin/login',
   '/api/admin/verify-google',
   '/api/admin/link-google',
+  '/api/admin/didit/complete',
+  '/api/client/cards/security/didit/session',
   '/api/teacher/login',
   '/api/teacher/verify-google',
 ]) router.use(path, authRateLimiter);
@@ -6214,20 +6474,53 @@ router.post('/api/admin/verify-2fa', requireDb, async (req, res) => {
     const adminSnap = await adminDb.collection('admin_accounts').doc(result.accountId!).get();
     if (!adminSnap.exists) return res.status(404).json({ error: 'Compte introuvable.' });
 
-    await adminDb.collection('admin_login_logs').add({ adminName: result.name, success: true, ip: clientIp, reason: '2fa_verified', timestamp: FieldValue.serverTimestamp() });
-
     const admin = serializeDoc(adminSnap);
     delete admin.password;
     delete admin.passwordHash;
-    // A short-lived custom token bridges the verified server session to the
-    // existing admin-only Firestore dashboard listeners without a writable
-    // browser-side privilege mapping.
-    const firebaseToken = await issueAdminFirebaseToken(adminSnap.ref, adminSnap.data());
-    setAdminSession(res, adminSnap.id);
-    res.json({ success: true, admin, firebaseToken, hasPin: !!adminSnap.data()?.pinHash });
+    const challenge = await createDiditChallenge({
+      purpose: 'admin_login',
+      subjectId: adminSnap.id,
+      email: String(adminSnap.data()?.email || result.email || ''),
+    });
+    await adminDb.collection('admin_login_logs').add({ adminName: result.name, success: false, ip: clientIp, reason: 'didit_pending', timestamp: FieldValue.serverTimestamp() });
+    res.json({ pendingDidit: true, didit: challenge, adminName: admin.fullName });
   } catch (e: any) {
     console.error('[admin/verify-2fa]', e);
     res.status(500).json({ error: 'Erreur de vérification.' });
+  }
+});
+
+router.post('/api/admin/didit/complete', requireDb, async (req, res) => {
+  try {
+    const challengeId = String(req.body?.challengeId || '').trim();
+    const challenge = await getDiditChallenge(challengeId);
+    if (!challenge || challenge.data.purpose !== 'admin_login') {
+      return res.status(400).json({ error: 'Session de vérification administrateur invalide.' });
+    }
+    if (!(await requireApprovedDidit(challengeId, 'admin_login', String(challenge.data.subjectId || '')))) {
+      return res.status(401).json({ error: 'La vérification faciale administrateur n’est pas validée.' });
+    }
+    if (!(await consumeDiditChallenge(challengeId, 'admin_login', String(challenge.data.subjectId || '')))) {
+      return res.status(409).json({ error: 'Cette vérification Didit a déjà été utilisée.' });
+    }
+
+    const adminSnap = await adminDb.collection('admin_accounts').doc(String(challenge.data.subjectId)).get();
+    if (!adminSnap.exists) return res.status(404).json({ error: 'Compte administrateur introuvable.' });
+    const admin = serializeDoc(adminSnap);
+    delete admin.password;
+    delete admin.passwordHash;
+    const firebaseToken = await issueAdminFirebaseToken(adminSnap.ref, adminSnap.data());
+    setAdminSession(res, adminSnap.id);
+    await adminDb.collection('admin_login_logs').add({
+      adminName: admin.fullName,
+      success: true,
+      reason: 'didit_verified',
+      timestamp: FieldValue.serverTimestamp(),
+    });
+    return res.json({ success: true, admin, firebaseToken, hasPin: !!adminSnap.data()?.pinHash });
+  } catch (e: any) {
+    console.error('[admin/didit/complete]', e);
+    return res.status(500).json({ error: 'Erreur de validation Didit administrateur.' });
   }
 });
 
@@ -10707,6 +11000,23 @@ function validateKycImage(value: unknown, label: string, required = true): strin
   return encoded;
 }
 
+router.post('/api/client/cards/security/didit/session', requireDb, async (req, res) => {
+  const clientId = res.locals.clientSession.clientId as string;
+  const client = res.locals.clientRecord.data() || {};
+  try {
+    const challenge = await createDiditChallenge({
+      purpose: 'cards_entry',
+      subjectId: clientId,
+      email: String(client.email || ''),
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ success: true, challenge });
+  } catch (error: any) {
+    console.error('[client/cards/didit/session]', error);
+    return res.status(503).json({ error: 'La vérification faciale Cartes est momentanément indisponible.' });
+  }
+});
+
 router.get('/api/client/cards/security', requireDb, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const { data } = await getClientCardSecurity(clientId, res.locals.clientRecord.data() || {});
@@ -10767,10 +11077,17 @@ router.post('/api/client/cards/security/email-2fa/verify', requireDb, async (req
   const { ref: securityRef, data: security } = await getClientCardSecurity(clientId, client);
   const sessionId = String(req.body?.sessionId || '');
   const code = String(req.body?.code || '').trim();
+  const diditChallengeId = String(req.body?.diditChallengeId || '').trim();
   if (!/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Session ou code de vérification invalide.' });
   if (!security.pinHash) return res.status(409).json({ error: 'Créez d’abord votre code Cartes à 6 chiffres.' });
+  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId))) {
+    return res.status(401).json({ error: 'La vérification faciale est requise avant d’ouvrir l’espace Cartes.' });
+  }
   const result = await verifyCardSecurityOtp(sessionId, clientId, 'setup', code);
   if (!result.ok) return res.status(401).json({ error: result.error });
+  if (!(await consumeDiditChallenge(diditChallengeId, 'cards_entry', clientId))) {
+    return res.status(409).json({ error: 'Cette vérification faciale a déjà été utilisée. Recommencez la vérification.' });
+  }
   await securityRef.update({
     emailTwoFactorEnabled: true,
     emailTwoFactorEnabledAt: FieldValue.serverTimestamp(),
@@ -10794,15 +11111,22 @@ router.post('/api/client/cards/security/unlock', requireDb, async (req, res) => 
   const pin = String(req.body?.pin || '');
   const sessionId = String(req.body?.sessionId || '');
   const code = String(req.body?.code || '').trim();
+  const diditChallengeId = String(req.body?.diditChallengeId || '').trim();
   if (!/^\d{6}$/.test(pin) || !/^[A-Za-z0-9_-]{10,160}$/.test(sessionId) || !/^\d{6}$/.test(code)) {
     return res.status(400).json({ error: 'PIN, session ou code de vérification invalide.' });
   }
   if (!security.pinHash || !security.emailTwoFactorEnabled) {
     return res.status(423).json({ error: 'La protection Cartes doit d’abord être configurée.' });
   }
+  if (!(await requireApprovedDidit(diditChallengeId, 'cards_entry', clientId))) {
+    return res.status(401).json({ error: 'La vérification faciale est requise avant d’ouvrir l’espace Cartes.' });
+  }
   if (!verifyPin(pin, security.pinHash)) return res.status(401).json({ error: 'Code Cartes incorrect.' });
   const result = await verifyCardSecurityOtp(sessionId, clientId, 'unlock', code);
   if (!result.ok) return res.status(401).json({ error: result.error });
+  if (!(await consumeDiditChallenge(diditChallengeId, 'cards_entry', clientId))) {
+    return res.status(409).json({ error: 'Cette vérification faciale a déjà été utilisée. Recommencez la vérification.' });
+  }
   setCardsAccessSession(res, clientId);
   res.setHeader('Cache-Control', 'no-store');
   res.json({
