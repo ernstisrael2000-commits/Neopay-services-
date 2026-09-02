@@ -158,7 +158,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
   if (pendingDidit) {
     return (
       <div className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 bg-gray-50/50">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-4xl">
           <DiditVerificationStep
             challenge={pendingDidit}
             title="Vérification administrateur"

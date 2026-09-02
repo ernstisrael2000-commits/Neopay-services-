@@ -405,7 +405,7 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
     return (
       <main data-testid="cards-view" className="relative min-h-[100dvh] overflow-hidden bg-[#f3f8fb] px-4 pb-12 text-[#18384d] sm:px-6">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,#dff3fb_0%,transparent_42%),linear-gradient(180deg,#f8fcfe_0%,#f3f8fb_65%,#edf5f8_100%)]" />
-        <div className="relative mx-auto max-w-xl">
+        <div className="relative mx-auto w-full max-w-4xl">
           <header className="py-4 sm:py-6">
             <button type="button" data-testid="button-back-cards" onClick={onBack} aria-label="Retour à l’accueil" className="inline-flex items-center gap-2 rounded-full border border-[#cfe0e8] bg-white/80 px-3.5 py-2 text-xs font-bold text-[#426579] shadow-sm transition hover:border-[#9ec8db] hover:bg-white hover:text-[#18384d]">
               <ArrowLeft className="h-4 w-4" /> Retour à l’accueil

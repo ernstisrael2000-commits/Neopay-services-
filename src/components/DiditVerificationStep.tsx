@@ -53,22 +53,26 @@ export default function DiditVerificationStep({
   const rejected = status === 'rejected' || status === 'expired' || Boolean(error);
 
   return (
-    <section data-testid="didit-verification-step" className="mt-8 overflow-hidden rounded-[1.75rem] border border-[#dce8ee] bg-white shadow-[0_22px_60px_rgba(47,89,112,.12)]">
-      <div className="border-b border-[#e5eef2] bg-[#f8fbfd] p-5 text-center sm:p-7">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#b9dfef] bg-[#eaf7fc] text-[#1979a8]">
-          <ShieldCheck className="h-7 w-7" />
+    <section data-testid="didit-verification-step" className="mt-5 w-full overflow-hidden rounded-[1.75rem] border border-[#dce8ee] bg-white shadow-[0_22px_60px_rgba(47,89,112,.12)] sm:mt-8">
+      <div className="border-b border-[#e5eef2] bg-[#f8fbfd] p-4 text-center sm:p-7">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[#b9dfef] bg-[#eaf7fc] text-[#1979a8] sm:h-14 sm:w-14">
+          <ShieldCheck className="h-6 w-6 sm:h-7 sm:w-7" />
         </div>
-        <p className="mt-5 text-[10px] font-black uppercase tracking-[.2em] text-[#1979a8]">Vérification Didit</p>
+        <p className="mt-3 text-[10px] font-black uppercase tracking-[.2em] text-[#1979a8] sm:mt-5">Vérification Didit</p>
         <h1 className="mt-2 text-2xl font-black tracking-[-.035em] text-[#18384d]">{title}</h1>
-        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-[#60798a]">{description}</p>
+        <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-[#60798a]">{description}</p>
       </div>
 
-      <div className="p-3 sm:p-5">
+      <div className="p-2 sm:p-5">
         <iframe
           title="Vérification d’identité Didit"
           src={challenge.url}
           allow="camera; microphone; fullscreen; autoplay; encrypted-media"
-          className="h-[min(68vh,620px)] min-h-[480px] w-full rounded-2xl border border-[#dce8ee] bg-[#f8fbfd]"
+          className="block w-full rounded-2xl border border-[#dce8ee] bg-[#f8fbfd]"
+          style={{
+            height: 'clamp(520px, calc(100dvh - 390px), 720px)',
+            minHeight: '520px',
+          }}
         />
       </div>
 

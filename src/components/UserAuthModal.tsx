@@ -411,7 +411,9 @@ export default function UserAuthModal({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="max-w-sm rounded-[2rem] p-0 overflow-hidden border-0 shadow-2xl"
+        className={`${view === 'admin-didit'
+          ? 'w-[calc(100vw-1rem)] max-w-5xl max-h-[96svh] overflow-y-auto'
+          : 'max-w-sm overflow-hidden'} rounded-[2rem] p-0 border-0 shadow-2xl`}
       >
         {/* No AnimatePresence / motion.div — plain conditional rendering to avoid DOM conflicts */}
 
