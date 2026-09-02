@@ -36,6 +36,7 @@ export default function DiditVerificationStep({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const completionStarted = useRef(false);
+  const completionAttempts = useRef(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
@@ -47,7 +48,13 @@ export default function DiditVerificationStep({
         setStatus(result.status);
         if (result.status === 'approved' && !completionStarted.current) {
           completionStarted.current = true;
-          await onVerified(challenge.challengeId);
+          completionAttempts.current += 1;
+          try {
+            await onVerified(challenge.challengeId);
+          } catch (cause) {
+            completionStarted.current = false;
+            throw cause;
+          }
         }
       } catch (cause: any) {
         if (active) setError(cause?.message || 'La session Didit est momentanément indisponible.');
@@ -71,6 +78,15 @@ export default function DiditVerificationStep({
       window.removeEventListener('message', handleMessage);
     };
   }, [challenge.challengeId, onVerified]);
+
+  useEffect(() => {
+    if (!error || status !== 'approved' || completionAttempts.current >= 3) return;
+    const timeout = window.setTimeout(() => {
+      completionStarted.current = false;
+      setError(null);
+    }, 1200);
+    return () => window.clearTimeout(timeout);
+  }, [error, status]);
 
   const rejected = status === 'rejected' || status === 'expired' || Boolean(error);
   const terminalError = error

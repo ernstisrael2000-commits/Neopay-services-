@@ -26,3 +26,9 @@ Didit's session `callback` is a browser return URL loaded after the capture flow
 **Why:** Pointing the callback at the protected webhook causes an anti-framing error. In addition, a valid Didit approval may be available from the decision API before the local webhook state reflects it; relying only on local polling can leave the UI waiting until expiration.
 
 **How to apply:** Let the completion page signal only that capture was submitted. While waiting, synchronize pending challenges through the authenticated decision API, allow enough time for mobile capture, and compare the official name server-side before advancing.
+
+Didit's v3 decision response places extracted legal-name fields in entries of the `id_verifications` array rather than in a top-level `identity`, `document`, or `decision` object.
+
+**Why:** Reading only the older direct containers returns no verified name even when Didit reports `Approved`, causing a false account-name mismatch.
+
+**How to apply:** Prefer the verified document entries from `id_verifications` (including their direct or nested document fields), then apply the established normalized full-name comparison.
