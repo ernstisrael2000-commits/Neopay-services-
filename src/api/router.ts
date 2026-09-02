@@ -713,7 +713,10 @@ async function createDiditChallenge(opts: {
   }
 
   const challengeRef = adminDb.collection('didit_verifications').doc();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  // Full identity capture can legitimately take longer than ten minutes on a
+  // mobile connection. Keep the local challenge short-lived, but long enough
+  // for document capture, liveness and the provider decision to complete.
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   const vendorData = opts.vendorData || `solutionpam:${opts.purpose}:${opts.subjectId}:${challengeRef.id}`;
   await challengeRef.create({
     purpose: opts.purpose,
@@ -1771,12 +1774,22 @@ router.post('/api/didit/webhook', requireDb, async (req, res) => {
 router.get('/api/didit/status/:challengeId', requireDb, async (req, res) => {
   const challenge = await getDiditChallenge(String(req.params.challengeId || ''));
   if (!challenge) return res.status(404).json({ error: 'Session Didit introuvable.' });
+  let status = normalizeDiditStatus(challenge.data.status);
+  if (status === 'pending') {
+    try {
+      const decision = await syncDiditDecision(challenge.ref, challenge.data);
+      status = decision.status;
+    } catch {
+      // Keep polling the locally signed webhook state when Didit's decision
+      // endpoint is temporarily unavailable.
+    }
+  }
   const expiresAt = challenge.data.expiresAt?.toDate
     ? challenge.data.expiresAt.toDate().toISOString()
     : new Date(challenge.data.expiresAt).toISOString();
   return res.json({
     challengeId: challenge.ref.id,
-    status: normalizeDiditStatus(challenge.data.status),
+    status,
     mode: challenge.data.verificationMode || 'full',
     expiresAt,
   });

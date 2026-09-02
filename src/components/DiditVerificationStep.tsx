@@ -15,6 +15,16 @@ interface DiditVerificationStepProps {
   onBack?: () => void;
 }
 
+function WaitingAnimation() {
+  return (
+    <div role="status" aria-label="Traitement en cours" className="relative h-14 w-14">
+      <span className="absolute inset-0 animate-pulse rounded-full border-[3px] border-[#d9f0f7]" />
+      <span className="absolute inset-2 animate-spin rounded-full border-2 border-transparent border-r-[#55b7d3] border-t-[#1979a8] [animation-duration:1.15s]" />
+      <span className="absolute left-1/2 top-0 h-2 w-2 -translate-x-1/2 rounded-full bg-[#1979a8] shadow-[0_0_0_5px_rgba(25,121,168,.08)]" />
+    </div>
+  );
+}
+
 export default function DiditVerificationStep({
   challenge,
   title,
@@ -63,6 +73,20 @@ export default function DiditVerificationStep({
   }, [challenge.challengeId, onVerified]);
 
   const rejected = status === 'rejected' || status === 'expired' || Boolean(error);
+  const terminalError = error
+    || (status === 'expired' ? 'Cette session Didit a expiré. Veuillez recommencer.' : null)
+    || (status === 'rejected' ? 'La vérification Didit n’a pas été acceptée.' : null);
+
+  if ((submitted || status === 'approved') && !terminalError) {
+    return (
+      <section
+        data-testid="didit-verification-step"
+        className="mt-5 flex min-h-[280px] w-full items-center justify-center rounded-[1.75rem] border border-[#dce8ee] bg-[#f4fbfe] shadow-[0_22px_60px_rgba(47,89,112,.12)] sm:mt-8"
+      >
+        <WaitingAnimation />
+      </section>
+    );
+  }
 
   return (
     <section data-testid="didit-verification-step" className="mt-5 w-full overflow-hidden rounded-[1.75rem] border border-[#dce8ee] bg-white shadow-[0_22px_60px_rgba(47,89,112,.12)] sm:mt-8">
@@ -76,30 +100,12 @@ export default function DiditVerificationStep({
       </div>
 
       <div className="p-2 sm:p-5">
-        {error ? (
+        {terminalError ? (
           <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-[#f3b7b0] bg-[#fff8f7] p-6 text-center text-[#b42318]">
             <div>
               <TriangleAlert className="mx-auto h-10 w-10" />
               <p className="mt-3 text-sm font-black">La vérification n’a pas pu être finalisée.</p>
-              <p className="mt-1 text-xs text-[#60798a]">Vous pouvez revenir en arrière et recommencer avec une nouvelle session.</p>
-            </div>
-          </div>
-        ) : submitted && status !== 'approved' ? (
-          <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-[#dce8ee] bg-[#f4fbfe] p-6">
-            <Loader2 className="h-10 w-10 animate-spin text-[#1979a8]" aria-label="Traitement en cours" />
-          </div>
-        ) : status === 'approved' ? (
-          <div
-            className="flex min-h-[220px] items-center justify-center rounded-2xl border border-[#b9dfef] bg-[#f4fbfe] p-6 text-center text-[#1979a8]"
-          >
-            <div>
-              <ShieldCheck className="mx-auto h-10 w-10" />
-              <p className="mt-3 text-sm font-black">
-                Vérification Didit approuvée.
-              </p>
-              <p className="mt-1 text-xs text-[#60798a]">
-                Solution PAM compare maintenant le prénom et le nom vérifiés avec ceux du compte.
-              </p>
+              <p className="mt-1 text-xs text-[#60798a]">{terminalError}</p>
             </div>
           </div>
         ) : (
@@ -130,10 +136,10 @@ export default function DiditVerificationStep({
         </div>
       )}
 
-      {error && (
+      {terminalError && (
         <div role="alert" className="mx-5 mb-5 flex items-start gap-2 rounded-xl border border-[#f3b7b0] bg-[#fff1f0] p-3 text-xs leading-5 text-[#b42318]">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-          {error}
+          {terminalError}
         </div>
       )}
       {rejected && onBack && (

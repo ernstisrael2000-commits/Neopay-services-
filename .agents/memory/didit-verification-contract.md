@@ -21,8 +21,8 @@ Returning clients reuse the exact Didit `vendor_data` associated with their firs
 
 **How to apply:** Persist only provider session identifiers, stable vendor data, verification status, purpose, mode, timestamps, and keyed identity fingerprints. Require both approved liveness and approved face match for biometric challenges, bind each challenge to one action purpose, and consume it atomically.
 
-Didit's session `callback` is a browser return URL loaded after the capture flow; it is not the signed decision webhook. Keep the callback on a dedicated, frameable, data-free completion page, while the workflow webhook remains the only authoritative decision channel.
+Didit's session `callback` is a browser return URL loaded after the capture flow; it is not a decision channel. Keep it on a dedicated, frameable, data-free completion page. Authoritative decisions come from the signed webhook or a server-authenticated read of Didit's decision API.
 
-**Why:** Pointing the session callback at the protected webhook redirects the embedded flow to a route with anti-framing headers and produces a blank “refused to connect” screen. Callback query parameters are also browser-controlled and cannot authorize access.
+**Why:** Pointing the callback at the protected webhook causes an anti-framing error. In addition, a valid Didit approval may be available from the decision API before the local webhook state reflects it; relying only on local polling can leave the UI waiting until expiration.
 
-**How to apply:** Let the completion page signal only that the Didit steps were submitted. Continue polling or await the signed webhook, then perform the server-side official-name comparison before advancing the user.
+**How to apply:** Let the completion page signal only that capture was submitted. While waiting, synchronize pending challenges through the authenticated decision API, allow enough time for mobile capture, and compare the official name server-side before advancing.
