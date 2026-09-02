@@ -64,16 +64,36 @@ export default function DiditVerificationStep({
       </div>
 
       <div className="p-2 sm:p-5">
-        <iframe
-          title="Vérification d’identité Didit"
-          src={challenge.url}
-          allow="camera; microphone; fullscreen; autoplay; encrypted-media"
-          className="block w-full rounded-2xl border border-[#dce8ee] bg-[#f8fbfd]"
-          style={{
-            height: 'clamp(520px, calc(100dvh - 390px), 720px)',
-            minHeight: '520px',
-          }}
-        />
+        {status === 'approved' || error ? (
+          <div
+            className={`flex min-h-[220px] items-center justify-center rounded-2xl border p-6 text-center ${
+              error
+                ? 'border-[#f3b7b0] bg-[#fff8f7] text-[#b42318]'
+                : 'border-[#b9dfef] bg-[#f4fbfe] text-[#1979a8]'
+            }`}
+          >
+            <div>
+              {error ? <TriangleAlert className="mx-auto h-10 w-10" /> : <ShieldCheck className="mx-auto h-10 w-10" />}
+              <p className="mt-3 text-sm font-black">
+                {error ? 'La vérification n’a pas pu être finalisée.' : 'Vérification Didit terminée.'}
+              </p>
+              <p className="mt-1 text-xs text-[#60798a]">
+                {error ? 'Vous pouvez revenir en arrière et recommencer avec une nouvelle session.' : 'Confirmation sécurisée en cours…'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <iframe
+            title="Vérification d’identité Didit"
+            src={challenge.url}
+            allow="camera; microphone; fullscreen; autoplay; encrypted-media"
+            className="block w-full rounded-2xl border border-[#dce8ee] bg-[#f8fbfd]"
+            style={{
+              height: 'clamp(520px, calc(100dvh - 390px), 720px)',
+              minHeight: '520px',
+            }}
+          />
+        )}
       </div>
 
       <div className="flex items-center justify-center gap-2 px-5 pb-5 text-center text-xs font-bold text-[#60798a]">

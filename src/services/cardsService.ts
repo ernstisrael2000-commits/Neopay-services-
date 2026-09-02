@@ -61,6 +61,7 @@ export const startCardsDiditSession = () =>
 export const confirmCardsDidit = (challengeId: string) =>
   apiFetch<{ success: boolean }>('/api/client/cards/security/didit/confirm', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ challengeId }),
   });
 export const setCardsSecurityPin = (pin: string, confirmPin: string) =>
