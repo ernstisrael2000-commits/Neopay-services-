@@ -1701,20 +1701,19 @@ router.get('/api/didit/completed', (_req, res) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Vérification transmise</title>
+  <title>Traitement en cours</title>
   <style>
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4fbfe;color:#18384d;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px}
-    main{width:min(100%,420px);text-align:center}.icon{width:64px;height:64px;margin:0 auto 20px;display:grid;place-items:center;border-radius:20px;background:#eaf7fc;color:#1979a8;font-size:30px;font-weight:900}
-    h1{margin:0;font-size:22px;line-height:1.2}p{margin:12px 0 0;color:#60798a;font-size:14px;line-height:1.6}.loader{width:26px;height:26px;margin:24px auto 0;border:3px solid #cce8f3;border-top-color:#1979a8;border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4fbfe}
+    .loader{position:relative;width:54px;height:54px;border:3px solid #d9f0f7;border-radius:50%;animation:breath 1.8s ease-in-out infinite}
+    .loader:before,.loader:after{content:"";position:absolute;border-radius:50%}
+    .loader:before{inset:7px;border:2px solid transparent;border-top-color:#1979a8;border-right-color:#55b7d3;animation:spin 1.15s cubic-bezier(.5,.1,.35,1) infinite}
+    .loader:after{width:8px;height:8px;left:20px;top:-5px;background:#1979a8;box-shadow:0 0 0 5px rgba(25,121,168,.08);animation:orbit 1.15s cubic-bezier(.5,.1,.35,1) infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}@keyframes orbit{to{transform:rotate(360deg) translateX(20px) rotate(-360deg)}}@keyframes breath{0%,100%{transform:scale(.94);opacity:.7}50%{transform:scale(1);opacity:1}}
+    @media (prefers-reduced-motion:reduce){.loader,.loader:before,.loader:after{animation:none}}
   </style>
 </head>
 <body>
-  <main>
-    <div class="icon">✓</div>
-    <h1>Vérification Didit terminée</h1>
-    <p>Solution PAM vérifie maintenant que le prénom et le nom correspondent au compte.</p>
-    <div class="loader" aria-label="Vérification en cours"></div>
-  </main>
+  <main aria-label="Traitement en cours"><div class="loader" role="status" aria-label="Traitement en cours"></div></main>
   <script>window.parent.postMessage({type:'solutionpam:didit-completed'}, '*');</script>
 </body>
 </html>`);

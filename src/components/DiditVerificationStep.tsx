@@ -76,25 +76,29 @@ export default function DiditVerificationStep({
       </div>
 
       <div className="p-2 sm:p-5">
-        {status === 'approved' || submitted || error ? (
+        {error ? (
+          <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-[#f3b7b0] bg-[#fff8f7] p-6 text-center text-[#b42318]">
+            <div>
+              <TriangleAlert className="mx-auto h-10 w-10" />
+              <p className="mt-3 text-sm font-black">La vérification n’a pas pu être finalisée.</p>
+              <p className="mt-1 text-xs text-[#60798a]">Vous pouvez revenir en arrière et recommencer avec une nouvelle session.</p>
+            </div>
+          </div>
+        ) : submitted && status !== 'approved' ? (
+          <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-[#dce8ee] bg-[#f4fbfe] p-6">
+            <Loader2 className="h-10 w-10 animate-spin text-[#1979a8]" aria-label="Traitement en cours" />
+          </div>
+        ) : status === 'approved' ? (
           <div
-            className={`flex min-h-[220px] items-center justify-center rounded-2xl border p-6 text-center ${
-              error
-                ? 'border-[#f3b7b0] bg-[#fff8f7] text-[#b42318]'
-                : 'border-[#b9dfef] bg-[#f4fbfe] text-[#1979a8]'
-            }`}
+            className="flex min-h-[220px] items-center justify-center rounded-2xl border border-[#b9dfef] bg-[#f4fbfe] p-6 text-center text-[#1979a8]"
           >
             <div>
-              {error ? <TriangleAlert className="mx-auto h-10 w-10" /> : status === 'approved' ? <ShieldCheck className="mx-auto h-10 w-10" /> : <Loader2 className="mx-auto h-10 w-10 animate-spin" />}
+              <ShieldCheck className="mx-auto h-10 w-10" />
               <p className="mt-3 text-sm font-black">
-                {error ? 'La vérification n’a pas pu être finalisée.' :
-                 status === 'approved' ? 'Vérification Didit approuvée.' :
-                 'Vérification Didit terminée.'}
+                Vérification Didit approuvée.
               </p>
               <p className="mt-1 text-xs text-[#60798a]">
-                {error ? 'Vous pouvez revenir en arrière et recommencer avec une nouvelle session.' :
-                 status === 'approved' ? 'Solution PAM compare maintenant le prénom et le nom vérifiés avec ceux du compte.' :
-                 'Solution PAM attend la décision sécurisée de Didit, puis compare le prénom et le nom du compte.'}
+                Solution PAM compare maintenant le prénom et le nom vérifiés avec ceux du compte.
               </p>
             </div>
           </div>
@@ -113,17 +117,18 @@ export default function DiditVerificationStep({
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-2 px-5 pb-5 text-center text-xs font-bold text-[#60798a]">
-        {!rejected && <Loader2 className="h-4 w-4 animate-spin text-[#1979a8]" />}
-        <span>
-          {error ? 'La comparaison d’identité n’a pas pu être finalisée.' :
-           status === 'approved' ? 'Identité du compte validée. Ouverture sécurisée…' :
-           submitted ? 'Didit est terminé. Vérification du compte par Solution PAM…' :
-           status === 'rejected' ? 'La vérification n’a pas été acceptée.' :
-           status === 'expired' ? 'Cette session Didit a expiré.' :
-           'Terminez la vérification dans la fenêtre ci-dessus.'}
-        </span>
-      </div>
+      {!submitted && (
+        <div className="flex items-center justify-center gap-2 px-5 pb-5 text-center text-xs font-bold text-[#60798a]">
+          {!rejected && <Loader2 className="h-4 w-4 animate-spin text-[#1979a8]" />}
+          <span>
+            {error ? 'La comparaison d’identité n’a pas pu être finalisée.' :
+             status === 'approved' ? 'Identité du compte validée. Ouverture sécurisée…' :
+             status === 'rejected' ? 'La vérification n’a pas été acceptée.' :
+             status === 'expired' ? 'Cette session Didit a expiré.' :
+             'Terminez la vérification dans la fenêtre ci-dessus.'}
+          </span>
+        </div>
+      )}
 
       {error && (
         <div role="alert" className="mx-5 mb-5 flex items-start gap-2 rounded-xl border border-[#f3b7b0] bg-[#fff1f0] p-3 text-xs leading-5 text-[#b42318]">
