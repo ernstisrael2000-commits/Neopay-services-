@@ -216,7 +216,8 @@ export const submitClientWithdrawal = async (
   captchaToken?: string,
   message?: string,
   accountName?: string,
-  exchangeRate?: number
+  exchangeRate?: number,
+  diditChallengeId?: string,
 ) => {
   if (usdAmount <= 0) throw new Error("Montant invalide.");
   if (usdAmount > client.balance) throw new Error("Solde insuffisant.");
@@ -235,7 +236,8 @@ export const submitClientWithdrawal = async (
     accountNumber,
     ...(accountName && { accountName }),
     ...(message && { message }),
-    ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
+    ...(captchaToken && captchaToken !== 'bypass' && { captchaToken }),
+    ...(diditChallengeId && { diditChallengeId }),
   });
 };
 
@@ -245,7 +247,8 @@ export const submitClientTransfer = async (
   senderClientId: string,
   recipientWalletId: string,
   amount: number,
-  message?: string
+  message?: string,
+  diditChallengeId?: string,
 ): Promise<{ recipientName: string; amount: number }> => {
   if (amount <= 0) throw new Error("Montant invalide.");
   if (!recipientWalletId.trim()) throw new Error("ID Wallet du destinataire requis.");
@@ -254,6 +257,7 @@ export const submitClientTransfer = async (
     recipientWalletId: recipientWalletId.trim(),
     amount,
     ...(message && { message }),
+    ...(diditChallengeId && { diditChallengeId }),
   });
   return { recipientName: data.recipientName || '', amount: data.amount || amount };
 };

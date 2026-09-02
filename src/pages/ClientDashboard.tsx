@@ -28,6 +28,8 @@ import { Client, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 import CryptoDepositFlow from '../components/CryptoDepositFlow';
 import { ClientDashboardSkeleton } from '../components/skeletons/ClientDashboardSkeleton';
 import { TransactionListSkeleton } from '../components/skeletons/TransactionListSkeleton';
+import DiditVerificationStep from '../components/DiditVerificationStep';
+import { startClientDiditSession, type DiditChallenge } from '../services/diditService';
 
 interface ClientDashboardProps {
   clientId: string;
@@ -199,6 +201,8 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
   const [isTransferOpen,    setIsTransferOpen]    = useState(false);
   const [actionLoading,     setActionLoading]     = useState(false);
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
+  const [financialDiditChallenge, setFinancialDiditChallenge] = useState<DiditChallenge | null>(null);
+  const financialDiditAction = useRef<((challengeId: string) => Promise<void>) | null>(null);
 
   // Deposit state
   const [depositMethod,       setDepositMethod]       = useState<PaymentMethod | null>(null);
@@ -266,6 +270,32 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
   const effectiveDepositRate = (depositMethod?.id && cardRates?.[depositMethod.id]) || rate;
   const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / effectiveDepositRate : 0;
   const transferHtgPreview = transferUSD && !isNaN(parseFloat(transferUSD)) ? parseFloat(transferUSD) * rate : 0;
+
+  const startFinancialVerification = async (action: (challengeId: string) => Promise<void>) => {
+    setActionLoading(true);
+    try {
+      const challenge = await startClientDiditSession('financial_risk');
+      financialDiditAction.current = action;
+      setFinancialDiditChallenge(challenge);
+    } catch (error: any) {
+      toast.error(error?.message || 'La vérification faciale est indisponible.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleFinancialDiditVerified = async (challengeId: string) => {
+    const action = financialDiditAction.current;
+    if (!action) throw new Error('Action financière introuvable.');
+    setActionLoading(true);
+    try {
+      await action(challengeId);
+      setFinancialDiditChallenge(null);
+      financialDiditAction.current = null;
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Fee computation (preview only – server calculates authoritatively at approval)
   // All withdrawal/QR inputs are in HTG; server always receives USD
@@ -605,26 +635,28 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
     if (!withdrawMethod)          { toast.error('Choisissez une méthode de retrait.'); return; }
     if (!withdrawAccount)         { toast.error('Numéro/adresse de réception requis.'); return; }
     if (RECAPTCHA_SITE_KEY && !withdrawCaptchaToken) { toast.error('Validez le captcha.'); return; }
-    setActionLoading(true);
-    try {
-      await submitClientWithdrawal(client!, usd, withdrawMethod.name, withdrawAccount,
-        withdrawCaptchaToken || undefined, withdrawMessage || undefined,
-        withdrawAccountName || undefined, rate);
-      const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
-      const msg = `Bonjour Solutionpam 👋,\n\nDemande de *RETRAIT* :\n` +
-        `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
-        `💰 Montant: *${htg.toLocaleString()} HTG*\n≈ *$${usd.toFixed(2)} USD* (taux: ${rate})\n` +
-        `💳 Via: *${withdrawMethod.name}*\n📞 Compte: *${withdrawAccount}*` +
-        (withdrawAccountName ? `\n👤 Bénéficiaire: *${withdrawAccountName}*` : '') +
-        (withdrawMessage ? `\n💬 Message: *${withdrawMessage}*` : '') +
-        `\n\nMerci de traiter ma demande. 🙏`;
-      window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
-      toast.success('Demande de retrait soumise !');
-      setIsWithdrawOpen(false); resetWithdraw();
-    } catch (err: any) {
-      toast.error(err.message);
-      withdrawCaptchaRef.current?.reset(); setWithdrawCaptchaToken(null);
-    } finally { setActionLoading(false); }
+    await startFinancialVerification(async (challengeId) => {
+      try {
+        await submitClientWithdrawal(client!, usd, withdrawMethod.name, withdrawAccount,
+          withdrawCaptchaToken || undefined, withdrawMessage || undefined,
+          withdrawAccountName || undefined, rate, challengeId);
+        const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
+        const msg = `Bonjour Solutionpam 👋,\n\nDemande de *RETRAIT* :\n` +
+          `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
+          `💰 Montant: *${htg.toLocaleString()} HTG*\n≈ *$${usd.toFixed(2)} USD* (taux: ${rate})\n` +
+          `💳 Via: *${withdrawMethod.name}*\n📞 Compte: *${withdrawAccount}*` +
+          (withdrawAccountName ? `\n👤 Bénéficiaire: *${withdrawAccountName}*` : '') +
+          (withdrawMessage ? `\n💬 Message: *${withdrawMessage}*` : '') +
+          `\n\nMerci de traiter ma demande. 🙏`;
+        window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+        toast.success('Demande de retrait soumise !');
+        setIsWithdrawOpen(false); resetWithdraw();
+      } catch (err: any) {
+        toast.error(err.message);
+        withdrawCaptchaRef.current?.reset(); setWithdrawCaptchaToken(null);
+        throw err;
+      }
+    });
   };
 
   const handleTransfer = async (e: React.FormEvent) => {
@@ -636,16 +668,18 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
     if (transferWalletId.trim() === client?.walletId) {
       toast.error('Vous ne pouvez pas vous transférer à vous-même.'); return;
     }
-    setActionLoading(true);
-    try {
-      const result = await submitClientTransfer(
-        clientId, transferWalletId.trim(), usd, transferMessage || undefined
-      );
-      toast.success(`$${result.amount.toFixed(2)} envoyé à ${result.recipientName || 'destinataire'} !`);
-      setIsTransferOpen(false); resetTransfer();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally { setActionLoading(false); }
+    await startFinancialVerification(async (challengeId) => {
+      try {
+        const result = await submitClientTransfer(
+          clientId, transferWalletId.trim(), usd, transferMessage || undefined, challengeId
+        );
+        toast.success(`$${result.amount.toFixed(2)} envoyé à ${result.recipientName || 'destinataire'} !`);
+        setIsTransferOpen(false); resetTransfer();
+      } catch (err: any) {
+        toast.error(err.message);
+        throw err;
+      }
+    });
   };
 
   const handleDeleteHistory = async () => {
@@ -1906,6 +1940,39 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, asP
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog
+        open={Boolean(financialDiditChallenge)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setFinancialDiditChallenge(null);
+            financialDiditAction.current = null;
+          }
+        }}
+      >
+        <DialogContent className="max-h-[95dvh] max-w-4xl overflow-y-auto border-0 bg-transparent p-0 shadow-none">
+          <DialogTitle className="sr-only">Vérification faciale Didit</DialogTitle>
+          <DialogDescription className="sr-only">
+            Vérification requise avant une opération financière sensible.
+          </DialogDescription>
+          {financialDiditChallenge && (
+            <DiditVerificationStep
+              challenge={financialDiditChallenge}
+              title={financialDiditChallenge.mode === 'biometric'
+                ? 'Confirmez votre visage'
+                : 'Vérifiez votre identité'}
+              description={financialDiditChallenge.mode === 'biometric'
+                ? 'Votre identité est déjà validée. Un selfie avec contrôle de présence suffit pour autoriser cette opération.'
+                : 'Didit doit d’abord valider votre identité complète. Les prochaines opérations utiliseront uniquement la vérification faciale.'}
+              onVerified={handleFinancialDiditVerified}
+              onBack={() => {
+                setFinancialDiditChallenge(null);
+                financialDiditAction.current = null;
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Success Modal — shown when a deposit/withdrawal is approved ── */}
       {txSuccessModal && (

@@ -116,6 +116,7 @@ NODE_ENV = "development"
 PORT = "5000"
 DIDIT_ADMIN_WORKFLOW_ID = "103e03d8-139d-4faf-a978-37d86fe045de"
 DIDIT_CARDS_WORKFLOW_ID = "103e03d8-139d-4faf-a978-37d86fe045de"
+DIDIT_BIOMETRIC_WORKFLOW_ID = "196bd47b-de6f-4bff-bea7-17a8b44c1dc9"
 
 [postMerge]
 path = "scripts/post-merge.sh"

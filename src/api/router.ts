@@ -323,14 +323,22 @@ function readCardsAccessSession(req: express.Request, clientId: string): boolean
   }
 }
 
-type DiditVerificationPurpose = 'admin_login' | 'cards_entry';
+type DiditVerificationPurpose =
+  | 'admin_login'
+  | 'cards_entry'
+  | 'card_issue'
+  | 'card_details'
+  | 'account_change'
+  | 'financial_risk';
 type DiditVerificationStatus = 'pending' | 'approved' | 'rejected' | 'expired';
+type DiditVerificationMode = 'full' | 'biometric';
 
 interface DiditChallenge {
   challengeId: string;
   sessionId: string;
   url: string;
   expiresAt: string;
+  mode: DiditVerificationMode;
 }
 
 function diditWorkflowId(purpose: DiditVerificationPurpose): string {
@@ -340,6 +348,100 @@ function diditWorkflowId(purpose: DiditVerificationPurpose): string {
       : process.env.DIDIT_CARDS_WORKFLOW_ID || process.env.DIDIT_WORKFLOW_ID
       || '',
   ).trim();
+}
+
+let cachedDiditBiometricWorkflowId = '';
+
+function diditArray(payload: any, key: string): any[] {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.decision,
+    payload?.result,
+    payload?.data?.decision,
+    payload?.data?.result,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate?.[key])) return candidate[key];
+  }
+  return [];
+}
+
+function diditBiometricChecksPassed(payload: any): boolean {
+  const liveness = diditArray(payload, 'liveness_checks');
+  const faceMatches = diditArray(payload, 'face_matches');
+  return liveness.some((item) => normalizeDiditStatus(item?.status || item?.decision) === 'approved')
+    && faceMatches.some((item) => normalizeDiditStatus(item?.status || item?.decision) === 'approved');
+}
+
+async function ensureDiditBiometricWorkflowId(): Promise<string> {
+  const configured = String(process.env.DIDIT_BIOMETRIC_WORKFLOW_ID || process.env.DIDIT_FACE_WORKFLOW_ID || '').trim();
+  if (configured) return configured;
+  if (cachedDiditBiometricWorkflowId) return cachedDiditBiometricWorkflowId;
+
+  const configRef = adminDb.collection('settings').doc('didit_biometric');
+  const configSnap = await configRef.get();
+  const stored = String(configSnap.data()?.workflowId || '').trim();
+  if (stored) {
+    cachedDiditBiometricWorkflowId = stored;
+    return stored;
+  }
+
+  const apiKey = String(process.env.DIDIT_API_KEY || '').trim();
+  if (!apiKey) throw new Error('La vérification Didit n’est pas configurée.');
+
+  const listResponse = await fetch('https://verification.didit.me/v3/workflows/?page_size=100', {
+    headers: { 'x-api-key': apiKey, Accept: 'application/json' },
+  });
+  const listPayload = await listResponse.json().catch(() => ({}));
+  if (!listResponse.ok) throw new Error(`Impossible de rechercher le workflow biométrique Didit (${listResponse.status}).`);
+  const workflows = Array.isArray(listPayload)
+    ? listPayload
+    : Array.isArray(listPayload?.results)
+      ? listPayload.results
+      : Array.isArray(listPayload?.data)
+        ? listPayload.data
+        : [];
+  const existing = workflows.find((workflow: any) =>
+    String(workflow?.workflow_type || '').toLowerCase() === 'biometric_authentication'
+    && workflow?.is_archived !== true,
+  );
+  let workflowId = String(existing?.workflow_id || existing?.uuid || '').trim();
+
+  if (!workflowId) {
+    const createResponse = await fetch('https://verification.didit.me/v3/workflows/', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        workflow_label: 'Solution PAM — Vérification faciale',
+        workflow_type: 'biometric_authentication',
+        features: [
+          { feature: 'LIVENESS', config: { face_liveness_method: 'passive' } },
+          {
+            feature: 'FACE_MATCH',
+            config: {
+              face_match_score_decline_threshold: 50,
+              face_match_score_review_threshold: 70,
+            },
+          },
+        ],
+      }),
+    });
+    const createPayload = await createResponse.json().catch(() => ({}));
+    if (!createResponse.ok) {
+      throw new Error(`Impossible de créer le workflow biométrique Didit (${createResponse.status}).`);
+    }
+    workflowId = String(createPayload?.workflow_id || createPayload?.uuid || createPayload?.data?.workflow_id || '').trim();
+  }
+  if (!workflowId) throw new Error('Didit n’a pas renvoyé de workflow biométrique valide.');
+
+  cachedDiditBiometricWorkflowId = workflowId;
+  await configRef.set({
+    workflowId,
+    source: existing ? 'discovered' : 'created',
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return workflowId;
 }
 
 function diditWebhookUrl(): string {
@@ -433,6 +535,84 @@ function identityNameFingerprint(value: unknown): string | null {
 interface DiditDecisionResult {
   status: DiditVerificationStatus;
   verifiedName?: string;
+  biometricChecksPassed?: boolean;
+}
+
+type ClientDiditProfile = {
+  ref: FirebaseFirestore.DocumentReference;
+  data: FirebaseFirestore.DocumentData;
+};
+
+function clientDiditProfileRef(clientId: string): FirebaseFirestore.DocumentReference {
+  return adminDb.collection('didit_profiles').doc(`client_${clientId}`);
+}
+
+function stableClientDiditVendorData(clientId: string): string {
+  return `solutionpam:client:${clientId}`;
+}
+
+async function getClientDiditProfile(clientId: string): Promise<ClientDiditProfile> {
+  const ref = clientDiditProfileRef(clientId);
+  const snap = await ref.get();
+  if (snap.exists && snap.data()?.hasVerifiedIdentity === true && snap.data()?.vendorData) {
+    return { ref, data: snap.data() || {} };
+  }
+
+  const historical = await adminDb.collection('didit_verifications')
+    .where('subjectId', '==', clientId)
+    .limit(50)
+    .get();
+  const approved = historical.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() } as Record<string, any>))
+    .filter((item) =>
+      normalizeDiditStatus(item.status) === 'approved'
+      && item.identityMatchPassed === true
+      && item.diditSessionId
+      && item.vendorData,
+    )
+    .sort((left, right) => {
+      const leftMs = left.updatedAt?.toMillis?.() || left.createdAt?.toMillis?.() || 0;
+      const rightMs = right.updatedAt?.toMillis?.() || right.createdAt?.toMillis?.() || 0;
+      return rightMs - leftMs;
+    })[0];
+
+  const migrated = approved
+    ? {
+        subjectId: clientId,
+        subjectType: 'client',
+        vendorData: String(approved.vendorData),
+        originalSessionId: String(approved.diditSessionId),
+        hasVerifiedIdentity: true,
+        verificationStatus: 'verified',
+        migratedFromChallengeId: approved.id,
+        verifiedAt: approved.identityMatchedAt || approved.updatedAt || FieldValue.serverTimestamp(),
+      }
+    : {
+        subjectId: clientId,
+        subjectType: 'client',
+        vendorData: stableClientDiditVendorData(clientId),
+        hasVerifiedIdentity: false,
+        verificationStatus: 'pending',
+      };
+  await ref.set({ ...migrated, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return { ref, data: migrated };
+}
+
+async function updateDiditProfileFromChallenge(
+  challenge: FirebaseFirestore.DocumentData,
+  status: 'verified' | 'pending' | 'failed',
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  const profileId = String(challenge.diditProfileId || '').trim();
+  if (!profileId) return;
+  await adminDb.collection('didit_profiles').doc(profileId).set({
+    verificationStatus: status,
+    latestPurpose: challenge.purpose || null,
+    latestMode: challenge.verificationMode || 'full',
+    latestSessionId: challenge.diditSessionId || null,
+    ...extra,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
 }
 
 function diditCanonicalJson(value: unknown): string {
@@ -470,24 +650,41 @@ async function createDiditChallenge(opts: {
   purpose: DiditVerificationPurpose;
   subjectId: string;
   email?: string;
+  mode?: DiditVerificationMode;
+  vendorData?: string;
+  profileId?: string;
 }): Promise<DiditChallenge> {
   const apiKey = String(process.env.DIDIT_API_KEY || '').trim();
-  const workflowId = diditWorkflowId(opts.purpose);
+  const mode = opts.mode || 'full';
+  const workflowId = mode === 'biometric'
+    ? await ensureDiditBiometricWorkflowId()
+    : diditWorkflowId(opts.purpose);
   if (!apiKey || !workflowId) {
     throw new Error('La vérification Didit n’est pas configurée.');
   }
 
   const challengeRef = adminDb.collection('didit_verifications').doc();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  const vendorData = `solutionpam:${opts.purpose}:${opts.subjectId}:${challengeRef.id}`;
+  const vendorData = opts.vendorData || `solutionpam:${opts.purpose}:${opts.subjectId}:${challengeRef.id}`;
   await challengeRef.create({
     purpose: opts.purpose,
     subjectId: opts.subjectId,
     vendorData,
+    verificationMode: mode,
+    ...(opts.profileId ? { diditProfileId: opts.profileId } : {}),
     status: 'pending',
     expiresAt,
     createdAt: FieldValue.serverTimestamp(),
   });
+  if (opts.profileId) {
+    await adminDb.collection('didit_profiles').doc(opts.profileId).set({
+      verificationStatus: 'pending',
+      latestPurpose: opts.purpose,
+      latestMode: mode,
+      latestChallengeId: challengeRef.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
@@ -511,7 +708,14 @@ async function createDiditChallenge(opts: {
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(`Didit session creation failed (${response.status}).`);
+    if (!response.ok) {
+      const detail = typeof payload?.detail === 'string'
+        ? payload.detail
+        : typeof payload?.portrait_image === 'string'
+          ? payload.portrait_image
+          : '';
+      throw new Error(detail || `Didit session creation failed (${response.status}).`);
+    }
     const sessionId = String(payload.session_id || '').trim();
     const url = String(payload.url || payload.verification_url || '').trim();
     if (!sessionId || !url) throw new Error('Réponse Didit invalide.');
@@ -522,13 +726,39 @@ async function createDiditChallenge(opts: {
       url,
       updatedAt: FieldValue.serverTimestamp(),
     });
-    return { challengeId: challengeRef.id, sessionId, url, expiresAt: expiresAt.toISOString() };
+    return { challengeId: challengeRef.id, sessionId, url, expiresAt: expiresAt.toISOString(), mode };
   } catch (error) {
     await challengeRef.delete().catch(() => {});
+    if (opts.profileId) {
+      await adminDb.collection('didit_profiles').doc(opts.profileId).set({
+        verificationStatus: 'failed',
+        latestPurpose: opts.purpose,
+        latestMode: mode,
+        lastErrorCode: 'SESSION_CREATION_FAILED',
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(() => {});
+    }
     throw error;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function createSmartClientDiditChallenge(opts: {
+  purpose: Exclude<DiditVerificationPurpose, 'admin_login'>;
+  clientId: string;
+  email?: string;
+}): Promise<DiditChallenge> {
+  const profile = await getClientDiditProfile(opts.clientId);
+  const mode: DiditVerificationMode = profile.data.hasVerifiedIdentity === true ? 'biometric' : 'full';
+  return createDiditChallenge({
+    purpose: opts.purpose,
+    subjectId: opts.clientId,
+    email: opts.email,
+    mode,
+    vendorData: String(profile.data.vendorData || stableClientDiditVendorData(opts.clientId)),
+    profileId: profile.ref.id,
+  });
 }
 
 async function syncDiditDecision(
@@ -545,18 +775,28 @@ async function syncDiditDecision(
   const payload = await response.json().catch(() => ({}));
   const status = diditStatusFromPayload(payload);
   const verifiedName = diditVerifiedName(payload);
-  if (status !== normalizeDiditStatus(challenge.status)) {
-    await challengeRef.update({
-      status,
-      providerStatus: String(payload.status || payload.decision?.status || ''),
-      ...(verifiedName && identityNameFingerprint(verifiedName)
-        ? { diditVerifiedNameFingerprint: identityNameFingerprint(verifiedName) }
-        : {}),
-      decisionUpdatedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  }
-  return { status, ...(verifiedName ? { verifiedName } : {}) };
+  const biometricChecksPassed = diditBiometricChecksPassed(payload);
+  const updates = {
+    status,
+    providerStatus: String(payload.status || payload.decision?.status || ''),
+    ...(verifiedName && identityNameFingerprint(verifiedName)
+      ? { diditVerifiedNameFingerprint: identityNameFingerprint(verifiedName) }
+      : {}),
+    ...(challenge.verificationMode === 'biometric' ? { biometricChecksPassed } : {}),
+    decisionUpdatedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await challengeRef.update(updates);
+  await updateDiditProfileFromChallenge(
+    { ...challenge, ...updates },
+    status === 'rejected' || status === 'expired' ? 'failed' : 'pending',
+    status === 'rejected' || status === 'expired' ? { lastErrorCode: 'VERIFICATION_REJECTED' } : {},
+  ).catch(() => {});
+  return {
+    status,
+    ...(verifiedName ? { verifiedName } : {}),
+    ...(challenge.verificationMode === 'biometric' ? { biometricChecksPassed } : {}),
+  };
 }
 
 async function getDiditChallenge(challengeId: string): Promise<{
@@ -571,6 +811,7 @@ async function getDiditChallenge(challengeId: string): Promise<{
   const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
   if (expiresAt <= new Date()) {
     await ref.update({ status: 'expired', updatedAt: FieldValue.serverTimestamp() }).catch(() => {});
+    await updateDiditProfileFromChallenge(data, 'failed', { lastErrorCode: 'VERIFICATION_EXPIRED' }).catch(() => {});
     return { ref, data: { ...data, status: 'expired' } };
   }
   return { ref, data };
@@ -585,6 +826,27 @@ async function requireApprovedDidit(
   const challenge = await getDiditChallenge(challengeId);
   if (!challenge || challenge.data.purpose !== purpose || challenge.data.subjectId !== subjectId) return false;
   let status = normalizeDiditStatus(challenge.data.status);
+  const biometricMode = challenge.data.verificationMode === 'biometric';
+  if (biometricMode) {
+    let biometricChecksPassed = challenge.data.biometricChecksPassed === true;
+    if (status === 'pending' || !biometricChecksPassed) {
+      try {
+        const decision = await syncDiditDecision(challenge.ref, challenge.data);
+        status = decision.status;
+        biometricChecksPassed = decision.biometricChecksPassed === true;
+      } catch {
+        return false;
+      }
+    }
+    if (status !== 'approved' || !biometricChecksPassed) return false;
+    await challenge.ref.update({
+      identityMatchPassed: true,
+      biometricChecksPassed: true,
+      identityMatchedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  }
   let verifiedName = '';
   const expectedFingerprint = expectedName ? identityNameFingerprint(expectedName) : null;
   const identityAlreadyMatched = Boolean(
@@ -645,6 +907,43 @@ async function confirmDiditIdentityForClient(
     diditIdentityVerifiedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  const challenge = await getDiditChallenge(challengeId);
+  if (challenge) {
+    await updateDiditProfileFromChallenge(challenge.data, 'verified', {
+      hasVerifiedIdentity: true,
+      vendorData: challenge.data.vendorData,
+      ...(challenge.data.verificationMode === 'full'
+        ? { originalSessionId: challenge.data.diditSessionId }
+        : {}),
+      latestVerifiedSessionId: challenge.data.diditSessionId,
+      verifiedAt: FieldValue.serverTimestamp(),
+      lastErrorCode: FieldValue.delete(),
+    });
+  }
+  return true;
+}
+
+async function consumeClientDiditForAction(
+  challengeId: string,
+  purpose: Exclude<DiditVerificationPurpose, 'admin_login' | 'cards_entry'>,
+  clientId: string,
+  expectedName: string,
+): Promise<boolean> {
+  if (!(await requireApprovedDidit(challengeId, purpose, clientId, expectedName))) return false;
+  if (!(await consumeDiditChallenge(challengeId, purpose, clientId))) return false;
+  const challenge = await getDiditChallenge(challengeId);
+  if (challenge) {
+    await updateDiditProfileFromChallenge(challenge.data, 'verified', {
+      hasVerifiedIdentity: true,
+      vendorData: challenge.data.vendorData,
+      ...(challenge.data.verificationMode === 'full'
+        ? { originalSessionId: challenge.data.diditSessionId }
+        : {}),
+      latestVerifiedSessionId: challenge.data.diditSessionId,
+      verifiedAt: FieldValue.serverTimestamp(),
+      lastErrorCode: FieldValue.delete(),
+    });
+  }
   return true;
 }
 
@@ -1342,10 +1641,18 @@ router.post('/api/didit/webhook', requireDb, async (req, res) => {
     ...(diditVerifiedName(req.body) && identityNameFingerprint(diditVerifiedName(req.body))
       ? { diditVerifiedNameFingerprint: identityNameFingerprint(diditVerifiedName(req.body)) }
       : {}),
+    ...(current.verificationMode === 'biometric'
+      ? { biometricChecksPassed: diditBiometricChecksPassed(req.body) }
+      : {}),
     eventType: String(req.body?.event_type || req.body?.webhook_type || ''),
     webhookReceivedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  await updateDiditProfileFromChallenge(
+    current,
+    status === 'rejected' || status === 'expired' ? 'failed' : 'pending',
+    status === 'rejected' || status === 'expired' ? { lastErrorCode: 'VERIFICATION_REJECTED' } : {},
+  ).catch(() => {});
   return res.json({ ok: true });
 });
 
@@ -1358,8 +1665,31 @@ router.get('/api/didit/status/:challengeId', requireDb, async (req, res) => {
   return res.json({
     challengeId: challenge.ref.id,
     status: normalizeDiditStatus(challenge.data.status),
+    mode: challenge.data.verificationMode || 'full',
     expiresAt,
   });
+});
+
+router.post('/api/client/didit/session', requireDb, async (req, res) => {
+  try {
+    const clientId = String(res.locals.clientSession?.clientId || '').trim();
+    const requestedPurpose = String(req.body?.purpose || '').trim();
+    const allowedPurposes = new Set(['card_issue', 'card_details', 'account_change', 'financial_risk']);
+    if (!clientId || !allowedPurposes.has(requestedPurpose)) {
+      return res.status(400).json({ error: 'Action de vérification invalide.' });
+    }
+    const clientSnap = await adminDb.collection('clients').doc(clientId).get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const challenge = await createSmartClientDiditChallenge({
+      purpose: requestedPurpose as Exclude<DiditVerificationPurpose, 'admin_login'>,
+      clientId,
+      email: String(clientSnap.data()?.email || ''),
+    });
+    return res.json({ success: true, challenge });
+  } catch (e: any) {
+    console.error('[client/didit/session]', e);
+    return res.status(503).json({ error: e?.message || 'La vérification Didit est indisponible.' });
+  }
 });
 
 // Route profiles run after the role guards above, so financial and AI limits
@@ -1904,7 +2234,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
 // ── Withdrawal ────────────────────────────────────────────────────────────────
 router.post('/api/client/withdrawal', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientPhone, clientWalletId, amount, usdAmount, htgEquivalent, exchangeRate, method, accountNumber, accountName, message, captchaToken } = req.body;
+    const { clientId, clientName, clientPhone, clientWalletId, amount, usdAmount, htgEquivalent, exchangeRate, method, accountNumber, accountName, message, captchaToken, diditChallengeId } = req.body;
     if (!clientId || !clientName || !amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
@@ -1932,6 +2262,16 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'Un retrait est déjà en cours de traitement. Veuillez patienter.' });
 
     const clientRef = adminDb.collection('clients').doc(clientId);
+    const identityClient = await clientRef.get();
+    if (!identityClient.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    if (!(await consumeClientDiditForAction(
+      String(diditChallengeId || ''),
+      'financial_risk',
+      clientId,
+      String(identityClient.data()?.name || ''),
+    ))) {
+      return res.status(401).json({ error: 'Une vérification faciale Didit valide est requise pour ce retrait.' });
+    }
 
     // SECURITY: Use runTransaction to atomically verify balance and deduct.
     // A plain read + batch write has a race condition: two simultaneous withdrawals
@@ -3464,7 +3804,7 @@ router.get('/api/agent/stats/:agentCode', requireDb, async (req, res) => {
 // ── Client-to-client transfer ─────────────────────────────────────────────────
 router.post('/api/client/transfer', requireDb, async (req, res) => {
   try {
-    const { senderClientId, recipientWalletId, amount, message } = req.body;
+    const { senderClientId, recipientWalletId, amount, message, diditChallengeId } = req.body;
     if (!senderClientId || !recipientWalletId || !amount)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
@@ -3489,6 +3829,16 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
       ? parseFloat((usd * transferFeePercent / 100).toFixed(4))
       : 0;
     const netToRecipient = usd - feeAmount;
+    const senderIdentity = await senderRef.get();
+    if (!senderIdentity.exists) return res.status(404).json({ error: 'Compte introuvable.' });
+    if (!(await consumeClientDiditForAction(
+      String(diditChallengeId || ''),
+      'financial_risk',
+      senderClientId,
+      String(senderIdentity.data()?.name || ''),
+    ))) {
+      return res.status(401).json({ error: 'Une vérification faciale Didit valide est requise pour ce transfert.' });
+    }
 
     let recipientName = '';
     await adminDb.runTransaction(async (tx) => {
@@ -11227,9 +11577,9 @@ router.post('/api/client/cards/security/didit/session', requireDb, async (req, r
   const clientId = res.locals.clientSession.clientId as string;
   const client = res.locals.clientRecord.data() || {};
   try {
-    const challenge = await createDiditChallenge({
+    const challenge = await createSmartClientDiditChallenge({
       purpose: 'cards_entry',
-      subjectId: clientId,
+      clientId,
       email: String(client.email || ''),
     });
     res.setHeader('Cache-Control', 'no-store');

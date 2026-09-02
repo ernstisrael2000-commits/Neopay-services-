@@ -424,8 +424,10 @@ export default function CardsView({ clientId, clientName, clientPhone = '', onBa
           ) : !diditVerified && diditChallenge ? (
             <DiditVerificationStep
               challenge={diditChallenge}
-              title="Confirmez votre identité"
-              description="Cette vérification est obligatoire à l’entrée de votre espace Cartes. Elle protège vos informations et vos opérations sensibles."
+              title={diditChallenge.mode === 'biometric' ? 'Vérification faciale rapide' : 'Confirmez votre identité'}
+              description={diditChallenge.mode === 'biometric'
+                ? 'Votre identité est déjà validée. Effectuez uniquement un selfie avec contrôle de présence pour confirmer que vous êtes bien la même personne.'
+                : 'Première vérification : Didit doit valider votre identité complète avant l’accès à votre espace Cartes.'}
               onVerified={handleDiditVerified}
               onBack={onBack}
             />
