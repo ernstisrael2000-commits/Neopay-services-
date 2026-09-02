@@ -772,7 +772,7 @@ function AppInner() {
           </Suspense>
         )}
 
-        {loggedClient?.uid && loggedClient.identityNameCompleted !== true && (
+        {loggedClient && loggedClient.identityNameCompleted !== true && (
           <Suspense fallback={null}>
             <IdentityNameGate
               client={loggedClient}
