@@ -76,6 +76,17 @@ export const loginClient = async (email: string, password: string): Promise<Clie
   return json.client as Client;
 };
 
+export const restoreClientSession = async (firebaseIdToken?: string): Promise<Client | null> => {
+  const res = await fetch('/api/client/session', {
+    credentials: 'include',
+    headers: firebaseIdToken ? { Authorization: `Bearer ${firebaseIdToken}` } : undefined,
+  });
+  if (res.status === 401 || res.status === 404) return null;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Erreur session (${res.status})`);
+  return json.client as Client;
+};
+
 export interface GoogleClientLoginResult {
   client: Client | null;
   googleEmail?: string;

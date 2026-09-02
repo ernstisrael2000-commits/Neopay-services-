@@ -44,7 +44,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
 import { toast } from 'sonner';
-import { logoutClient } from './services/clientService';
+import { logoutClient, restoreClientSession } from './services/clientService';
 
 type AppView = 'home' | 'tracking' | 'admin' | 'affiliate' | 'teacher' | 'shipping' | 'formations' | 'products' | 'services' | 'cards' | 'wallet' | 'seo';
 type CatalogTab = 'products' | 'games' | 'giftcards' | 'cards';
@@ -76,7 +76,7 @@ function AppInner() {
   const [formationsTab, setFormationsTab] = useState<'all' | 'my' | 'profile'>('all');
   const [formationsResetSignal, setFormationsResetSignal] = useState(0);
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'agent' | 'admin' | null>(null);
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const [splashVisible, setSplashVisible] = useState(true);
   const { settings } = useSettingsCtx();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -297,6 +297,7 @@ function AppInner() {
     const saved = localStorage.getItem('rena_client');
     return saved ? JSON.parse(saved) : null;
   });
+  const [clientSessionResolved, setClientSessionResolved] = useState(false);
 
   useFCM(loggedClient?.id || null);
 
@@ -304,6 +305,39 @@ function AppInner() {
     setLoggedClient(client);
     localStorage.setItem('rena_client', JSON.stringify(client));
   };
+
+  // Restore the server-side client session when Firebase auth survived a refresh
+  // or when the local client profile was cleared while the account stayed signed in.
+  useEffect(() => {
+    if (loading) return;
+    let active = true;
+
+    const restore = async () => {
+      const hasFirebaseUser = Boolean(user);
+      const hasStoredClient = Boolean(localStorage.getItem('rena_client'));
+      if (!hasFirebaseUser && !hasStoredClient) {
+        setClientSessionResolved(true);
+        return;
+      }
+
+      setClientSessionResolved(false);
+      try {
+        const idToken = user ? await user.getIdToken() : undefined;
+        const client = await restoreClientSession(idToken);
+        if (active && client) {
+          setLoggedClient(client);
+          localStorage.setItem('rena_client', JSON.stringify(client));
+        }
+      } catch (error) {
+        console.warn('Impossible de restaurer la session client.', error);
+      } finally {
+        if (active) setClientSessionResolved(true);
+      }
+    };
+
+    void restore();
+    return () => { active = false; };
+  }, [loading, user?.uid]);
 
   const handleClientLogout = () => {
     setLoggedClient(null);
@@ -567,6 +601,35 @@ function AppInner() {
                         onBack={handleBack}
                         onRequestAuth={() => setShowAuthModal(true)}
                       />
+                    ) : user && !clientSessionResolved ? (
+                      <section className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-[#f3f8fb] px-5 py-16 text-[#18384d]" aria-busy="true">
+                        <div className="flex flex-col items-center gap-4 text-center">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#b9dfef] bg-white text-[#1979a8] shadow-sm">
+                            <CreditCard className="h-7 w-7" />
+                          </div>
+                          <p className="flex items-center gap-2 text-sm font-bold text-[#60798a]">
+                            <span className="inline-flex h-4 w-4 animate-spin rounded-full border-2 border-[#b9dfef] border-t-[#1979a8]" />
+                            Ouverture de votre espace Cartes…
+                          </p>
+                        </div>
+                      </section>
+                    ) : user ? (
+                      <section className="min-h-[calc(100dvh-3.5rem)] bg-[#f3f8fb] px-5 py-16 text-[#18384d]">
+                        <div className="mx-auto flex max-w-md flex-col items-center rounded-[2rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.12)]">
+                          <CreditCard className="mb-5 h-10 w-10 text-[#1979a8]" />
+                          <h1 className="text-3xl font-black">Profil client indisponible</h1>
+                          <p className="mt-3 text-sm leading-6 text-[#60798a]">
+                            Votre connexion est active, mais aucun profil client n’est associé à ce compte.
+                          </p>
+                          <Button
+                            data-testid="button-retry-client-session"
+                            onClick={() => window.location.reload()}
+                            className="mt-7 w-full rounded-2xl bg-blue-600 py-6 font-black text-white hover:bg-blue-500"
+                          >
+                            Réessayer
+                          </Button>
+                        </div>
+                      </section>
                     ) : (
                       <section className="min-h-[calc(100dvh-3.5rem)] bg-[#f3f8fb] px-5 py-16 text-[#18384d]">
                         <div className="mx-auto flex max-w-md flex-col items-center rounded-[2rem] border border-[#dce8ee] bg-white p-8 text-center shadow-[0_22px_60px_rgba(47,89,112,.12)]">

@@ -899,6 +899,7 @@ router.use('/api/admin', requireDb, (req, res, next) => {
 
 const publicClientPaths = new Set([
   '/fees',
+  '/session',
   '/register',
   '/login',
   '/login-google',
@@ -5039,6 +5040,46 @@ router.get('/api/admin/agent/:agentId/wallet/history', requireDb, async (req, re
 });
 
 // ── Client auth ───────────────────────────────────────────────────────────────
+router.get('/api/client/session', requireDb, async (req, res) => {
+  try {
+    const authorization = String(req.headers.authorization || '');
+    const bearerToken = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+    let clientDoc: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+    if (bearerToken) {
+      let decoded: { email?: string };
+      try {
+        decoded = await getAuth().verifyIdToken(bearerToken);
+      } catch {
+        return res.status(401).json({ error: 'Session Firebase invalide.' });
+      }
+
+      const email = String(decoded.email || '').trim().toLowerCase();
+      if (!email) return res.status(401).json({ error: 'Le compte connecté doit contenir un email.' });
+      const matchingClients = await adminDb.collection('clients').where('email', '==', email).limit(1).get();
+      if (matchingClients.empty) return res.status(404).json({ error: 'Aucun compte client associé.', noAccount: true });
+      clientDoc = matchingClients.docs[0];
+    } else {
+      const session = readClientSession(req);
+      if (!session) return res.status(401).json({ error: 'Aucune session client active.' });
+      clientDoc = await adminDb.collection('clients').doc(session.clientId).get();
+    }
+
+    if (!clientDoc.exists || clientDoc.data()?.status === 'blocked') {
+      res.clearCookie('rena_client_session', { path: '/' });
+      return res.status(403).json({ error: 'Compte client indisponible.' });
+    }
+
+    const client = serializeDoc(clientDoc);
+    delete client.password;
+    setClientSession(res, clientDoc.id);
+    return res.json({ success: true, client });
+  } catch (e: any) {
+    console.error('[client/session]', e);
+    return res.status(503).json({ error: 'Vérification de session temporairement indisponible.' });
+  }
+});
+
 router.post('/api/client/register', requireDb, async (req, res) => {
   try {
     const { name, phone, email, password, sponsorCode } = req.body;

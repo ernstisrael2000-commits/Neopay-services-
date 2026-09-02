@@ -132,6 +132,24 @@ const CATALOG_SHORTCUTS = [
   { tab: 'cards' as const, label: 'Recharges', icon: Smartphone, activeClass: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' },
 ];
 
+function UserAvatar({ photoUrl, alt, className }: { photoUrl?: string | null; alt?: string; className: string }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [photoUrl]);
+
+  if (photoUrl && !imageFailed) {
+    return <img src={photoUrl} alt={alt || ''} className={className} onError={() => setImageFailed(true)} />;
+  }
+
+  return (
+    <span className={`flex items-center justify-center ${className}`} aria-label={alt || 'Profil utilisateur'}>
+      <UsersRound className="h-[55%] w-[55%]" strokeWidth={2} aria-hidden="true" />
+    </span>
+  );
+}
+
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, onTeacherAccess, onCatalogShortcut, formationsTab, onFormationsTabChange }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettingsCtx();
@@ -156,6 +174,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      onClientLogout();
       onViewChange('home');
       setMenuOpen(false);
     } catch (error) {
@@ -476,10 +495,10 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 aria-label={loggedClient ? 'Ouvrir mon Wallet' : 'Se connecter'}
                 className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-black text-white shadow-sm md:hidden"
               >
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="" className="h-full w-full object-cover" />
+                {loggedClient ? (
+                  loggedClient.name.charAt(0).toUpperCase()
                 ) : (
-                  (loggedClient?.name || user?.displayName || 'E').charAt(0).toUpperCase()
+                  <UserAvatar photoUrl={user?.photoURL} className="h-full w-full rounded-full text-white" />
                 )}
                 {loggedClient && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />}
               </button>
@@ -496,9 +515,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </button>
               ) : user ? (
                 <div className="hidden md:flex items-center gap-2">
-                  <img src={user.photoURL || ''} alt={user.displayName || ''}
-                    className="h-7 w-7 rounded-full border-2 border-primary/20"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'U')}`; }} />
+                  <UserAvatar photoUrl={user.photoURL} alt={user.displayName || ''} className="h-7 w-7 rounded-full border-2 border-primary/20 bg-primary/5 text-primary" />
                   <span className="text-xs font-bold text-gray-700 max-w-[90px] truncate">{user.displayName?.split(' ')[0]}</span>
                   <button onClick={handleLogout} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                     <LogOut className="h-4 w-4" />
@@ -545,9 +562,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               <div className="p-4 border-b bg-gray-50">
                 {user && (
                   <div className="flex items-center gap-3">
-                    <img src={user.photoURL || ''} alt={user.displayName || ''}
-                      className="h-10 w-10 rounded-full border-2 border-primary/20"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'U')}`; }} />
+                    <UserAvatar photoUrl={user.photoURL} alt={user.displayName || ''} className="h-10 w-10 rounded-full border-2 border-primary/20 bg-primary/5 text-primary" />
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{user.displayName}</p>
                       <p className="text-xs text-gray-400 truncate">{user.email}</p>
