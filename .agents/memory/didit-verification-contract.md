@@ -15,11 +15,11 @@ For account ownership, the verified legal name returned by Didit must match the 
 
 **How to apply:** Compare card challenges only against the separately collected official account first and last name and its server-keyed fingerprint. Require a fresh full Didit verification when that official identity changes. Never read or compare a HeyQO cardholder field when deciding access.
 
-Returning clients reuse the exact Didit `vendor_data` associated with their first approved identity. Later sensitive actions use Didit's Biometric Authentication workflow with liveness and face match against Didit's stored face; they must not request identity documents again or copy the reference portrait into Firebase.
+Client sessions use Didit's full KYC workflow, including for returning clients. The stable `vendor_data` is still reused so the provider identity remains linked, but no biometric-authentication workflow is required.
 
-**Why:** Didit resolves a stored reference face by stable `vendor_data`. Generating a new provider identity for every challenge loses that link, while storing the portrait locally would unnecessarily expand the biometric-data attack surface.
+**Why:** The current free Didit setup does not have capacity for credit-consuming biometric-authentication sessions. Requiring full KYC keeps the requested second/third-login behavior explicit without silently bypassing identity verification.
 
-**How to apply:** Persist only provider session identifiers, stable vendor data, verification status, purpose, mode, timestamps, and keyed identity fingerprints. Require both approved liveness and approved face match for biometric challenges, bind each challenge to one action purpose, and consume it atomically.
+**How to apply:** Persist only provider session identifiers, stable vendor data, verification status, purpose, mode, timestamps, and keyed identity fingerprints. Do not request or store biometric media locally.
 
 Didit's session `callback` is a browser return URL loaded after the capture flow; it is not a decision channel. Keep it on a dedicated, frameable, data-free completion page. Authoritative decisions come from the signed webhook or a server-authenticated read of Didit's decision API.
 
@@ -33,8 +33,8 @@ Didit's v3 decision response places extracted legal-name fields in entries of th
 
 **How to apply:** Prefer the verified document entries from `id_verifications` (including their direct or nested document fields), then apply the established normalized full-name comparison.
 
-Each new biometric-authentication session consumes Didit provider capacity; an existing verified profile does not make a new face/liveness session free or valid to skip.
+The biometric-authentication workflow remains disabled for client sessions unless the product explicitly re-enables it with provider capacity.
 
-**Why:** When provider credits are exhausted, Didit rejects session creation before returning an iframe. Falling back to a previous verification would weaken the fresh liveness and face-match requirement for card access.
+**Why:** When provider credits are exhausted, Didit rejects biometric session creation before returning an iframe. Full KYC is the intended fallback for returning clients in the free setup.
 
-**How to apply:** Keep the server-side failure explicit, offer a retry after provider capacity is restored, and never silently bypass the biometric step.
+**How to apply:** Keep mode selection explicit and ensure returning clients see the complete KYC flow rather than an unavailable biometric step.
