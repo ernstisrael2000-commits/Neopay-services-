@@ -1413,7 +1413,6 @@ for (const path of [
   '/api/admin/teacher-withdrawals', '/api/admin/card-topup',
   '/api/formations/purchases', '/api/formations/payment-request',
   '/api/client/crypto-orders', '/api/client/crypto-market/requests',
-  '/api/client/cards',
   '/api/teacher/withdrawal', '/api/crypto/create-payment',
   '/api/fazer/topups/order', '/api/fazer/giftcards/order',
   '/api/reseller/ff/order', '/api/reseller/ff/buy-pack',
@@ -11549,7 +11548,7 @@ router.get('/api/client/cards', requireDb, requireClientCardsAccess, async (_req
   }
 });
 
-router.post('/api/client/cards', requireDb, requireClientCardsAccess, async (req, res) => {
+router.post('/api/client/cards', requireDb, financialRateLimiter, idempotencyGuard(), requireClientCardsAccess, async (req, res) => {
   const clientId = res.locals.clientSession.clientId as string;
   const clientRef = adminDb.collection('clients').doc(clientId);
   const initialClient = res.locals.clientRecord.data() || {};
